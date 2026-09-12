@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && request.auth.token.email == 'sidibey487@gmail.com';
+    }
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isStaff() { return isAdmin() || (signedIn() && userRole() == 'teacher'); }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+                    && request.resource.data.role == 'student';
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+                    && request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin();
+    }
+    match /students/{studentId} {
+      allow read: if signedIn();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /attendance/{recordId} {
+      allow read: if signedIn();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /quranLogs/{recordId} {
+      allow read: if signedIn();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+  }
+}

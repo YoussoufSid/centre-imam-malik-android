@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.ImamMalik" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#075B3A</item>
+        <item name="android:navigationBarColor">#F7F5EC</item>
+    </style>
+</resources>

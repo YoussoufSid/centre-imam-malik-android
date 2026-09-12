@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "101956265246",
+    "project_id": "centre-al-imam-malik",
+    "storage_bucket": "centre-al-imam-malik.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:101956265246:android:acf56387143c9c0970d50f",
+        "android_client_info": {
+          "package_name": "ml.centre.imammalik"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFnc4WbRzhf1w2i7Lma2WBnjbHZpOCaQQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
