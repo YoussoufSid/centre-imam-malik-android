@@ -4,11 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -47,7 +50,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-data class Student(val id: String = "", val name: String = "", val level: String = "", val phone: String = "")
+data class Student(
+    val id: String = "",
+    val name: String = "",
+    val gender: String = "",
+    val birthDate: String = "",
+    val level: String = "",
+    val group: String = "",
+    val teacher: String = "",
+    val phone: String = "",
+    val address: String = "",
+    val enrollmentDate: String = "",
+    val status: String = "نشط"
+)
 
 class AppState {
     val auth = FirebaseAuth.getInstance()
@@ -93,15 +108,47 @@ class AppState {
         listener = db.collection("students").orderBy("name").addSnapshotListener { snap, error ->
             if (error != null) { message = arabicError(error.message); return@addSnapshotListener }
             students = snap?.documents?.map { d ->
-                Student(d.id, d.getString("name") ?: "", d.getString("level") ?: "", d.getString("phone") ?: "")
+                Student(
+                    id = d.id,
+                    name = d.getString("name") ?: "",
+                    gender = d.getString("gender") ?: "",
+                    birthDate = d.getString("birthDate") ?: "",
+                    level = d.getString("level") ?: "",
+                    group = d.getString("group") ?: "",
+                    teacher = d.getString("teacher") ?: "",
+                    phone = d.getString("phone") ?: "",
+                    address = d.getString("address") ?: "",
+                    enrollmentDate = d.getString("enrollmentDate") ?: "",
+                    status = d.getString("status") ?: "نشط"
+                )
             } ?: emptyList()
         }
     }
 
-    fun addStudent(name: String, level: String, phone: String, done: () -> Unit) {
-        if (name.isBlank()) { message = "اسم الطالب مطلوب"; return }
-        db.collection("students").add(mapOf("name" to name.trim(), "level" to level.trim(), "phone" to phone.trim(), "createdAt" to Date()))
-            .addOnSuccessListener { done(); message = "تمت إضافة الطالب" }
+    fun saveStudent(student: Student, done: () -> Unit) {
+        if (student.name.isBlank()) { message = "اسم الطالب مطلوب"; return }
+        val data = mapOf(
+            "name" to student.name.trim(), "gender" to student.gender.trim(),
+            "birthDate" to student.birthDate.trim(), "level" to student.level.trim(),
+            "group" to student.group.trim(), "teacher" to student.teacher.trim(),
+            "phone" to student.phone.trim(), "address" to student.address.trim(),
+            "enrollmentDate" to student.enrollmentDate.trim(), "status" to student.status,
+            "updatedAt" to Date()
+        )
+        if (student.id.isBlank()) {
+            db.collection("students").add(data)
+                .addOnSuccessListener { done(); message = "تمت إضافة الطالب" }
+                .addOnFailureListener { message = arabicError(it.message) }
+        } else {
+            db.collection("students").document(student.id).set(data)
+                .addOnSuccessListener { done(); message = "تم تحديث بيانات الطالب" }
+                .addOnFailureListener { message = arabicError(it.message) }
+        }
+    }
+
+    fun deleteStudent(student: Student, done: () -> Unit) {
+        db.collection("students").document(student.id).delete()
+            .addOnSuccessListener { done(); message = "تم حذف ${student.name}" }
             .addOnFailureListener { message = arabicError(it.message) }
     }
 
@@ -174,6 +221,7 @@ private fun AppField(value: String, change: (String) -> Unit, label: String, typ
 private fun Dashboard(state: AppState) {
     var tab by remember { mutableIntStateOf(0) }
     var addOpen by remember { mutableStateOf(false) }
+    var selectedStudent by remember { mutableStateOf<Student?>(null) }
     Scaffold(
         topBar = { TopAppBar(title = { Text("مركز الإمام مالك") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Green, titleContentColor = Color.White),
             actions = { IconButton(onClick = state::logout) { Icon(Icons.Default.Logout, "خروج", tint = Color.White) } }) },
@@ -182,10 +230,11 @@ private fun Dashboard(state: AppState) {
         } } },
         floatingActionButton = { if (tab == 1) FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") } }
     ) { pad -> Box(Modifier.padding(pad).fillMaxSize()) {
-        when(tab) { 0 -> Home(state); 1 -> Students(state); else -> Attendance(state) }
+        when(tab) { 0 -> Home(state); 1 -> Students(state) { selectedStudent = it }; else -> Attendance(state) }
         state.message?.let { msg -> Card(Modifier.align(Alignment.BottomCenter).padding(12.dp)) { Text(msg, Modifier.padding(12.dp)) } }
     } }
-    if (addOpen) AddStudentDialog(state) { addOpen = false }
+    if (addOpen) StudentDialog(state, null) { addOpen = false }
+    selectedStudent?.let { student -> StudentDialog(state, student) { selectedStudent = null } }
 }
 
 @Composable
@@ -214,10 +263,15 @@ private fun Home(state: AppState) {
 }
 
 @Composable
-private fun Students(state: AppState) {
+private fun Students(state: AppState, open: (Student) -> Unit) {
     if (state.students.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("لا يوجد طلاب بعد\nاضغط زر الإضافة", color=Color.Gray) }
     else LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { items(state.students, key={it.id}) { s ->
-        Card(Modifier.fillMaxWidth()) { ListItem(headlineContent={Text(s.name,fontWeight=FontWeight.Bold)}, supportingContent={Text("المستوى: ${s.level.ifBlank { "غير محدد" }}")}, leadingContent={Icon(Icons.Default.Person,null,tint=Green)}) }
+        Card(Modifier.fillMaxWidth().clickable { open(s) }) { ListItem(
+            headlineContent={Text(s.name,fontWeight=FontWeight.Bold)},
+            supportingContent={Text("المستوى: ${s.level.ifBlank { "غير محدد" }} • الحلقة: ${s.group.ifBlank { "غير محددة" }} • ${s.status}")},
+            leadingContent={Icon(Icons.Default.Person,null,tint=Green)},
+            trailingContent={Icon(Icons.Default.ChevronLeft,"فتح الملف")}
+        ) }
     } }
 }
 
@@ -232,8 +286,47 @@ private fun Attendance(state: AppState) {
 }
 
 @Composable
-private fun AddStudentDialog(state: AppState, close:()->Unit) {
-    var name by remember{mutableStateOf("")}; var level by remember{mutableStateOf("")}; var phone by remember{mutableStateOf("")}
-    AlertDialog(onDismissRequest=close,title={Text("إضافة طالب")},text={Column{AppField(name,{name=it},"الاسم الكامل");AppField(level,{level=it},"المستوى");AppField(phone,{phone=it},"هاتف ولي الأمر",KeyboardType.Phone)}},
-        confirmButton={Button(onClick={state.addStudent(name,level,phone,close)}){Text("حفظ")}},dismissButton={TextButton(onClick=close){Text("إلغاء")}})
+private fun StudentDialog(state: AppState, existing: Student?, close:()->Unit) {
+    var name by remember{mutableStateOf(existing?.name ?: "")}
+    var gender by remember{mutableStateOf(existing?.gender ?: "")}
+    var birthDate by remember{mutableStateOf(existing?.birthDate ?: "")}
+    var level by remember{mutableStateOf(existing?.level ?: "")}
+    var group by remember{mutableStateOf(existing?.group ?: "")}
+    var teacher by remember{mutableStateOf(existing?.teacher ?: "")}
+    var phone by remember{mutableStateOf(existing?.phone ?: "")}
+    var address by remember{mutableStateOf(existing?.address ?: "")}
+    var enrollmentDate by remember{mutableStateOf(existing?.enrollmentDate ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()))}
+    var status by remember{mutableStateOf(existing?.status ?: "نشط")}
+    var confirmDelete by remember{mutableStateOf(false)}
+    val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status)
+
+    AlertDialog(
+        onDismissRequest=close,
+        title={Text(if(existing == null) "إضافة طالب" else "ملف الطالب")},
+        text={Column(Modifier.verticalScroll(rememberScrollState())){
+            AppField(name,{name=it},"الاسم الكامل")
+            AppField(gender,{gender=it},"الجنس: ذكر أو أنثى")
+            AppField(birthDate,{birthDate=it},"تاريخ الميلاد: 2015-01-30")
+            AppField(level,{level=it},"المستوى")
+            AppField(group,{group=it},"الحلقة")
+            AppField(teacher,{teacher=it},"المعلم أو المعلمة")
+            AppField(phone,{phone=it},"هاتف ولي الأمر",KeyboardType.Phone)
+            AppField(address,{address=it},"العنوان")
+            AppField(enrollmentDate,{enrollmentDate=it},"تاريخ التسجيل")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("الحالة:", fontWeight = FontWeight.Bold)
+                RadioButton(selected=status=="نشط",onClick={status="نشط"}); Text("نشط")
+                RadioButton(selected=status=="متوقف",onClick={status="متوقف"}); Text("متوقف")
+            }
+            if (existing != null) TextButton(onClick={confirmDelete=true}, colors=ButtonDefaults.textButtonColors(contentColor=MaterialTheme.colorScheme.error)) { Text("حذف الطالب") }
+        }},
+        confirmButton={Button(onClick={state.saveStudent(student,close)}){Text("حفظ")}},
+        dismissButton={TextButton(onClick=close){Text("إلغاء")}}
+    )
+    if(confirmDelete) AlertDialog(
+        onDismissRequest={confirmDelete=false}, title={Text("تأكيد الحذف")},
+        text={Text("هل تريد حذف ملف ${existing?.name}؟")},
+        confirmButton={Button(onClick={existing?.let { state.deleteStudent(it,close) }}, colors=ButtonDefaults.buttonColors(containerColor=MaterialTheme.colorScheme.error)){Text("حذف")}},
+        dismissButton={TextButton(onClick={confirmDelete=false}){Text("تراجع")}}
+    )
 }
