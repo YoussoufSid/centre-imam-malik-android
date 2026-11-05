@@ -5,31 +5,41 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn() && request.auth.token.email == 'sidibey487@gmail.com';
     }
-    function userRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    function isStaff() { return isAdmin() || (signedIn() && userRole() == 'teacher'); }
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function isStaff() { return isAdmin() || (hasProfile() && me().role == 'teacher'); }
+    // Parents and students may only read the student files linked to their account by the admin.
+    function linkedTo(studentId) {
+      return hasProfile() && studentId in me().get('studentIds', []);
+    }
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if signedIn() && request.auth.uid == uid
-                    && request.resource.data.role == 'student';
+                    && (request.resource.data.role == 'student'
+                        || (request.resource.data.role == 'admin' && isAdmin()))
+                    && !('studentIds' in request.resource.data);
+      // Users may only change their own name/phone; role and links are set by the admin.
       allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
-                    && request.resource.data.role == resource.data.role);
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone']));
       allow delete: if isAdmin();
     }
     match /students/{studentId} {
-      allow read: if signedIn();
+      allow read: if isStaff() || linkedTo(studentId);
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
     match /attendance/{recordId} {
-      allow read: if signedIn();
+      allow read: if isStaff() || linkedTo(resource.data.studentId);
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
     match /quranLogs/{recordId} {
-      allow read: if signedIn();
+      allow read: if isStaff() || linkedTo(resource.data.studentId);
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
