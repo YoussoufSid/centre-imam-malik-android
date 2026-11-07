@@ -22,8 +22,8 @@ android {
         applicationId = "ml.centre.imammalik"
         minSdk = 24
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.7.0"
+        versionCode = 10
+        versionName = "2.0.0"
     }
     // Fixed debug key so every CI build can be installed over the previous one.
     signingConfigs {
@@ -34,6 +34,17 @@ android {
             keyPassword = "android"
         }
     }
+    buildTypes {
+        // Optimised, much smaller APK (R8 shrinking), signed with the same fixed key so it
+        // installs over the debug build and vice versa.
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+    testOptions { unitTests.isReturnDefaultValues = true }
     buildFeatures { compose = true; buildConfig = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
@@ -54,4 +65,5 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
 }

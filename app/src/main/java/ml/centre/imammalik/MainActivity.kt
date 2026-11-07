@@ -135,6 +135,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var editStudent by remember { mutableStateOf<Student?>(null) }
     var showUsers by rememberSaveable { mutableStateOf(false) }
     var showGrades by rememberSaveable { mutableStateOf(false) }
+    var showStats by rememberSaveable { mutableStateOf(false) }
     var announceOpen by remember { mutableStateOf(false) }
     var exportOpen by remember { mutableStateOf(false) }
     var quickLogOpen by remember { mutableStateOf(false) }
@@ -145,6 +146,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             add(QuickAction("تسميع جديد", Icons.Default.MenuBook) { quickLogOpen = true })
             add(QuickAction("إضافة طالب", Icons.Default.PersonAdd) { addOpen = true })
             add(QuickAction("إدخال درجات", Icons.Default.School) { showGrades = true })
+            add(QuickAction("الإحصائيات", Icons.Default.Insights) { showStats = true })
         }
         if (me.isAdmin) {
             add(QuickAction("المالية", Icons.Default.AccountBalanceWallet) { goTo("المالية") })
@@ -160,23 +162,33 @@ private fun Dashboard(state: AppState, me: AppUser) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; showGrades -> "إدخال الدرجات"; else -> "مركز الإمام مالك" }) },
+                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; showGrades -> "إدخال الدرجات"; showStats -> "الإحصائيات"; else -> "مركز الإمام مالك" }) },
                 navigationIcon = {
-                    if (profileStudent != null || showUsers || showGrades) IconButton(onClick = {
-                        if (profileStudent != null) profileId = null else { showUsers = false; showGrades = false }
+                    if (profileStudent != null || showUsers || showGrades || showStats) IconButton(onClick = {
+                        if (profileStudent != null) profileId = null else { showUsers = false; showGrades = false; showStats = false }
                     }) {
                         Icon(Icons.Default.ArrowForward, "رجوع", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Green, titleContentColor = Color.White),
                 actions = {
+                    if (me.isStaff) {
+                        val (icon, msg) = when {
+                            state.hasPendingWrites -> Icons.Default.CloudUpload to "توجد تغييرات محفوظة على الهاتف بانتظار الاتصال بالإنترنت، وستُرسل تلقائيًا."
+                            state.isOffline -> Icons.Default.CloudOff to "لا يوجد اتصال؛ تعرض البيانات المحفوظة على الهاتف، ويمكنك متابعة العمل."
+                            else -> Icons.Default.CloudDone to "كل البيانات متزامنة مع الخادم ✅"
+                        }
+                        IconButton(onClick = { state.message = msg }) {
+                            Icon(icon, "حالة المزامنة", tint = if (state.hasPendingWrites || state.isOffline) Gold else Color.White)
+                        }
+                    }
                     if (profileStudent != null && me.isStaff) IconButton(onClick = { editStudent = profileStudent }) {
                         Icon(Icons.Default.Edit, "تعديل", tint = Color.White)
                     }
-                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades) IconButton(onClick = { exportOpen = true }) {
+                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades && !showStats) IconButton(onClick = { exportOpen = true }) {
                         Icon(Icons.Default.FileDownload, "تصدير", tint = Color.White)
                     }
-                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades) IconButton(onClick = { showUsers = true }) {
+                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades && !showStats) IconButton(onClick = { showUsers = true }) {
                         Icon(Icons.Default.ManageAccounts, "الحسابات", tint = Color.White)
                     }
                     IconButton(onClick = state::logout) { Icon(Icons.Default.Logout, "خروج", tint = Color.White) }
@@ -184,7 +196,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             )
         },
         bottomBar = {
-            if (profileStudent == null && !showUsers && !showGrades) NavigationBar {
+            if (profileStudent == null && !showUsers && !showGrades && !showStats) NavigationBar {
                 tabs.forEachIndexed { i, item ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i },
                         icon = { Icon(item.icon, item.title) }, label = { Text(item.title, maxLines = 1) })
@@ -192,7 +204,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             }
         },
         floatingActionButton = {
-            if (profileStudent == null && !showUsers && !showGrades && me.isStaff && tabs[tab].title == "الطلاب")
+            if (profileStudent == null && !showUsers && !showGrades && !showStats && me.isStaff && tabs[tab].title == "الطلاب")
                 FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") }
         }
     ) { pad ->
@@ -200,6 +212,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
             if (profileStudent != null) {
                 BackHandler { profileId = null }
                 StudentProfileScreen(state, me, profileStudent)
+            } else if (showStats) {
+                BackHandler { showStats = false }
+                StatsScreen(state) { profileId = it }
             } else if (showGrades) {
                 BackHandler { showGrades = false }
                 GradeEntryScreen(state) { showGrades = false }

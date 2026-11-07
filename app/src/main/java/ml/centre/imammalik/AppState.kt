@@ -8,6 +8,9 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.MetadataChanges
+import com.google.firebase.firestore.QuerySnapshot
+import androidx.compose.runtime.mutableStateMapOf
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import java.util.Date
@@ -59,6 +62,19 @@ class AppState {
     var expenseMonth by mutableStateOf(currentMonth())
     var monthExpenses by mutableStateOf(emptyList<Expense>())
     var busy by mutableStateOf(false)
+
+    // ---------- Sync status ----------
+    private val pending = mutableStateMapOf<String, Boolean>()
+    private val fromCache = mutableStateMapOf<String, Boolean>()
+    /** True while some local changes have not reached the server yet (offline or slow network). */
+    val hasPendingWrites: Boolean get() = pending.values.any { it }
+    /** True when the data shown comes from the local cache only (likely offline). */
+    val isOffline: Boolean get() = fromCache.isNotEmpty() && fromCache.values.all { it }
+    private fun track(key: String, snap: QuerySnapshot?) {
+        snap ?: return
+        pending[key] = snap.metadata.hasPendingWrites()
+        fromCache[key] = snap.metadata.isFromCache
+    }
     var message by mutableStateOf<String?>(null)
 
     private val listeners = mutableListOf<ListenerRegistration>()
@@ -138,6 +154,7 @@ class AppState {
         feeListener?.remove(); feeListener = null
         expenseListener?.remove(); expenseListener = null
         linkedListeners.values.forEach { it.remove() }; linkedListeners.clear(); linkedStudents.clear()
+        pending.clear(); fromCache.clear()
         students = emptyList(); users = emptyList(); todayAttendance = emptyList()
         dayAttendance = emptyList(); recentLogs = emptyList()
         announcements = emptyList(); monthPayments = emptyList()
@@ -157,15 +174,17 @@ class AppState {
                 .addSnapshotListener { snap, _ -> registrationPayments = snap?.documents?.map(::toPayment) ?: emptyList() }
         }
         if (p.isStaff) {
-            listeners += db.collection("students").orderBy("name").addSnapshotListener { snap, e ->
+            listeners += db.collection("students").orderBy("name").addSnapshotListener(MetadataChanges.INCLUDE) { snap, e ->
                 if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+                track("students", snap)
                 students = snap?.documents?.map(::toStudent) ?: emptyList()
             }
-            listeners += db.collection("attendance").whereEqualTo("date", today()).addSnapshotListener { snap, _ ->
+            listeners += db.collection("attendance").whereEqualTo("date", today()).addSnapshotListener(MetadataChanges.INCLUDE) { snap, _ ->
+                track("today", snap)
                 todayAttendance = snap?.documents?.map(::toAttendance) ?: emptyList()
             }
             listeners += db.collection("quranLogs").orderBy("createdAt", Query.Direction.DESCENDING).limit(300)
-                .addSnapshotListener { snap, _ -> recentLogs = snap?.documents?.map(::toLog) ?: emptyList() }
+                .addSnapshotListener(MetadataChanges.INCLUDE) { snap, _ -> track("logs", snap); recentLogs = snap?.documents?.map(::toLog) ?: emptyList() }
             listenDay(attendanceDate)
             if (p.isAdmin) listeners += db.collection("users").addSnapshotListener { snap, _ ->
                 users = snap?.documents?.map(::toUser)?.sortedBy { it.name } ?: emptyList()
@@ -226,8 +245,9 @@ class AppState {
 
     private fun listenDay(day: String) {
         dayListener?.remove()
-        dayListener = db.collection("attendance").whereEqualTo("date", day).addSnapshotListener { snap, e ->
+        dayListener = db.collection("attendance").whereEqualTo("date", day).addSnapshotListener(MetadataChanges.INCLUDE) { snap, e ->
             if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+            track("day", snap)
             dayAttendance = snap?.documents?.map(::toAttendance) ?: emptyList()
         }
     }
@@ -326,8 +346,9 @@ class AppState {
 
     private fun listenFees(month: String) {
         feeListener?.remove()
-        feeListener = db.collection("payments").whereEqualTo("month", month).addSnapshotListener { snap, e ->
+        feeListener = db.collection("payments").whereEqualTo("month", month).addSnapshotListener(MetadataChanges.INCLUDE) { snap, e ->
             if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+            track("fees", snap)
             monthPayments = snap?.documents?.map(::toPayment)?.filter { it.type == PaymentType.MONTHLY } ?: emptyList()
         }
     }
@@ -363,8 +384,9 @@ class AppState {
 
     private fun listenExpenses(month: String) {
         expenseListener?.remove()
-        expenseListener = db.collection("expenses").whereEqualTo("month", month).addSnapshotListener { snap, e ->
+        expenseListener = db.collection("expenses").whereEqualTo("month", month).addSnapshotListener(MetadataChanges.INCLUDE) { snap, e ->
             if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+            track("expenses", snap)
             monthExpenses = snap?.documents?.map(::toExpense)?.sortedByDescending { it.date } ?: emptyList()
         }
     }
@@ -454,6 +476,21 @@ class AppState {
         db.collection("payments").whereEqualTo("studentId", studentId).addSnapshotListener { snap, _ ->
             onPayments(snap?.documents?.map(::toPayment)?.sortedByDescending { it.month } ?: emptyList())
         }
+
+    // ---------- Analytics ----------
+
+    /** Loads one month of attendance and recitation logs (scoped to the students this user can see). */
+    fun loadMonthStats(month: String, onReady: (List<AttendanceRecord>, List<QuranLog>) -> Unit) {
+        db.collection("attendance").whereGreaterThanOrEqualTo("date", "$month-01").whereLessThanOrEqualTo("date", "$month-31")
+            .get().addOnSuccessListener { a ->
+                db.collection("quranLogs").whereGreaterThanOrEqualTo("date", "$month-01").whereLessThanOrEqualTo("date", "$month-31")
+                    .get().addOnSuccessListener { l ->
+                        val ids = students.map { it.id }.toSet()
+                        onReady(a.documents.map(::toAttendance).filter { it.studentId in ids },
+                            l.documents.map(::toLog).filter { it.studentId in ids })
+                    }.addOnFailureListener { message = arabicError(it.message) }
+            }.addOnFailureListener { message = arabicError(it.message) }
+    }
 
     // ---------- CSV export (admin) ----------
 
