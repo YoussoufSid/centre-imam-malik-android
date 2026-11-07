@@ -18,12 +18,39 @@ class AppState {
 
     var firebaseUser by mutableStateOf(auth.currentUser)
     var profile by mutableStateOf<AppUser?>(null)
-    var students by mutableStateOf(emptyList<Student>())
+    private var allStudents by mutableStateOf(emptyList<Student>())
+    private var allTodayAttendance by mutableStateOf(emptyList<AttendanceRecord>())
+    private var allDayAttendance by mutableStateOf(emptyList<AttendanceRecord>())
+    private var allRecentLogs by mutableStateOf(emptyList<QuranLog>())
+
+    /** Teachers assigned to groups only see the students of those groups. */
+    private val scopedGroups: Set<String>?
+        get() = profile?.takeIf { it.role == Roles.TEACHER && it.groups.isNotEmpty() }?.groups?.toSet()
+
+    var students: List<Student>
+        get() { val g = scopedGroups; return if (g == null) allStudents else allStudents.filter { it.group in g } }
+        set(v) { allStudents = v }
+
+    /** All group names known in the centre (unfiltered), for admin screens. */
+    val allGroups: List<String> get() = allStudents.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
+
+    private fun <T> scoped(list: List<T>, id: (T) -> String): List<T> {
+        if (scopedGroups == null) return list
+        val ids = students.map { it.id }.toSet()
+        return list.filter { id(it) in ids }
+    }
+
+    var todayAttendance: List<AttendanceRecord>
+        get() = scoped(allTodayAttendance) { it.studentId }
+        set(v) { allTodayAttendance = v }
+    var dayAttendance: List<AttendanceRecord>
+        get() = scoped(allDayAttendance) { it.studentId }
+        set(v) { allDayAttendance = v }
+    var recentLogs: List<QuranLog>
+        get() = scoped(allRecentLogs) { it.studentId }
+        set(v) { allRecentLogs = v }
     var users by mutableStateOf(emptyList<AppUser>())
-    var todayAttendance by mutableStateOf(emptyList<AttendanceRecord>())
     var attendanceDate by mutableStateOf(today())
-    var dayAttendance by mutableStateOf(emptyList<AttendanceRecord>())
-    var recentLogs by mutableStateOf(emptyList<QuranLog>())
     var announcements by mutableStateOf(emptyList<Announcement>())
     var feeMonth by mutableStateOf(currentMonth())
     var monthPayments by mutableStateOf(emptyList<Payment>())
@@ -96,7 +123,7 @@ class AppState {
             val fixed = if (isAdminEmail(email)) p.copy(role = Roles.ADMIN) else p
             val old = profile
             profile = fixed
-            if (old == null || old.role != fixed.role || old.studentIds != fixed.studentIds) startData(fixed)
+            if (old == null || old.role != fixed.role || old.studentIds != fixed.studentIds || old.groups != fixed.groups) startData(fixed)
         }
     }
 
@@ -360,11 +387,62 @@ class AppState {
             onPayments(snap?.documents?.map(::toPayment)?.sortedByDescending { it.month } ?: emptyList())
         }
 
+    // ---------- CSV export (admin) ----------
+
+    private fun csv(rows: List<List<Any?>>): String = rows.joinToString("\r\n") { row ->
+        row.joinToString(";") { v ->
+            val t = (v ?: "").toString()
+            if (t.any { it == ';' || it == '"' || it == '\n' }) "\"" + t.replace("\"", "\"\"") + "\"" else t
+        }
+    }
+
+    fun studentsCsv(): String = csv(listOf(listOf("الاسم", "الجنس", "تاريخ الميلاد", "المستوى", "الحلقة", "المعلم",
+        "هاتف ولي الأمر", "العنوان", "تاريخ التسجيل", "الحالة", "الأحزاب المحفوظة", "الرسوم الشهرية")) +
+        allStudents.map { listOf(it.name, it.gender, it.birthDate, it.level, it.group, it.teacher, it.phone, it.address,
+            it.enrollmentDate, it.status, it.hizbs, it.monthlyFee) })
+
+    fun attendanceCsv(month: String, onReady: (String) -> Unit) {
+        db.collection("attendance").whereGreaterThanOrEqualTo("date", "$month-01").whereLessThanOrEqualTo("date", "$month-31")
+            .get().addOnSuccessListener { snap ->
+                val recs = snap.documents.map(::toAttendance).groupBy { it.studentId }
+                val header = listOf("الاسم", "الحلقة") + AttendanceStatus.all + listOf("أيام مسجلة", "نسبة الحضور ٪")
+                onReady(csv(listOf(header) + allStudents.filter { it.status == "نشط" || it.id in recs }.map { s ->
+                    val r = recs[s.id].orEmpty()
+                    val present = r.count { AttendanceStatus.isPresent(it.status) }
+                    listOf(s.name, s.group) + AttendanceStatus.all.map { st -> r.count { it.status == st } } +
+                        listOf(r.size, if (r.isEmpty()) "" else present * 100 / r.size)
+                }))
+            }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun feesCsv(month: String, onReady: (String) -> Unit) {
+        db.collection("payments").whereEqualTo("month", month).get().addOnSuccessListener { snap ->
+            val paid = snap.documents.map(::toPayment).associateBy { it.studentId }
+            onReady(csv(listOf(listOf("الاسم", "الحلقة", "الرسوم الشهرية", "المدفوع", "تاريخ الدفع", "الحالة")) +
+                allStudents.filter { (it.status == "نشط" && it.monthlyFee > 0) || it.id in paid }.map { s ->
+                    val p = paid[s.id]
+                    listOf(s.name, s.group, s.monthlyFee, p?.amount ?: 0, p?.paidOn ?: "", if (p != null) "مدفوع" else "غير مدفوع")
+                }))
+        }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun gradesCsv(onReady: (String) -> Unit) {
+        db.collection("grades").get().addOnSuccessListener { snap ->
+            val groupOf = allStudents.associate { it.id to it.group }
+            onReady(csv(listOf(listOf("الاسم", "الحلقة", "المادة", "الفصل", "الدرجة من $MAX_SCORE", "التاريخ", "المعلم", "ملاحظة")) +
+                snap.documents.map { d ->
+                    listOf(d.getString("studentName"), groupOf[d.getString("studentId")] ?: "", d.getString("subject"),
+                        d.getString("term"), scoreText(d.getDouble("score") ?: 0.0), d.getString("date"),
+                        d.getString("teacherName"), d.getString("notes"))
+                }.sortedWith(compareBy({ it[0].toString() }, { it[2].toString() }))))
+        }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
     // ---------- Users (admin) ----------
 
-    fun updateUser(user: AppUser, role: String, studentIds: List<String>) {
+    fun updateUser(user: AppUser, role: String, studentIds: List<String>, groups: List<String> = emptyList()) {
         db.collection("users").document(user.uid)
-            .update(mapOf("role" to role, "studentIds" to studentIds, "updatedAt" to FieldValue.serverTimestamp()))
+            .update(mapOf("role" to role, "studentIds" to studentIds, "groups" to groups, "updatedAt" to FieldValue.serverTimestamp()))
             .addOnSuccessListener { message = "تم تحديث حساب ${user.name.ifBlank { user.email }}" }
             .addOnFailureListener { message = arabicError(it.message) }
     }
@@ -437,7 +515,8 @@ class AppState {
         name = d.getString("name") ?: "",
         email = d.getString("email") ?: "",
         role = d.getString("role") ?: Roles.STUDENT,
-        studentIds = (d.get("studentIds") as? List<String>) ?: emptyList()
+        studentIds = (d.get("studentIds") as? List<String>) ?: emptyList(),
+        groups = (d.get("groups") as? List<String>) ?: emptyList()
     )
 
     private fun arabicError(raw: String?) = when {

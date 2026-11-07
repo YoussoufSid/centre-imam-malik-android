@@ -224,7 +224,8 @@ fun UsersScreen(state: AppState) {
                         headlineContent = { Text(u.name.ifBlank { "بدون اسم" }, fontWeight = FontWeight.Bold) },
                         supportingContent = {
                             val linked = u.studentIds.mapNotNull { id -> state.students.firstOrNull { it.id == id }?.name }
-                            Text(u.email + if (linked.isNotEmpty()) "\nمرتبط بـ: ${linked.joinToString("، ")}" else "")
+                            Text(u.email + (if (linked.isNotEmpty()) "\nمرتبط بـ: ${linked.joinToString("، ")}" else "") +
+                                (if (u.role == Roles.TEACHER && u.groups.isNotEmpty()) "\nالحلقات: ${u.groups.joinToString("، ")}" else ""))
                         },
                         leadingContent = { Icon(Icons.Default.AccountCircle, null, tint = Green) },
                         trailingContent = { Text(Roles.label(u.role), color = Gold, fontWeight = FontWeight.Bold) },
@@ -241,6 +242,7 @@ fun UsersScreen(state: AppState) {
 private fun UserDialog(state: AppState, user: AppUser, close: () -> Unit) {
     var role by remember { mutableStateOf(user.role) }
     var linked by remember { mutableStateOf(user.studentIds.toSet()) }
+    var groups by remember { mutableStateOf(user.groups.toSet()) }
     AlertDialog(
         onDismissRequest = close,
         title = { Text(user.name.ifBlank { user.email }) },
@@ -250,6 +252,19 @@ private fun UserDialog(state: AppState, user: AppUser, close: () -> Unit) {
                 Roles.all.filter { it != Roles.ADMIN }.forEach { r ->
                     Row(Modifier.fillMaxWidth().clickable { role = r }, verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = role == r, onClick = { role = r }); Text(Roles.label(r))
+                    }
+                }
+                if (role == Roles.TEACHER) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("الحلقات التي يدرّسها", fontWeight = FontWeight.Bold)
+                    Text("إن لم تُحدَّد حلقة يرى المعلم جميع الطلاب.", fontSize = 12.sp, color = Color.Gray)
+                    if (state.allGroups.isEmpty()) Text("لا توجد حلقات بعد (أضف اسم الحلقة في ملفات الطلاب)", color = Color.Gray, fontSize = 13.sp)
+                    state.allGroups.forEach { g ->
+                        Row(Modifier.fillMaxWidth().clickable { groups = if (g in groups) groups - g else groups + g },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = g in groups, onCheckedChange = { c -> groups = if (c) groups + g else groups - g })
+                            Text(g)
+                        }
                     }
                 }
                 if (role == Roles.PARENT || role == Roles.STUDENT) {
@@ -269,7 +284,7 @@ private fun UserDialog(state: AppState, user: AppUser, close: () -> Unit) {
         confirmButton = {
             Button(onClick = {
                 val ids = if (role == Roles.PARENT || role == Roles.STUDENT) linked.toList() else emptyList()
-                state.updateUser(user, role, ids); close()
+                state.updateUser(user, role, ids, if (role == Roles.TEACHER) groups.toList() else emptyList()); close()
             }) { Text("حفظ") }
         },
         dismissButton = { TextButton(onClick = close) { Text("إلغاء") } }

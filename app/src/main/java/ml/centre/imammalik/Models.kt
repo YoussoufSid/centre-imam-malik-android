@@ -26,7 +26,9 @@ data class AppUser(
     val name: String = "",
     val email: String = "",
     val role: String = Roles.STUDENT,
-    val studentIds: List<String> = emptyList()
+    val studentIds: List<String> = emptyList(),
+    /** For teachers: the groups (halaqat) they teach. Empty = sees all students. */
+    val groups: List<String> = emptyList()
 ) {
     val isAdmin get() = role == Roles.ADMIN
     val isStaff get() = role == Roles.ADMIN || role == Roles.TEACHER

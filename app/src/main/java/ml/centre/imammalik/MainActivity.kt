@@ -131,6 +131,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var showUsers by rememberSaveable { mutableStateOf(false) }
     var showGrades by rememberSaveable { mutableStateOf(false) }
     var announceOpen by remember { mutableStateOf(false) }
+    var exportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.message) { if (state.message != null) { delay(3500); state.message = null } }
 
@@ -152,6 +153,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
                 actions = {
                     if (profileStudent != null && me.isStaff) IconButton(onClick = { editStudent = profileStudent }) {
                         Icon(Icons.Default.Edit, "تعديل", tint = Color.White)
+                    }
+                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades) IconButton(onClick = { exportOpen = true }) {
+                        Icon(Icons.Default.FileDownload, "تصدير", tint = Color.White)
                     }
                     if (me.isAdmin && profileStudent == null && !showUsers && !showGrades) IconButton(onClick = { showUsers = true }) {
                         Icon(Icons.Default.ManageAccounts, "الحسابات", tint = Color.White)
@@ -203,6 +207,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
     }
     if (addOpen) StudentDialog(state, null) { addOpen = false }
     if (announceOpen) AnnouncementDialog(state) { announceOpen = false }
+    if (exportOpen) ExportDialog(state) { exportOpen = false }
     editStudent?.let { s -> StudentDialog(state, s, onDeleted = { profileId = null }) { editStudent = null } }
 }
 

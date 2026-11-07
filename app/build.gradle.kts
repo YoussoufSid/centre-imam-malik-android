@@ -22,8 +22,8 @@ android {
         applicationId = "ml.centre.imammalik"
         minSdk = 24
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.4.0"
+        versionCode = 7
+        versionName = "1.5.0"
     }
     // Fixed debug key so every CI build can be installed over the previous one.
     signingConfigs {
@@ -41,6 +41,7 @@ android {
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.10.0")
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
