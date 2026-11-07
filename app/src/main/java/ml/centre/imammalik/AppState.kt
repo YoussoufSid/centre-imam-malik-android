@@ -24,12 +24,16 @@ class AppState {
     var attendanceDate by mutableStateOf(today())
     var dayAttendance by mutableStateOf(emptyList<AttendanceRecord>())
     var recentLogs by mutableStateOf(emptyList<QuranLog>())
+    var announcements by mutableStateOf(emptyList<Announcement>())
+    var feeMonth by mutableStateOf(currentMonth())
+    var monthPayments by mutableStateOf(emptyList<Payment>())
     var busy by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
 
     private val listeners = mutableListOf<ListenerRegistration>()
     private var profileListener: ListenerRegistration? = null
     private var dayListener: ListenerRegistration? = null
+    private var feeListener: ListenerRegistration? = null
     private val linkedListeners = mutableMapOf<String, ListenerRegistration>()
     private val linkedStudents = mutableMapOf<String, Student>()
 
@@ -99,13 +103,20 @@ class AppState {
     private fun stopData() {
         listeners.forEach { it.remove() }; listeners.clear()
         dayListener?.remove(); dayListener = null
+        feeListener?.remove(); feeListener = null
         linkedListeners.values.forEach { it.remove() }; linkedListeners.clear(); linkedStudents.clear()
         students = emptyList(); users = emptyList(); todayAttendance = emptyList()
         dayAttendance = emptyList(); recentLogs = emptyList()
+        announcements = emptyList(); monthPayments = emptyList()
     }
 
     private fun startData(p: AppUser) {
         stopData()
+        listeners += db.collection("announcements").orderBy("createdAt", Query.Direction.DESCENDING).limit(30)
+            .addSnapshotListener { snap, _ ->
+                announcements = snap?.documents?.map(::toAnnouncement)?.filter { Audience.visibleTo(it.audience, p) } ?: emptyList()
+            }
+        if (p.isAdmin) listenFees(feeMonth)
         if (p.isStaff) {
             listeners += db.collection("students").orderBy("name").addSnapshotListener { snap, e ->
                 if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
@@ -140,6 +151,7 @@ class AppState {
             "group" to student.group.trim(), "teacher" to student.teacher.trim(),
             "phone" to student.phone.trim(), "address" to student.address.trim(),
             "enrollmentDate" to student.enrollmentDate.trim(), "status" to student.status,
+            "monthlyFee" to student.monthlyFee,
             "updatedAt" to Date()
         )
         // merge keeps fields edited elsewhere (e.g. hizb progress).
@@ -247,6 +259,60 @@ class AppState {
         }
     )
 
+    // ---------- Announcements ----------
+
+    fun postAnnouncement(title: String, body: String, audience: String, done: () -> Unit) {
+        if (title.isBlank()) { message = "اكتب عنوان الإعلان"; return }
+        done(); message = "تم نشر الإعلان"
+        db.collection("announcements").add(mapOf(
+            "title" to title.trim(), "body" to body.trim(), "audience" to audience,
+            "author" to (profile?.name?.ifBlank { null } ?: "إدارة المركز"), "createdAt" to Date()
+        )).addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun deleteAnnouncement(a: Announcement) {
+        db.collection("announcements").document(a.id).delete()
+            .addOnSuccessListener { message = "تم حذف الإعلان" }
+            .addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    // ---------- Fees ----------
+
+    fun changeFeeMonth(delta: Int) {
+        val next = shiftMonth(feeMonth, delta)
+        if (next > currentMonth()) return
+        feeMonth = next
+        listenFees(next)
+    }
+
+    private fun listenFees(month: String) {
+        feeListener?.remove()
+        feeListener = db.collection("payments").whereEqualTo("month", month).addSnapshotListener { snap, e ->
+            if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+            monthPayments = snap?.documents?.map(::toPayment) ?: emptyList()
+        }
+    }
+
+    fun savePayment(student: Student, month: String, amount: Int, done: () -> Unit) {
+        if (amount <= 0) { message = "أدخل المبلغ المدفوع"; return }
+        done(); message = "سُجّل دفع ${student.name} لشهر ${monthName(month)}"
+        db.collection("payments").document("${month}_${student.id}").set(mapOf(
+            "studentId" to student.id, "studentName" to student.name, "month" to month,
+            "amount" to amount, "paidOn" to today(), "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
+        )).addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun deletePayment(p: Payment) {
+        db.collection("payments").document(p.id).delete()
+            .addOnSuccessListener { message = "تم إلغاء الدفع" }
+            .addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun listenStudentPayments(studentId: String, onPayments: (List<Payment>) -> Unit): ListenerRegistration =
+        db.collection("payments").whereEqualTo("studentId", studentId).addSnapshotListener { snap, _ ->
+            onPayments(snap?.documents?.map(::toPayment)?.sortedByDescending { it.month } ?: emptyList())
+        }
+
     // ---------- Users (admin) ----------
 
     fun updateUser(user: AppUser, role: String, studentIds: List<String>) {
@@ -270,7 +336,27 @@ class AppState {
         address = d.getString("address") ?: "",
         enrollmentDate = d.getString("enrollmentDate") ?: "",
         status = d.getString("status") ?: "نشط",
-        hizbs = d.getLong("hizbs")?.toInt() ?: 0
+        hizbs = d.getLong("hizbs")?.toInt() ?: 0,
+        monthlyFee = d.getLong("monthlyFee")?.toInt() ?: 0
+    )
+
+    private fun toAnnouncement(d: DocumentSnapshot) = Announcement(
+        id = d.id,
+        title = d.getString("title") ?: "",
+        body = d.getString("body") ?: "",
+        audience = d.getString("audience") ?: Audience.ALL,
+        author = d.getString("author") ?: "",
+        createdAt = d.getDate("createdAt")?.time ?: 0
+    )
+
+    private fun toPayment(d: DocumentSnapshot) = Payment(
+        id = d.id,
+        studentId = d.getString("studentId") ?: "",
+        studentName = d.getString("studentName") ?: "",
+        month = d.getString("month") ?: "",
+        amount = d.getLong("amount")?.toInt() ?: 0,
+        paidOn = d.getString("paidOn") ?: "",
+        recordedBy = d.getString("recordedBy") ?: ""
     )
 
     private fun toAttendance(d: DocumentSnapshot) = AttendanceRecord(

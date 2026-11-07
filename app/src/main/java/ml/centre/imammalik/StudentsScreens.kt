@@ -94,6 +94,12 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
     var logs by remember(student.id) { mutableStateOf(emptyList<QuranLog>()) }
     var addLog by remember { mutableStateOf(false) }
     var reportOpen by remember { mutableStateOf(false) }
+    var payments by remember(student.id) { mutableStateOf(emptyList<Payment>()) }
+    val seesFees = me.isAdmin || !me.isStaff
+    DisposableEffect(student.id, seesFees) {
+        val reg = if (seesFees) state.listenStudentPayments(student.id) { payments = it } else null
+        onDispose { reg?.remove() }
+    }
     DisposableEffect(student.id) {
         val regs: List<ListenerRegistration> = state.listenStudentHistory(student.id, { attendance = it }, { logs = it })
         onDispose { regs.forEach { it.remove() } }
@@ -126,6 +132,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
             }
         }
         item { HizbProgressCard(state, me, student) }
+        if (seesFees) item { StudentFeesCard(state, me, student, payments) }
         item {
             OutlinedButton(onClick = { reportOpen = true }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Assessment, null); Spacer(Modifier.width(6.dp)); Text("التقرير الشهري")
@@ -199,8 +206,10 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
     var address by remember { mutableStateOf(existing?.address ?: "") }
     var enrollmentDate by remember { mutableStateOf(existing?.enrollmentDate ?: today()) }
     var status by remember { mutableStateOf(existing?.status ?: "نشط") }
+    var fee by remember { mutableStateOf(existing?.monthlyFee?.takeIf { it > 0 }?.toString() ?: "") }
     var confirmDelete by remember { mutableStateOf(false) }
-    val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status)
+    val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status,
+        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0)
 
     AlertDialog(
         onDismissRequest = close,
@@ -221,6 +230,8 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
                 AppField(phone, { phone = it }, "هاتف ولي الأمر", KeyboardType.Phone)
                 AppField(address, { address = it }, "العنوان")
                 AppField(enrollmentDate, { enrollmentDate = it }, "تاريخ التسجيل")
+                if (state.profile?.isAdmin == true) AppField(fee, { v -> fee = v.filter { it.isDigit() }.take(7) },
+                    "الرسوم الشهرية بالفرنك (اتركها فارغة للإعفاء)", KeyboardType.Number)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("الحالة:", fontWeight = FontWeight.Bold)
                     listOf("نشط", "متوقف").forEach { st ->

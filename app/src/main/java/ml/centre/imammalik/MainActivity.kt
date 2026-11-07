@@ -121,13 +121,15 @@ private fun Dashboard(state: AppState, me: AppUser) {
             add(Tab("الحضور", Icons.Default.FactCheck))
             add(Tab("الحفظ", Icons.Default.MenuBook))
         }
-        if (me.isAdmin) add(Tab("الحسابات", Icons.Default.ManageAccounts))
+        if (me.isAdmin) add(Tab("الرسوم", Icons.Default.Payments))
     }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     if (tab >= tabs.size) tab = 0
     var addOpen by remember { mutableStateOf(false) }
     var profileId by rememberSaveable { mutableStateOf<String?>(null) }
     var editStudent by remember { mutableStateOf<Student?>(null) }
+    var showUsers by rememberSaveable { mutableStateOf(false) }
+    var announceOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.message) { if (state.message != null) { delay(3500); state.message = null } }
 
@@ -137,9 +139,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (profileStudent != null) profileStudent.name else "مركز الإمام مالك") },
+                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; else -> "مركز الإمام مالك" }) },
                 navigationIcon = {
-                    if (profileStudent != null) IconButton(onClick = { profileId = null }) {
+                    if (profileStudent != null || showUsers) IconButton(onClick = { if (profileStudent != null) profileId = null else showUsers = false }) {
                         Icon(Icons.Default.ArrowForward, "رجوع", tint = Color.White)
                     }
                 },
@@ -148,12 +150,15 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     if (profileStudent != null && me.isStaff) IconButton(onClick = { editStudent = profileStudent }) {
                         Icon(Icons.Default.Edit, "تعديل", tint = Color.White)
                     }
+                    if (me.isAdmin && profileStudent == null && !showUsers) IconButton(onClick = { showUsers = true }) {
+                        Icon(Icons.Default.ManageAccounts, "الحسابات", tint = Color.White)
+                    }
                     IconButton(onClick = state::logout) { Icon(Icons.Default.Logout, "خروج", tint = Color.White) }
                 }
             )
         },
         bottomBar = {
-            if (profileStudent == null) NavigationBar {
+            if (profileStudent == null && !showUsers) NavigationBar {
                 tabs.forEachIndexed { i, item ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i },
                         icon = { Icon(item.icon, item.title) }, label = { Text(item.title, maxLines = 1) })
@@ -161,20 +166,26 @@ private fun Dashboard(state: AppState, me: AppUser) {
             }
         },
         floatingActionButton = {
-            if (profileStudent == null && me.isStaff && tabs[tab].title == "الطلاب")
+            if (profileStudent == null && !showUsers && me.isStaff && tabs[tab].title == "الطلاب")
                 FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") }
+            if (profileStudent == null && !showUsers && me.isAdmin && tabs[tab].title == "الرئيسية")
+                ExtendedFloatingActionButton(onClick = { announceOpen = true }, containerColor = Gold,
+                    icon = { Icon(Icons.Default.Campaign, null) }, text = { Text("إعلان") })
         }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (profileStudent != null) {
                 BackHandler { profileId = null }
                 StudentProfileScreen(state, me, profileStudent)
+            } else if (showUsers) {
+                BackHandler { showUsers = false }
+                UsersScreen(state)
             } else when (tabs[tab].title) {
                 "الرئيسية" -> HomeScreen(state, me) { profileId = it.id }
                 "الطلاب", "أبنائي" -> StudentsScreen(state, me) { profileId = it.id }
                 "الحضور" -> AttendanceScreen(state)
                 "الحفظ" -> QuranScreen(state) { profileId = it }
-                "الحسابات" -> UsersScreen(state)
+                "الرسوم" -> FeesScreen(state) { profileId = it }
             }
             state.message?.let { msg ->
                 Card(
@@ -185,6 +196,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
         }
     }
     if (addOpen) StudentDialog(state, null) { addOpen = false }
+    if (announceOpen) AnnouncementDialog(state) { announceOpen = false }
     editStudent?.let { s -> StudentDialog(state, s, onDeleted = { profileId = null }) { editStudent = null } }
 }
 
@@ -218,6 +230,13 @@ private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
                         Text("الصفة: ${Roles.label(me.role)}", color = Gold, fontSize = 13.sp)
                     }
                 }
+            }
+        }
+        if (state.announcements.isNotEmpty()) {
+            item { Text("الإعلانات", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+            items(state.announcements.take(5).size) { i ->
+                val a = state.announcements[i]
+                AnnouncementCard(a, canDelete = me.isAdmin) { state.deleteAnnouncement(a) }
             }
         }
         item {

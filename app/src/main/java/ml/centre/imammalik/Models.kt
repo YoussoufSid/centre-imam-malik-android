@@ -45,8 +45,61 @@ data class Student(
     val enrollmentDate: String = "",
     val status: String = "نشط",
     /** Number of hizbs memorized (0..60). */
-    val hizbs: Int = 0
+    val hizbs: Int = 0,
+    /** Monthly fee in FCFA (0 = exempt / not set). */
+    val monthlyFee: Int = 0
 )
+
+object Audience {
+    const val ALL = "all"
+    const val PARENTS = "parents"
+    const val TEACHERS = "teachers"
+    val all = listOf(ALL, PARENTS, TEACHERS)
+    fun label(a: String) = when (a) { PARENTS -> "أولياء الأمور"; TEACHERS -> "المعلمون"; else -> "الجميع" }
+    fun visibleTo(a: String, user: AppUser) = user.isAdmin || a == ALL ||
+        (a == TEACHERS && user.isStaff) || (a == PARENTS && !user.isStaff)
+}
+
+data class Announcement(
+    val id: String = "",
+    val title: String = "",
+    val body: String = "",
+    val audience: String = Audience.ALL,
+    val author: String = "",
+    val createdAt: Long = 0
+)
+
+data class Payment(
+    val id: String = "",
+    val studentId: String = "",
+    val studentName: String = "",
+    /** yyyy-MM */
+    val month: String = "",
+    val amount: Int = 0,
+    val paidOn: String = "",
+    val recordedBy: String = ""
+)
+
+fun currentMonth(): String = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
+
+fun shiftMonth(month: String, delta: Int): String {
+    val f = SimpleDateFormat("yyyy-MM", Locale.US)
+    val cal = Calendar.getInstance()
+    runCatching { f.parse(month) }.getOrNull()?.let { cal.time = it }
+    cal.add(Calendar.MONTH, delta)
+    return f.format(cal.time)
+}
+
+private val ArabicMonthNames = listOf("يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر")
+
+fun monthName(key: String): String {
+    val parts = key.split("-")
+    val m = parts.getOrNull(1)?.toIntOrNull() ?: return key
+    return "${ArabicMonthNames.getOrElse(m - 1) { key }} ${parts[0]}"
+}
+
+fun money(amount: Int): String = "%,d".format(Locale.US, amount).replace(',', ' ') + " فرنك"
 
 const val TOTAL_HIZBS = 60
 

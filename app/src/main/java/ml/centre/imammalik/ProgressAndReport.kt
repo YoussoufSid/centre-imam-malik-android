@@ -83,15 +83,6 @@ private fun monthKey(offset: Int): String {
     return SimpleDateFormat("yyyy-MM", Locale.US).format(cal.time)
 }
 
-private val ArabicMonths = listOf("يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
-    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر")
-
-private fun monthName(key: String): String {
-    val parts = key.split("-")
-    val m = parts.getOrNull(1)?.toIntOrNull() ?: return key
-    return "${ArabicMonths.getOrElse(m - 1) { key }} ${parts[0]}"
-}
-
 fun buildMonthlyReport(student: Student, month: String, attendance: List<AttendanceRecord>, logs: List<QuranLog>): String {
     val att = attendance.filter { it.date.startsWith(month) }
     val ls = logs.filter { it.date.startsWith(month) }
@@ -137,7 +128,7 @@ fun buildMonthlyReport(student: Student, month: String, attendance: List<Attenda
 }
 
 /** Mali numbers are 8 digits; add the country code when it is missing. */
-private fun whatsappNumber(phone: String): String? {
+fun whatsappNumber(phone: String): String? {
     var d = phone.filter { it.isDigit() }
     if (d.startsWith("00")) d = d.drop(2)
     if (d.length == 8) d = "223$d"
