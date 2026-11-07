@@ -135,26 +135,27 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var addOpen by remember { mutableStateOf(false) }
     var profileId by rememberSaveable { mutableStateOf<String?>(null) }
     var editStudent by remember { mutableStateOf<Student?>(null) }
-    var showUsers by rememberSaveable { mutableStateOf(false) }
-    var showGrades by rememberSaveable { mutableStateOf(false) }
-    var showStats by rememberSaveable { mutableStateOf(false) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    /** Secondary full screen shown above the tabs (null = tabs). */
+    var screen by rememberSaveable { mutableStateOf<String?>(null) }
     var aboutOpen by remember { mutableStateOf(false) }
     var logoutOpen by remember { mutableStateOf(false) }
     var announceOpen by remember { mutableStateOf(false) }
     var exportOpen by remember { mutableStateOf(false) }
     var quickLogOpen by remember { mutableStateOf(false) }
     fun goTo(title: String) { tabs.indexOfFirst { it.title == title }.takeIf { it >= 0 }?.let { tab = it } }
+    fun open(s: String) { profileId = null; screen = s }
     val quickActions = buildList {
         if (me.isStaff) {
             add(QuickAction("تسجيل الحضور", Icons.Default.FactCheck) { goTo("الحضور") })
             add(QuickAction("تسميع جديد", Icons.Default.MenuBook) { quickLogOpen = true })
             add(QuickAction("إضافة طالب", Icons.Default.PersonAdd) { addOpen = true })
-            add(QuickAction("إدخال درجات", Icons.Default.School) { showGrades = true })
-            add(QuickAction("الإحصائيات", Icons.Default.Insights) { showStats = true })
+            add(QuickAction("إدخال درجات", Icons.Default.School) { open(Screens.GRADES) })
+            add(QuickAction("الإحصائيات", Icons.Default.Insights) { open(Screens.STATS) })
+            add(QuickAction("الحلقات", Icons.Default.Diversity3) { open(Screens.HALAQAT) })
         }
         if (me.isAdmin) {
             add(QuickAction("المالية", Icons.Default.AccountBalanceWallet) { goTo("المالية") })
+            add(QuickAction("إضافة جماعية", Icons.Default.GroupAdd) { open(Screens.BULK) })
             add(QuickAction("إعلان جديد", Icons.Default.Campaign) { announceOpen = true })
         }
     }
@@ -163,15 +164,14 @@ private fun Dashboard(state: AppState, me: AppUser) {
 
     val profileStudent = profileId?.let { id -> state.students.firstOrNull { it.id == id } }
     if (profileId != null && profileStudent == null && state.students.isNotEmpty()) profileId = null
+    val onMain = profileStudent == null && screen == null
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; showGrades -> "إدخال الدرجات"; showStats -> "الإحصائيات"; showSettings -> "إعدادات المركز"; else -> "مركز الإمام مالك" }) },
+                title = { Text(profileStudent?.name ?: Screens.title(screen) ?: "مركز الإمام مالك", maxLines = 1) },
                 navigationIcon = {
-                    if (profileStudent != null || showUsers || showGrades || showStats || showSettings) IconButton(onClick = {
-                        if (profileStudent != null) profileId = null else { showUsers = false; showGrades = false; showStats = false; showSettings = false }
-                    }) {
+                    if (!onMain) IconButton(onClick = { if (profileStudent != null) profileId = null else screen = null }) {
                         Icon(Icons.Default.ArrowForward, "رجوع", tint = Color.White)
                     }
                 },
@@ -191,12 +191,14 @@ private fun Dashboard(state: AppState, me: AppUser) {
                         Icon(Icons.Default.Edit, "تعديل", tint = Color.White)
                     }
                     AppMenu(buildList {
+                        if (me.isStaff) add(MenuEntry("الحلقات", Icons.Default.Diversity3) { open(Screens.HALAQAT) })
                         if (me.isAdmin) {
-                            add(MenuEntry("إعدادات المركز", Icons.Default.Settings) { profileId = null; showSettings = true })
+                            add(MenuEntry("إضافة طلاب دفعة واحدة", Icons.Default.GroupAdd) { open(Screens.BULK) })
+                            add(MenuEntry("إعدادات المركز", Icons.Default.Settings) { open(Screens.SETTINGS) })
                             add(MenuEntry("تصدير البيانات", Icons.Default.FileDownload) { exportOpen = true })
-                            add(MenuEntry("حسابات المستخدمين", Icons.Default.ManageAccounts) { profileId = null; showUsers = true })
+                            add(MenuEntry("حسابات المستخدمين", Icons.Default.ManageAccounts) { open(Screens.USERS) })
                         }
-                        if (me.isStaff) add(MenuEntry("الإحصائيات", Icons.Default.Insights) { profileId = null; showStats = true })
+                        if (me.isStaff) add(MenuEntry("الإحصائيات", Icons.Default.Insights) { open(Screens.STATS) })
                         add(MenuEntry("حول التطبيق", Icons.Default.Info) { aboutOpen = true })
                         add(MenuEntry("تسجيل الخروج", Icons.Default.Logout) { logoutOpen = true })
                     })
@@ -204,7 +206,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             )
         },
         bottomBar = {
-            if (profileStudent == null && !showUsers && !showGrades && !showStats && !showSettings) NavigationBar {
+            if (onMain) NavigationBar {
                 tabs.forEachIndexed { i, item ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i },
                         icon = { Icon(item.icon, item.title) }, label = { Text(item.title, maxLines = 1) })
@@ -212,7 +214,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             }
         },
         floatingActionButton = {
-            if (profileStudent == null && !showUsers && !showGrades && !showStats && !showSettings && me.isStaff && tabs[tab].title == "الطلاب")
+            if (onMain && me.isStaff && tabs[tab].title == "الطلاب")
                 FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") }
         }
     ) { pad ->
@@ -220,21 +222,20 @@ private fun Dashboard(state: AppState, me: AppUser) {
             if (profileStudent != null) {
                 BackHandler { profileId = null }
                 StudentProfileScreen(state, me, profileStudent)
-            } else if (showSettings) {
-                BackHandler { showSettings = false }
-                SettingsScreen(state) { showSettings = false }
-            } else if (showStats) {
-                BackHandler { showStats = false }
-                StatsScreen(state) { profileId = it }
-            } else if (showGrades) {
-                BackHandler { showGrades = false }
-                GradeEntryScreen(state) { showGrades = false }
-            } else if (showUsers) {
-                BackHandler { showUsers = false }
-                UsersScreen(state)
+            } else if (screen != null) {
+                BackHandler { screen = null }
+                when (screen) {
+                    Screens.SETTINGS -> SettingsScreen(state) { screen = null }
+                    Screens.STATS -> StatsScreen(state) { profileId = it }
+                    Screens.GRADES -> GradeEntryScreen(state) { screen = null }
+                    Screens.USERS -> UsersScreen(state)
+                    Screens.HALAQAT -> HalaqatScreen(state, me, onBulk = { screen = Screens.BULK }) { profileId = it }
+                    Screens.BULK -> BulkAddScreen(state) { screen = null }
+                }
             } else when (tabs[tab].title) {
                 "الرئيسية" -> HomeScreen(state, me, quickActions) { profileId = it.id }
-                "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { showGrades = true }) { profileId = it.id }
+                "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { open(Screens.GRADES) },
+                    onBulkAdd = { open(Screens.BULK) }) { profileId = it.id }
                 "الحضور" -> AttendanceScreen(state)
                 "الحفظ" -> QuranScreen(state) { profileId = it }
                 "المالية" -> FinanceScreen(state) { profileId = it }
@@ -254,6 +255,24 @@ private fun Dashboard(state: AppState, me: AppUser) {
     if (logoutOpen) LogoutConfirm(state::logout) { logoutOpen = false }
     if (quickLogOpen) LogDialog(state, null) { quickLogOpen = false }
     editStudent?.let { s -> StudentDialog(state, s, onDeleted = { profileId = null }) { editStudent = null } }
+}
+
+object Screens {
+    const val SETTINGS = "settings"
+    const val STATS = "stats"
+    const val GRADES = "grades"
+    const val USERS = "users"
+    const val HALAQAT = "halaqat"
+    const val BULK = "bulk"
+    fun title(s: String?): String? = when (s) {
+        SETTINGS -> "إعدادات المركز"
+        STATS -> "الإحصائيات"
+        GRADES -> "إدخال الدرجات"
+        USERS -> "حسابات المستخدمين"
+        HALAQAT -> "الحلقات"
+        BULK -> "إضافة طلاب دفعة واحدة"
+        else -> null
+    }
 }
 
 @Composable

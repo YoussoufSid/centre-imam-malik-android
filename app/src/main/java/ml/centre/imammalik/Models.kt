@@ -70,6 +70,39 @@ data class Student(
     val registrationFee: Int = 0
 )
 
+// ---------- Halaqat (groups) ----------
+
+data class Halaqa(
+    val id: String = "",
+    val name: String = "",
+    val teacher: String = "",
+    /** Free text, e.g. "السبت–الخميس، 16:00–18:00". */
+    val schedule: String = "",
+    val notes: String = ""
+)
+
+/** A student line parsed from pasted text or a CSV file. */
+data class ParsedStudent(val name: String, val phone: String = "")
+
+private val HeaderWords = setOf("الاسم", "اسم الطالب", "الطالب", "الاسم الكامل", "name", "nom", "nom complet", "prénom et nom")
+
+/**
+ * Parses one student per line. Columns may be separated by tab (Excel copy), ';' or ',':
+ * first column = name, second (optional) = phone. Header rows, numbering and blank lines are ignored.
+ */
+fun parseStudentLines(text: String): List<ParsedStudent> = text.removePrefix("\uFEFF").lines().mapNotNull { raw ->
+    // Drop a leading numbering column (Excel "N°" column) such as "1" or "١٢".
+    val cols = raw.split('\t', ';', ',').map { it.trim().trim('"').trim() }
+        .dropWhile { it.isNotEmpty() && it.length <= 4 && it.all { c -> c.isDigit() } }
+    val name = cols.firstOrNull().orEmpty()
+        .replace(Regex("^\\s*[0-9٠-٩]+\\s*[-.)–]\\s*"), "")   // "1- أحمد" / "٢. علي"
+        .replace(Regex("\\s+"), " ").trim()
+    if (name.isBlank() || cols.any { it.lowercase() in HeaderWords }) return@mapNotNull null  // header row
+    if (name.all { it.isDigit() || it == '+' || it == ' ' }) return@mapNotNull null
+    val phone = cols.drop(1).firstOrNull { c -> c.count { it.isDigit() } >= 6 }.orEmpty()
+    ParsedStudent(name, phone)
+}.distinctBy { it.name }
+
 object Audience {
     const val ALL = "all"
     const val PARENTS = "parents"

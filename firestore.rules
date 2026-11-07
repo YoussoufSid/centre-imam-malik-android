@@ -50,6 +50,10 @@ service cloud.firestore {
     match /expenses/{expenseId} {
       allow read, write: if isAdmin();
     }
+    match /halaqat/{halaqaId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
     match /settings/{docId} {
       allow read: if signedIn();
       allow write: if isAdmin();

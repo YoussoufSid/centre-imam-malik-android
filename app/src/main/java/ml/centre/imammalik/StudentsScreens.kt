@@ -54,7 +54,7 @@ fun StudentRow(s: Student, open: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudentsScreen(state: AppState, me: AppUser, onGradeEntry: () -> Unit = {}, open: (Student) -> Unit) {
+fun StudentsScreen(state: AppState, me: AppUser, onGradeEntry: () -> Unit = {}, onBulkAdd: () -> Unit = {}, open: (Student) -> Unit) {
     var query by remember { mutableStateOf("") }
     var group by remember { mutableStateOf<String?>(null) }
     val groups = state.students.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
@@ -64,8 +64,13 @@ fun StudentsScreen(state: AppState, me: AppUser, onGradeEntry: () -> Unit = {}, 
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         if (me.isStaff) {
-            if (state.students.isNotEmpty()) OutlinedButton(onClick = onGradeEntry, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                Icon(Icons.Default.School, null); Spacer(Modifier.width(6.dp)); Text("إدخال درجات الدراسات الإسلامية")
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (me.isAdmin) OutlinedButton(onClick = onBulkAdd, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.GroupAdd, null); Spacer(Modifier.width(4.dp)); Text("إضافة جماعية", maxLines = 1)
+                }
+                if (state.students.isNotEmpty()) OutlinedButton(onClick = onGradeEntry, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.School, null); Spacer(Modifier.width(4.dp)); Text("إدخال درجات", maxLines = 1)
+                }
             }
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 10.dp),
                 placeholder = { Text("بحث بالاسم أو الهاتف") }, singleLine = true,
@@ -265,7 +270,7 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
                 }
                 DateField(birthDate, { birthDate = it }, "تاريخ الميلاد", optional = true)
                 AppField(level, { level = it }, "المستوى (مثال: الحزب 5)")
-                AppField(group, { group = it }, "الحلقة")
+                GroupField(state, group, { group = it }) { t -> if (teacher.isBlank()) teacher = t }
                 AppField(teacher, { teacher = it }, "المعلم أو المعلمة")
                 AppField(phone, { phone = it }, "هاتف ولي الأمر", KeyboardType.Phone)
                 AppField(address, { address = it }, "العنوان")

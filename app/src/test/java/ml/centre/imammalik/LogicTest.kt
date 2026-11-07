@@ -138,6 +138,32 @@ class LogicTest {
         assertEquals("20 من 60 حزبًا (≈ 10 جزءًا)", hizbLabel(20))
     }
 
+    // ---------- Bulk import ----------
+
+    @Test fun parseStudentLines_handlesPasteExcelAndCsv() {
+        val text = """
+            الاسم	الهاتف
+            1- أحمد  محمد سيسي ; 76 12 34 56
+            ٢. فاطمة علي
+            3	عمر تراوري	66554433
+            "مريم كوليبالي",70112233
+
+            76543210
+            أحمد محمد سيسي
+        """.trimIndent()
+        val r = parseStudentLines(text)
+        assertEquals(listOf("أحمد محمد سيسي", "فاطمة علي", "عمر تراوري", "مريم كوليبالي"), r.map { it.name })
+        assertEquals("76 12 34 56", r[0].phone)
+        assertEquals("", r[1].phone)
+        assertEquals("66554433", r[2].phone)
+        assertEquals("70112233", r[3].phone)
+    }
+
+    @Test fun parseStudentLines_ignoresBomAndBlank() {
+        assertEquals(listOf("علي"), parseStudentLines("\uFEFFعلي\n\n   \n").map { it.name })
+        assertTrue(parseStudentLines("").isEmpty())
+    }
+
     // ---------- Analytics ----------
 
     @Test fun absenceStreak_countsLatestConsecutive() {

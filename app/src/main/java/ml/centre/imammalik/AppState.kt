@@ -36,7 +36,8 @@ class AppState {
         set(v) { allStudents = v }
 
     /** All group names known in the centre (unfiltered), for admin screens. */
-    val allGroups: List<String> get() = allStudents.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
+    val allGroups: List<String> get() = (halaqat.map { it.name } + allStudents.map { it.group })
+        .filter { it.isNotBlank() }.distinct().sorted()
 
     private fun <T> scoped(list: List<T>, id: (T) -> String): List<T> {
         if (scopedGroups == null) return list
@@ -61,6 +62,7 @@ class AppState {
     var registrationPayments by mutableStateOf(emptyList<Payment>())
     var expenseMonth by mutableStateOf(currentMonth())
     var monthExpenses by mutableStateOf(emptyList<Expense>())
+    var halaqat by mutableStateOf(emptyList<Halaqa>())
     var busy by mutableStateOf(false)
     /** Bumped whenever centre settings change, so screens showing them recompose. */
     var settingsVersion by mutableStateOf(0)
@@ -159,7 +161,7 @@ class AppState {
         pending.clear(); fromCache.clear()
         students = emptyList(); users = emptyList(); todayAttendance = emptyList()
         dayAttendance = emptyList(); recentLogs = emptyList()
-        announcements = emptyList(); monthPayments = emptyList()
+        announcements = emptyList(); monthPayments = emptyList(); halaqat = emptyList()
         registrationPayments = emptyList(); monthExpenses = emptyList()
     }
 
@@ -187,6 +189,12 @@ class AppState {
                 .addSnapshotListener { snap, _ -> registrationPayments = snap?.documents?.map(::toPayment) ?: emptyList() }
         }
         if (p.isStaff) {
+            listeners += db.collection("halaqat").addSnapshotListener { snap, _ ->
+                halaqat = snap?.documents?.map { d ->
+                    Halaqa(d.id, d.getString("name") ?: "", d.getString("teacher") ?: "",
+                        d.getString("schedule") ?: "", d.getString("notes") ?: "")
+                }?.sortedBy { it.name } ?: emptyList()
+            }
             listeners += db.collection("students").orderBy("name").addSnapshotListener(MetadataChanges.INCLUDE) { snap, e ->
                 if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
                 track("students", snap)
@@ -489,6 +497,61 @@ class AppState {
         db.collection("payments").whereEqualTo("studentId", studentId).addSnapshotListener { snap, _ ->
             onPayments(snap?.documents?.map(::toPayment)?.sortedByDescending { it.month } ?: emptyList())
         }
+
+    // ---------- Halaqat ----------
+
+    fun saveHalaqa(h: Halaqa, done: () -> Unit) {
+        val name = h.name.trim()
+        if (name.isBlank()) { message = "اسم الحلقة مطلوب"; return }
+        if (halaqat.any { it.name == name && it.id != h.id }) { message = "توجد حلقة بهذا الاسم"; return }
+        val old = halaqat.firstOrNull { it.id == h.id }
+        val data = mapOf("name" to name, "teacher" to h.teacher.trim(), "schedule" to h.schedule.trim(),
+            "notes" to h.notes.trim(), "updatedAt" to Date())
+        val ref = if (h.id.isBlank()) db.collection("halaqat").document() else db.collection("halaqat").document(h.id)
+        ref.set(data).addOnFailureListener { message = arabicError(it.message) }
+        // Renaming a halaqa (or changing its teacher) updates its students so nothing gets lost.
+        if (old != null && (old.name != name || old.teacher != h.teacher.trim())) {
+            allStudents.filter { it.group == old.name }.chunked(400).forEach { chunk ->
+                val batch = db.batch()
+                chunk.forEach { s ->
+                    val upd = mutableMapOf<String, Any>("group" to name, "updatedAt" to Date())
+                    if (s.teacher.isBlank() || s.teacher == old.teacher) upd["teacher"] = h.teacher.trim()
+                    batch.update(db.collection("students").document(s.id), upd)
+                }
+                batch.commit().addOnFailureListener { message = arabicError(it.message) }
+            }
+        }
+        done(); message = if (h.id.isBlank()) "تمت إضافة حلقة «$name»" else "تم تحديث الحلقة"
+    }
+
+    fun deleteHalaqa(h: Halaqa) {
+        db.collection("halaqat").document(h.id).delete()
+            .addOnSuccessListener { message = "حُذفت الحلقة (يبقى طلابها بلا تغيير)" }
+            .addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    /** Adds many students at once; names that already exist in the same halaqa are skipped. */
+    fun bulkAddStudents(list: List<ParsedStudent>, group: String, gender: String, monthlyFee: Int, registrationFee: Int,
+                        done: (Int) -> Unit) {
+        val existing = allStudents.filter { it.group == group }.map { it.name.trim() }.toSet()
+        val toAdd = list.filter { it.name !in existing }
+        if (toAdd.isEmpty()) { message = "كل الأسماء موجودة مسبقًا في هذه الحلقة"; return }
+        val teacher = halaqat.firstOrNull { it.name == group }?.teacher ?: ""
+        toAdd.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { p ->
+                batch.set(db.collection("students").document(), mapOf(
+                    "name" to p.name, "gender" to gender, "birthDate" to "", "level" to "", "group" to group,
+                    "teacher" to teacher, "phone" to p.phone, "address" to "", "enrollmentDate" to today(),
+                    "status" to "نشط", "monthlyFee" to monthlyFee, "registrationFee" to registrationFee,
+                    "hizbs" to 0, "updatedAt" to Date()
+                ))
+            }
+            batch.commit().addOnFailureListener { message = arabicError(it.message) }
+        }
+        message = "تمت إضافة ${toAdd.size} طالب" + if (toAdd.size < list.size) " (تخطّي ${list.size - toAdd.size} مكرر)" else ""
+        done(toAdd.size)
+    }
 
     // ---------- Centre settings (admin) ----------
 
