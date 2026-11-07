@@ -11,6 +11,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import java.util.Date
+import java.util.Locale
 
 class AppState {
     val auth = FirebaseAuth.getInstance()
@@ -54,6 +55,9 @@ class AppState {
     var announcements by mutableStateOf(emptyList<Announcement>())
     var feeMonth by mutableStateOf(currentMonth())
     var monthPayments by mutableStateOf(emptyList<Payment>())
+    var registrationPayments by mutableStateOf(emptyList<Payment>())
+    var expenseMonth by mutableStateOf(currentMonth())
+    var monthExpenses by mutableStateOf(emptyList<Expense>())
     var busy by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
 
@@ -61,6 +65,7 @@ class AppState {
     private var profileListener: ListenerRegistration? = null
     private var dayListener: ListenerRegistration? = null
     private var feeListener: ListenerRegistration? = null
+    private var expenseListener: ListenerRegistration? = null
     private val linkedListeners = mutableMapOf<String, ListenerRegistration>()
     private val linkedStudents = mutableMapOf<String, Student>()
 
@@ -131,10 +136,12 @@ class AppState {
         listeners.forEach { it.remove() }; listeners.clear()
         dayListener?.remove(); dayListener = null
         feeListener?.remove(); feeListener = null
+        expenseListener?.remove(); expenseListener = null
         linkedListeners.values.forEach { it.remove() }; linkedListeners.clear(); linkedStudents.clear()
         students = emptyList(); users = emptyList(); todayAttendance = emptyList()
         dayAttendance = emptyList(); recentLogs = emptyList()
         announcements = emptyList(); monthPayments = emptyList()
+        registrationPayments = emptyList(); monthExpenses = emptyList()
     }
 
     private fun startData(p: AppUser) {
@@ -143,7 +150,12 @@ class AppState {
             .addSnapshotListener { snap, _ ->
                 announcements = snap?.documents?.map(::toAnnouncement)?.filter { Audience.visibleTo(it.audience, p) } ?: emptyList()
             }
-        if (p.isAdmin) listenFees(feeMonth)
+        if (p.isAdmin) {
+            listenFees(feeMonth)
+            listenExpenses(expenseMonth)
+            listeners += db.collection("payments").whereEqualTo("type", PaymentType.REGISTRATION)
+                .addSnapshotListener { snap, _ -> registrationPayments = snap?.documents?.map(::toPayment) ?: emptyList() }
+        }
         if (p.isStaff) {
             listeners += db.collection("students").orderBy("name").addSnapshotListener { snap, e ->
                 if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
@@ -178,7 +190,7 @@ class AppState {
             "group" to student.group.trim(), "teacher" to student.teacher.trim(),
             "phone" to student.phone.trim(), "address" to student.address.trim(),
             "enrollmentDate" to student.enrollmentDate.trim(), "status" to student.status,
-            "monthlyFee" to student.monthlyFee,
+            "monthlyFee" to student.monthlyFee, "registrationFee" to student.registrationFee,
             "updatedAt" to Date()
         )
         // merge keeps fields edited elsewhere (e.g. hizb progress).
@@ -316,7 +328,7 @@ class AppState {
         feeListener?.remove()
         feeListener = db.collection("payments").whereEqualTo("month", month).addSnapshotListener { snap, e ->
             if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
-            monthPayments = snap?.documents?.map(::toPayment) ?: emptyList()
+            monthPayments = snap?.documents?.map(::toPayment)?.filter { it.type == PaymentType.MONTHLY } ?: emptyList()
         }
     }
 
@@ -325,8 +337,64 @@ class AppState {
         done(); message = "سُجّل دفع ${student.name} لشهر ${monthName(month)}"
         db.collection("payments").document("${month}_${student.id}").set(mapOf(
             "studentId" to student.id, "studentName" to student.name, "month" to month,
-            "amount" to amount, "paidOn" to today(), "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
+            "amount" to amount, "paidOn" to today(), "recordedBy" to (profile?.name ?: ""),
+            "type" to PaymentType.MONTHLY, "updatedAt" to Date()
         )).addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun saveRegistrationPayment(student: Student, amount: Int, done: () -> Unit) {
+        if (amount <= 0) { message = "أدخل المبلغ المدفوع"; return }
+        done(); message = "سُجّلت رسوم تسجيل ${student.name}"
+        db.collection("payments").document("reg_${student.id}").set(mapOf(
+            "studentId" to student.id, "studentName" to student.name, "month" to currentMonth(),
+            "amount" to amount, "paidOn" to today(), "recordedBy" to (profile?.name ?: ""),
+            "type" to PaymentType.REGISTRATION, "updatedAt" to Date()
+        )).addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    // ---------- Expenses ----------
+
+    fun changeExpenseMonth(delta: Int) {
+        val next = shiftMonth(expenseMonth, delta)
+        if (next > currentMonth()) return
+        expenseMonth = next
+        listenExpenses(next)
+    }
+
+    private fun listenExpenses(month: String) {
+        expenseListener?.remove()
+        expenseListener = db.collection("expenses").whereEqualTo("month", month).addSnapshotListener { snap, e ->
+            if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+            monthExpenses = snap?.documents?.map(::toExpense)?.sortedByDescending { it.date } ?: emptyList()
+        }
+    }
+
+    fun saveExpense(e: Expense, done: () -> Unit) {
+        if (e.amount <= 0) { message = "أدخل المبلغ"; return }
+        if (e.category.isBlank()) { message = "اختر نوع المصروف"; return }
+        val date = e.date.trim().ifBlank { today() }
+        done(); message = "تم تسجيل المصروف"
+        val data = mapOf("category" to e.category, "amount" to e.amount, "date" to date, "month" to date.take(7),
+            "note" to e.note.trim(), "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date())
+        val ref = if (e.id.isBlank()) db.collection("expenses").document() else db.collection("expenses").document(e.id)
+        ref.set(data).addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun deleteExpense(e: Expense) {
+        db.collection("expenses").document(e.id).delete()
+            .addOnSuccessListener { message = "تم حذف المصروف" }
+            .addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    /** Loads all payments and expenses of a year (yyyy) for the financial summary. */
+    fun loadYear(year: String, onReady: (List<Payment>, List<Expense>) -> Unit) {
+        db.collection("payments").whereGreaterThanOrEqualTo("month", "$year-01").whereLessThanOrEqualTo("month", "$year-12")
+            .get().addOnSuccessListener { ps ->
+                db.collection("expenses").whereGreaterThanOrEqualTo("month", "$year-01").whereLessThanOrEqualTo("month", "$year-12")
+                    .get().addOnSuccessListener { es ->
+                        onReady(ps.documents.map(::toPayment), es.documents.map(::toExpense))
+                    }.addOnFailureListener { message = arabicError(it.message) }
+            }.addOnFailureListener { message = arabicError(it.message) }
     }
 
     fun deletePayment(p: Payment) {
@@ -438,6 +506,27 @@ class AppState {
         }.addOnFailureListener { message = arabicError(it.message) }
     }
 
+    fun expensesCsv(month: String, onReady: (String) -> Unit) {
+        db.collection("expenses").whereEqualTo("month", month).get().addOnSuccessListener { snap ->
+            val list = snap.documents.map(::toExpense).sortedBy { it.date }
+            onReady(csv(listOf(listOf("التاريخ", "النوع", "المبلغ", "ملاحظة", "سجّله")) +
+                list.map { listOf(it.date, it.category, it.amount, it.note, it.recordedBy) } +
+                listOf(listOf("", "المجموع", list.sumOf { it.amount }, "", ""))))
+        }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun financeSummaryCsv(year: String, onReady: (String) -> Unit) = loadYear(year) { ps, es ->
+        val rows = (1..12).map { "%s-%02d".format(Locale.US, year, it) }.map { m ->
+            val monthly = ps.filter { it.month == m && it.type == PaymentType.MONTHLY }.sumOf { it.amount }
+            val reg = ps.filter { it.month == m && it.type == PaymentType.REGISTRATION }.sumOf { it.amount }
+            val exp = es.filter { it.month == m }.sumOf { it.amount }
+            listOf(monthName(m), monthly, reg, monthly + reg, exp, monthly + reg - exp)
+        }
+        val totals = (1..5).map { i -> rows.sumOf { it[i] as Int } }
+        onReady(csv(listOf(listOf("الشهر", "الرسوم الشهرية", "رسوم التسجيل", "مجموع الإيرادات", "المصروفات", "الصافي")) +
+            rows + listOf(listOf<Any?>("المجموع") + totals)))
+    }
+
     // ---------- Users (admin) ----------
 
     fun updateUser(user: AppUser, role: String, studentIds: List<String>, groups: List<String> = emptyList()) {
@@ -462,7 +551,8 @@ class AppState {
         enrollmentDate = d.getString("enrollmentDate") ?: "",
         status = d.getString("status") ?: "نشط",
         hizbs = d.getLong("hizbs")?.toInt() ?: 0,
-        monthlyFee = d.getLong("monthlyFee")?.toInt() ?: 0
+        monthlyFee = d.getLong("monthlyFee")?.toInt() ?: 0,
+        registrationFee = d.getLong("registrationFee")?.toInt() ?: 0
     )
 
     private fun toAnnouncement(d: DocumentSnapshot) = Announcement(
@@ -481,6 +571,17 @@ class AppState {
         month = d.getString("month") ?: "",
         amount = d.getLong("amount")?.toInt() ?: 0,
         paidOn = d.getString("paidOn") ?: "",
+        recordedBy = d.getString("recordedBy") ?: "",
+        type = d.getString("type") ?: PaymentType.MONTHLY
+    )
+
+    private fun toExpense(d: DocumentSnapshot) = Expense(
+        id = d.id,
+        category = d.getString("category") ?: "",
+        amount = d.getLong("amount")?.toInt() ?: 0,
+        date = d.getString("date") ?: "",
+        month = d.getString("month") ?: "",
+        note = d.getString("note") ?: "",
         recordedBy = d.getString("recordedBy") ?: ""
     )
 

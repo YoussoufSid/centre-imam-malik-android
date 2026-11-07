@@ -47,6 +47,9 @@ service cloud.firestore {
       allow read: if isAdmin() || linkedTo(resource.data.studentId);
       allow write: if isAdmin();
     }
+    match /expenses/{expenseId} {
+      allow read, write: if isAdmin();
+    }
     match /announcements/{announcementId} {
       allow read: if signedIn();
       allow write: if isAdmin();

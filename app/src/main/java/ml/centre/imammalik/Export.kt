@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -59,7 +61,7 @@ fun ExportDialog(state: AppState, close: () -> Unit) {
         onDismissRequest = close,
         title = { Text("تصدير البيانات إلى Excel") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { month = shiftMonth(month, -1) }) { Icon(Icons.Default.ChevronRight, "الشهر السابق") }
                     Text(monthName(month), Modifier.weight(1f), fontWeight = FontWeight.Bold,
@@ -75,8 +77,14 @@ fun ExportDialog(state: AppState, close: () -> Unit) {
                 ExportRow(Icons.Default.FactCheck, "ملخص الحضور", "لكل طالب خلال ${monthName(month)}") {
                     loading = true; state.attendanceCsv(month, done("attendance-$month.csv"))
                 }
-                ExportRow(Icons.Default.Payments, "الرسوم", "المدفوع وغير المدفوع لشهر ${monthName(month)}") {
+                ExportRow(Icons.Default.Payments, "الرسوم الشهرية", "المدفوع وغير المدفوع لشهر ${monthName(month)}") {
                     loading = true; state.feesCsv(month, done("fees-$month.csv"))
+                }
+                ExportRow(Icons.Default.ReceiptLong, "المصروفات", "مصروفات ${monthName(month)} مع المجموع") {
+                    loading = true; state.expensesCsv(month, done("expenses-$month.csv"))
+                }
+                ExportRow(Icons.Default.AccountBalanceWallet, "الملخص المالي السنوي", "الإيرادات والمصروفات والصافي لسنة ${month.take(4)}") {
+                    loading = true; state.financeSummaryCsv(month.take(4), done("finance-${month.take(4)}.csv"))
                 }
                 ExportRow(Icons.Default.School, "درجات الدراسات الإسلامية", "كل الدرجات المسجلة") {
                     loading = true; state.gradesCsv(done("grades.csv"))

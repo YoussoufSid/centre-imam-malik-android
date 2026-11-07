@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -53,7 +54,11 @@ class MainActivity : ComponentActivity() {
 fun ImamMalikApp() {
     val state = remember { AppState() }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Gold, background = Cream, surface = Color.White)) {
+        MaterialTheme(
+            colorScheme = lightColorScheme(primary = Green, secondary = Gold, background = Cream, surface = Color.White,
+                secondaryContainer = Green.copy(alpha = .12f), onSecondaryContainer = Green),
+            shapes = Shapes(small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp))
+        ) {
             Surface(Modifier.fillMaxSize(), color = Cream) {
                 when {
                     state.firebaseUser == null -> AuthScreen(state)
@@ -121,7 +126,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             add(Tab("الحضور", Icons.Default.FactCheck))
             add(Tab("الحفظ", Icons.Default.MenuBook))
         }
-        if (me.isAdmin) add(Tab("الرسوم", Icons.Default.Payments))
+        if (me.isAdmin) add(Tab("المالية", Icons.Default.AccountBalanceWallet))
     }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     if (tab >= tabs.size) tab = 0
@@ -132,6 +137,20 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var showGrades by rememberSaveable { mutableStateOf(false) }
     var announceOpen by remember { mutableStateOf(false) }
     var exportOpen by remember { mutableStateOf(false) }
+    var quickLogOpen by remember { mutableStateOf(false) }
+    fun goTo(title: String) { tabs.indexOfFirst { it.title == title }.takeIf { it >= 0 }?.let { tab = it } }
+    val quickActions = buildList {
+        if (me.isStaff) {
+            add(QuickAction("تسجيل الحضور", Icons.Default.FactCheck) { goTo("الحضور") })
+            add(QuickAction("تسميع جديد", Icons.Default.MenuBook) { quickLogOpen = true })
+            add(QuickAction("إضافة طالب", Icons.Default.PersonAdd) { addOpen = true })
+            add(QuickAction("إدخال درجات", Icons.Default.School) { showGrades = true })
+        }
+        if (me.isAdmin) {
+            add(QuickAction("المالية", Icons.Default.AccountBalanceWallet) { goTo("المالية") })
+            add(QuickAction("إعلان جديد", Icons.Default.Campaign) { announceOpen = true })
+        }
+    }
 
     LaunchedEffect(state.message) { if (state.message != null) { delay(3500); state.message = null } }
 
@@ -175,9 +194,6 @@ private fun Dashboard(state: AppState, me: AppUser) {
         floatingActionButton = {
             if (profileStudent == null && !showUsers && !showGrades && me.isStaff && tabs[tab].title == "الطلاب")
                 FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") }
-            if (profileStudent == null && !showUsers && !showGrades && me.isAdmin && tabs[tab].title == "الرئيسية")
-                ExtendedFloatingActionButton(onClick = { announceOpen = true }, containerColor = Gold,
-                    icon = { Icon(Icons.Default.Campaign, null) }, text = { Text("إعلان") })
         }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
@@ -191,11 +207,11 @@ private fun Dashboard(state: AppState, me: AppUser) {
                 BackHandler { showUsers = false }
                 UsersScreen(state)
             } else when (tabs[tab].title) {
-                "الرئيسية" -> HomeScreen(state, me) { profileId = it.id }
+                "الرئيسية" -> HomeScreen(state, me, quickActions) { profileId = it.id }
                 "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { showGrades = true }) { profileId = it.id }
                 "الحضور" -> AttendanceScreen(state)
                 "الحفظ" -> QuranScreen(state) { profileId = it }
-                "الرسوم" -> FeesScreen(state) { profileId = it }
+                "المالية" -> FinanceScreen(state) { profileId = it }
             }
             state.message?.let { msg ->
                 Card(
@@ -208,6 +224,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
     if (addOpen) StudentDialog(state, null) { addOpen = false }
     if (announceOpen) AnnouncementDialog(state) { announceOpen = false }
     if (exportOpen) ExportDialog(state) { exportOpen = false }
+    if (quickLogOpen) LogDialog(state, null) { quickLogOpen = false }
     editStudent?.let { s -> StudentDialog(state, s, onDeleted = { profileId = null }) { editStudent = null } }
 }
 
@@ -223,7 +240,7 @@ fun StatCard(title: String, value: String, icon: ImageVector, modifier: Modifier
 }
 
 @Composable
-private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
+private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAction>, open: (Student) -> Unit) {
     val active = state.students.filter { it.status == "نشط" }
     val present = state.todayAttendance.count { AttendanceStatus.isPresent(it.status) }
     val absent = state.todayAttendance.count { it.status == AttendanceStatus.ABSENT }
@@ -259,6 +276,7 @@ private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
                     textAlign = TextAlign.Center)
             }
         }
+        if (quickActions.isNotEmpty()) item { QuickActions(quickActions) }
         if (me.isStaff) {
             item { Text("ملخص اليوم • ${ltr(today())}", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             item {

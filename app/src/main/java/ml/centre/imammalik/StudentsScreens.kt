@@ -40,7 +40,7 @@ fun StudentRow(s: Student, open: () -> Unit) {
                     }
                 }
             },
-            leadingContent = { Icon(Icons.Default.Person, null, tint = if (s.status == "نشط") Green else Color.Gray) },
+            leadingContent = { Avatar(s.name) },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (s.status != "نشط") Text(s.status, color = Color.Gray, fontSize = 12.sp)
@@ -216,9 +216,10 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
     var enrollmentDate by remember { mutableStateOf(existing?.enrollmentDate ?: today()) }
     var status by remember { mutableStateOf(existing?.status ?: "نشط") }
     var fee by remember { mutableStateOf(existing?.monthlyFee?.takeIf { it > 0 }?.toString() ?: "") }
+    var regFee by remember { mutableStateOf(existing?.registrationFee?.takeIf { it > 0 }?.toString() ?: "") }
     var confirmDelete by remember { mutableStateOf(false) }
     val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status,
-        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0)
+        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0, registrationFee = regFee.toIntOrNull() ?: 0)
 
     AlertDialog(
         onDismissRequest = close,
@@ -241,6 +242,8 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
                 AppField(enrollmentDate, { enrollmentDate = it }, "تاريخ التسجيل")
                 if (state.profile?.isAdmin == true) AppField(fee, { v -> fee = v.filter { it.isDigit() }.take(7) },
                     "الرسوم الشهرية بالفرنك (اتركها فارغة للإعفاء)", KeyboardType.Number)
+                if (state.profile?.isAdmin == true) AppField(regFee, { v -> regFee = v.filter { it.isDigit() }.take(7) },
+                    "رسوم التسجيل بالفرنك (مرة واحدة)", KeyboardType.Number)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("الحالة:", fontWeight = FontWeight.Bold)
                     listOf("نشط", "متوقف").forEach { st ->

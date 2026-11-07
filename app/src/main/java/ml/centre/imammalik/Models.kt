@@ -49,7 +49,9 @@ data class Student(
     /** Number of hizbs memorized (0..60). */
     val hizbs: Int = 0,
     /** Monthly fee in FCFA (0 = exempt / not set). */
-    val monthlyFee: Int = 0
+    val monthlyFee: Int = 0,
+    /** One-time registration fee in FCFA (0 = none). */
+    val registrationFee: Int = 0
 )
 
 object Audience {
@@ -79,6 +81,27 @@ data class Payment(
     val month: String = "",
     val amount: Int = 0,
     val paidOn: String = "",
+    val recordedBy: String = "",
+    /** "monthly" or "registration". */
+    val type: String = PaymentType.MONTHLY
+)
+
+object PaymentType {
+    const val MONTHLY = "monthly"
+    const val REGISTRATION = "registration"
+}
+
+val ExpenseCategories = listOf("رواتب المعلمين", "الإيجار", "الكهرباء والماء", "المصاحف والكتب",
+    "الأدوات واللوازم", "الصيانة", "النقل", "أخرى")
+
+data class Expense(
+    val id: String = "",
+    val category: String = "",
+    val amount: Int = 0,
+    val date: String = "",
+    /** yyyy-MM */
+    val month: String = "",
+    val note: String = "",
     val recordedBy: String = ""
 )
 
