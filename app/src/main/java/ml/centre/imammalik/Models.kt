@@ -94,6 +94,9 @@ data class QuranLog(
 
 private val dayFormat get() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
+/** Keeps dates like 2026-11-07 in their natural order inside right-to-left Arabic text. */
+fun ltr(text: String): String = "\u2066$text\u2069"
+
 fun today(): String = dayFormat.format(Date())
 
 fun shiftDay(day: String, delta: Int): String {

@@ -228,7 +228,7 @@ private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
             }
         }
         if (me.isStaff) {
-            item { Text("ملخص اليوم • ${today()}", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+            item { Text("ملخص اليوم • ${ltr(today())}", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatCard("طلاب نشطون", active.size.toString(), Icons.Default.Groups, Modifier.weight(1f))

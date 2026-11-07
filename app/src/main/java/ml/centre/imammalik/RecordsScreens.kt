@@ -30,7 +30,7 @@ fun AttendanceScreen(state: AppState) {
             IconButton(onClick = { state.changeAttendanceDate(-1) }) { Icon(Icons.Default.ChevronRight, "اليوم السابق") }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (isToday) "حضور اليوم" else "حضور يوم سابق", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(state.attendanceDate, color = Color.DarkGray)
+                Text(ltr(state.attendanceDate), color = Color.DarkGray)
             }
             IconButton(onClick = { state.changeAttendanceDate(1) }, enabled = !isToday) { Icon(Icons.Default.ChevronLeft, "اليوم التالي") }
         }
@@ -86,7 +86,7 @@ fun LogCard(log: QuranLog, showStudent: Boolean, onDelete: (() -> Unit)? = null,
             Column(Modifier.weight(1f)) {
                 if (showStudent) Text(log.studentName, fontWeight = FontWeight.Bold)
                 Text("${log.type} • سورة ${log.surah} ${log.range}".trim(), fontWeight = if (showStudent) FontWeight.Normal else FontWeight.Bold)
-                Text(listOf(log.date, log.teacherName).filter { it.isNotBlank() }.joinToString(" • "), fontSize = 12.sp, color = Color.Gray)
+                Text(listOf(ltr(log.date), log.teacherName).filter { it.isNotBlank() }.joinToString(" • "), fontSize = 12.sp, color = Color.Gray)
                 if (log.notes.isNotBlank()) Text(log.notes, fontSize = 13.sp, color = Color.DarkGray)
             }
             if (log.grade.isNotBlank()) Text(log.grade, color = gradeColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)

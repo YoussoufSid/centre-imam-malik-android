@@ -129,7 +129,7 @@ fun buildMonthlyReport(student: Student, month: String, attendance: List<Attenda
         if (notes.isNotEmpty()) {
             appendLine()
             appendLine("📝 ملاحظات المعلم")
-            notes.forEach { appendLine("• ${it.date}: ${it.notes}") }
+            notes.forEach { appendLine("• ${ltr(it.date)}: ${it.notes}") }
         }
         appendLine()
         append("جزاكم الله خيرًا على متابعتكم.")

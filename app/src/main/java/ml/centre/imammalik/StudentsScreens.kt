@@ -155,7 +155,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         items(attendance.take(30), key = { "att_" + it.id }) { r ->
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(r.date, Modifier.weight(1f))
+                    Text(ltr(r.date), Modifier.weight(1f))
                     StatusBadge(r.status)
                 }
             }
