@@ -54,7 +54,7 @@ fun StudentRow(s: Student, open: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudentsScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
+fun StudentsScreen(state: AppState, me: AppUser, onGradeEntry: () -> Unit = {}, open: (Student) -> Unit) {
     var query by remember { mutableStateOf("") }
     var group by remember { mutableStateOf<String?>(null) }
     val groups = state.students.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
@@ -64,6 +64,9 @@ fun StudentsScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         if (me.isStaff) {
+            if (state.students.isNotEmpty()) OutlinedButton(onClick = onGradeEntry, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                Icon(Icons.Default.School, null); Spacer(Modifier.width(6.dp)); Text("إدخال درجات الدراسات الإسلامية")
+            }
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 10.dp),
                 placeholder = { Text("بحث بالاسم أو الهاتف") }, singleLine = true,
                 leadingIcon = { Icon(Icons.Default.Search, null) })
@@ -95,6 +98,11 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
     var addLog by remember { mutableStateOf(false) }
     var reportOpen by remember { mutableStateOf(false) }
     var payments by remember(student.id) { mutableStateOf(emptyList<Payment>()) }
+    var grades by remember(student.id) { mutableStateOf(emptyList<Grade>()) }
+    DisposableEffect(student.id) {
+        val reg = state.listenStudentGrades(student.id) { grades = it }
+        onDispose { reg.remove() }
+    }
     val seesFees = me.isAdmin || !me.isStaff
     DisposableEffect(student.id, seesFees) {
         val reg = if (seesFees) state.listenStudentPayments(student.id) { payments = it } else null
@@ -132,6 +140,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
             }
         }
         item { HizbProgressCard(state, me, student) }
+        item { StudentGradesCard(state, me, student, grades) }
         if (seesFees) item { StudentFeesCard(state, me, student, payments) }
         item {
             OutlinedButton(onClick = { reportOpen = true }, modifier = Modifier.fillMaxWidth()) {
@@ -169,7 +178,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         }
     }
     if (addLog) LogDialog(state, initialStudent = student) { addLog = false }
-    if (reportOpen) MonthlyReportDialog(student, attendance, logs) { reportOpen = false }
+    if (reportOpen) MonthlyReportDialog(student, attendance, logs, grades) { reportOpen = false }
 }
 
 @Composable

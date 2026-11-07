@@ -80,6 +80,43 @@ data class Payment(
     val recordedBy: String = ""
 )
 
+// ---------- Islamic studies ----------
+
+val Subjects = listOf("القرآن والتجويد", "الفقه", "العقيدة", "الحديث", "السيرة النبوية", "اللغة العربية", "الأخلاق والآداب")
+val Terms = listOf("الفصل الأول", "الفصل الثاني", "الفصل الثالث")
+const val MAX_SCORE = 20
+
+data class Grade(
+    val id: String = "",
+    val studentId: String = "",
+    val studentName: String = "",
+    val subject: String = "",
+    val term: String = "",
+    val score: Double = 0.0,
+    val date: String = "",
+    val notes: String = "",
+    val teacherName: String = ""
+)
+
+fun scoreText(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else "%.1f".format(Locale.US, v)
+
+fun mention(avg: Double): String = when {
+    avg >= 16 -> "ممتاز"
+    avg >= 14 -> "جيد جدًا"
+    avg >= 12 -> "جيد"
+    avg >= 10 -> "مقبول"
+    else -> "ضعيف"
+}
+
+/** Today's date in the Hijri (Umm al-Qura) calendar, e.g. "16 جمادى الأولى 1448 هـ". */
+fun hijriToday(): String = runCatching {
+    val locale = android.icu.util.ULocale("ar@calendar=islamic-umalqura;numbers=latn")
+    val cal = android.icu.util.Calendar.getInstance(locale)
+    val fmt = android.icu.text.DateFormat.getDateInstance(android.icu.text.DateFormat.LONG, locale)
+    fmt.calendar = cal
+    fmt.format(Date())
+}.getOrDefault("")
+
 fun currentMonth(): String = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
 
 fun shiftMonth(month: String, delta: Int): String {

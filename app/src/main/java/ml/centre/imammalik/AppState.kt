@@ -308,6 +308,53 @@ class AppState {
             .addOnFailureListener { message = arabicError(it.message) }
     }
 
+    // ---------- Islamic studies grades ----------
+
+    /** Saves one grade per entry; entries with a blank score are skipped. */
+    fun saveGrades(subject: String, term: String, date: String, entries: List<Pair<Student, String>>, notes: String = "", done: () -> Unit) {
+        val valid = entries.mapNotNull { (s, raw) ->
+            val v = raw.replace(',', '.').trim().toDoubleOrNull() ?: return@mapNotNull null
+            if (v < 0 || v > MAX_SCORE) { message = "الدرجة يجب أن تكون بين 0 و$MAX_SCORE"; return }
+            s to v
+        }
+        if (valid.isEmpty()) { message = "أدخل درجة واحدة على الأقل"; return }
+        valid.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { (s, v) ->
+                batch.set(db.collection("grades").document(), mapOf(
+                    "studentId" to s.id, "studentName" to s.name, "subject" to subject, "term" to term,
+                    "score" to v, "date" to date, "notes" to notes.trim(),
+                    "teacherName" to (profile?.name ?: ""), "createdAt" to Date()
+                ))
+            }
+            batch.commit().addOnFailureListener { message = arabicError(it.message) }
+        }
+        done(); message = "سُجّلت ${valid.size} درجة في $subject"
+    }
+
+    fun deleteGrade(g: Grade) {
+        db.collection("grades").document(g.id).delete()
+            .addOnSuccessListener { message = "تم حذف الدرجة" }
+            .addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun listenStudentGrades(studentId: String, onGrades: (List<Grade>) -> Unit): ListenerRegistration =
+        db.collection("grades").whereEqualTo("studentId", studentId).addSnapshotListener { snap, _ ->
+            onGrades(snap?.documents?.map { d ->
+                Grade(
+                    id = d.id,
+                    studentId = d.getString("studentId") ?: "",
+                    studentName = d.getString("studentName") ?: "",
+                    subject = d.getString("subject") ?: "",
+                    term = d.getString("term") ?: "",
+                    score = d.getDouble("score") ?: 0.0,
+                    date = d.getString("date") ?: "",
+                    notes = d.getString("notes") ?: "",
+                    teacherName = d.getString("teacherName") ?: ""
+                )
+            }?.sortedByDescending { it.date } ?: emptyList())
+        }
+
     fun listenStudentPayments(studentId: String, onPayments: (List<Payment>) -> Unit): ListenerRegistration =
         db.collection("payments").whereEqualTo("studentId", studentId).addSnapshotListener { snap, _ ->
             onPayments(snap?.documents?.map(::toPayment)?.sortedByDescending { it.month } ?: emptyList())

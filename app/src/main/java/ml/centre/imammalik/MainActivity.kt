@@ -129,6 +129,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var profileId by rememberSaveable { mutableStateOf<String?>(null) }
     var editStudent by remember { mutableStateOf<Student?>(null) }
     var showUsers by rememberSaveable { mutableStateOf(false) }
+    var showGrades by rememberSaveable { mutableStateOf(false) }
     var announceOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.message) { if (state.message != null) { delay(3500); state.message = null } }
@@ -139,9 +140,11 @@ private fun Dashboard(state: AppState, me: AppUser) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; else -> "مركز الإمام مالك" }) },
+                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; showGrades -> "إدخال الدرجات"; else -> "مركز الإمام مالك" }) },
                 navigationIcon = {
-                    if (profileStudent != null || showUsers) IconButton(onClick = { if (profileStudent != null) profileId = null else showUsers = false }) {
+                    if (profileStudent != null || showUsers || showGrades) IconButton(onClick = {
+                        if (profileStudent != null) profileId = null else { showUsers = false; showGrades = false }
+                    }) {
                         Icon(Icons.Default.ArrowForward, "رجوع", tint = Color.White)
                     }
                 },
@@ -150,7 +153,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     if (profileStudent != null && me.isStaff) IconButton(onClick = { editStudent = profileStudent }) {
                         Icon(Icons.Default.Edit, "تعديل", tint = Color.White)
                     }
-                    if (me.isAdmin && profileStudent == null && !showUsers) IconButton(onClick = { showUsers = true }) {
+                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades) IconButton(onClick = { showUsers = true }) {
                         Icon(Icons.Default.ManageAccounts, "الحسابات", tint = Color.White)
                     }
                     IconButton(onClick = state::logout) { Icon(Icons.Default.Logout, "خروج", tint = Color.White) }
@@ -158,7 +161,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             )
         },
         bottomBar = {
-            if (profileStudent == null && !showUsers) NavigationBar {
+            if (profileStudent == null && !showUsers && !showGrades) NavigationBar {
                 tabs.forEachIndexed { i, item ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i },
                         icon = { Icon(item.icon, item.title) }, label = { Text(item.title, maxLines = 1) })
@@ -166,9 +169,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
             }
         },
         floatingActionButton = {
-            if (profileStudent == null && !showUsers && me.isStaff && tabs[tab].title == "الطلاب")
+            if (profileStudent == null && !showUsers && !showGrades && me.isStaff && tabs[tab].title == "الطلاب")
                 FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") }
-            if (profileStudent == null && !showUsers && me.isAdmin && tabs[tab].title == "الرئيسية")
+            if (profileStudent == null && !showUsers && !showGrades && me.isAdmin && tabs[tab].title == "الرئيسية")
                 ExtendedFloatingActionButton(onClick = { announceOpen = true }, containerColor = Gold,
                     icon = { Icon(Icons.Default.Campaign, null) }, text = { Text("إعلان") })
         }
@@ -177,12 +180,15 @@ private fun Dashboard(state: AppState, me: AppUser) {
             if (profileStudent != null) {
                 BackHandler { profileId = null }
                 StudentProfileScreen(state, me, profileStudent)
+            } else if (showGrades) {
+                BackHandler { showGrades = false }
+                GradeEntryScreen(state) { showGrades = false }
             } else if (showUsers) {
                 BackHandler { showUsers = false }
                 UsersScreen(state)
             } else when (tabs[tab].title) {
                 "الرئيسية" -> HomeScreen(state, me) { profileId = it.id }
-                "الطلاب", "أبنائي" -> StudentsScreen(state, me) { profileId = it.id }
+                "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { showGrades = true }) { profileId = it.id }
                 "الحضور" -> AttendanceScreen(state)
                 "الحفظ" -> QuranScreen(state) { profileId = it }
                 "الرسوم" -> FeesScreen(state) { profileId = it }
@@ -228,6 +234,8 @@ private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
                         Text("السلام عليكم ورحمة الله وبركاته", color = Color.White, fontWeight = FontWeight.Bold)
                         Text(me.name.ifBlank { me.email }, color = Color.White.copy(.9f))
                         Text("الصفة: ${Roles.label(me.role)}", color = Gold, fontSize = 13.sp)
+                        val hijri = remember { hijriToday() }
+                        if (hijri.isNotBlank()) Text(hijri, color = Color.White.copy(.85f), fontSize = 13.sp)
                     }
                 }
             }
