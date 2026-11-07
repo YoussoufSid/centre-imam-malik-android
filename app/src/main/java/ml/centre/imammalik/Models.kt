@@ -43,8 +43,12 @@ data class Student(
     val phone: String = "",
     val address: String = "",
     val enrollmentDate: String = "",
-    val status: String = "نشط"
+    val status: String = "نشط",
+    /** Number of hizbs memorized (0..60). */
+    val hizbs: Int = 0
 )
+
+const val TOTAL_HIZBS = 60
 
 object AttendanceStatus {
     const val PRESENT = "حاضر"

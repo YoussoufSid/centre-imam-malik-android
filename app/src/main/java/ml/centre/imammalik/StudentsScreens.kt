@@ -30,7 +30,15 @@ fun StudentRow(s: Student, open: () -> Unit) {
         ListItem(
             headlineContent = { Text(s.name, fontWeight = FontWeight.Bold) },
             supportingContent = {
-                Text("المستوى: ${s.level.ifBlank { "غير محدد" }} • الحلقة: ${s.group.ifBlank { "غير محددة" }}")
+                Column {
+                    Text("المستوى: ${s.level.ifBlank { "غير محدد" }} • الحلقة: ${s.group.ifBlank { "غير محددة" }}")
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HizbProgressBar(s.hizbs, Modifier.weight(1f))
+                        Spacer(Modifier.width(8.dp))
+                        Text("${s.hizbs}/$TOTAL_HIZBS", fontSize = 12.sp, color = Color.Gray)
+                    }
+                }
             },
             leadingContent = { Icon(Icons.Default.Person, null, tint = if (s.status == "نشط") Green else Color.Gray) },
             trailingContent = {
@@ -85,6 +93,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
     var attendance by remember(student.id) { mutableStateOf(emptyList<AttendanceRecord>()) }
     var logs by remember(student.id) { mutableStateOf(emptyList<QuranLog>()) }
     var addLog by remember { mutableStateOf(false) }
+    var reportOpen by remember { mutableStateOf(false) }
     DisposableEffect(student.id) {
         val regs: List<ListenerRegistration> = state.listenStudentHistory(student.id, { attendance = it }, { logs = it })
         onDispose { regs.forEach { it.remove() } }
@@ -114,6 +123,12 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
                         }) { Icon(Icons.Default.Phone, "اتصال", tint = Green) }
                     }
                 }
+            }
+        }
+        item { HizbProgressCard(state, me, student) }
+        item {
+            OutlinedButton(onClick = { reportOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Assessment, null); Spacer(Modifier.width(6.dp)); Text("التقرير الشهري")
             }
         }
         item {
@@ -147,6 +162,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         }
     }
     if (addLog) LogDialog(state, initialStudent = student) { addLog = false }
+    if (reportOpen) MonthlyReportDialog(student, attendance, logs) { reportOpen = false }
 }
 
 @Composable

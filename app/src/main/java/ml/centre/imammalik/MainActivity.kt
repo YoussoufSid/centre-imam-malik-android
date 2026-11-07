@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -244,6 +245,25 @@ private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
             if (active.isNotEmpty() && unmarked > 0) item {
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4D6))) {
                     Text("لم يُسجَّل حضور $unmarked طالب اليوم بعد.", Modifier.padding(14.dp), color = Color(0xFF6D4C00))
+                }
+            }
+            val leaders = active.filter { it.hizbs > 0 }.sortedByDescending { it.hizbs }.take(5)
+            if (leaders.isNotEmpty()) {
+                item { Text("الأكثر حفظًا", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                item {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            leaders.forEachIndexed { i, s ->
+                                Column(Modifier.clickable { open(s) }) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("${i + 1}. ${s.name}", Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                                        Text("${s.hizbs} حزبًا", color = Green, fontSize = 13.sp)
+                                    }
+                                    HizbProgressBar(s.hizbs, Modifier.padding(top = 4.dp))
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (todayLogs.isNotEmpty()) {

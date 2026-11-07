@@ -9,6 +9,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import java.util.Date
 
 class AppState {
@@ -141,11 +142,20 @@ class AppState {
             "enrollmentDate" to student.enrollmentDate.trim(), "status" to student.status,
             "updatedAt" to Date()
         )
+        // merge keeps fields edited elsewhere (e.g. hizb progress).
         val task = if (student.id.isBlank()) db.collection("students").document().set(data)
-        else db.collection("students").document(student.id).set(data)
+        else db.collection("students").document(student.id).set(data, SetOptions.merge())
         // Writes are applied locally at once (offline cache), so close the form immediately.
         done(); message = if (student.id.isBlank()) "تمت إضافة الطالب" else "تم تحديث بيانات الطالب"
         task.addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun setHizbs(student: Student, hizbs: Int) {
+        val n = hizbs.coerceIn(0, TOTAL_HIZBS)
+        db.collection("students").document(student.id)
+            .update(mapOf("hizbs" to n, "updatedAt" to Date()))
+            .addOnFailureListener { message = arabicError(it.message) }
+        if (n == TOTAL_HIZBS && student.hizbs < TOTAL_HIZBS) message = "مبارك! أتمّ ${student.name} حفظ القرآن الكريم 🎉"
     }
 
     fun deleteStudent(student: Student, done: () -> Unit) {
@@ -259,7 +269,8 @@ class AppState {
         phone = d.getString("phone") ?: "",
         address = d.getString("address") ?: "",
         enrollmentDate = d.getString("enrollmentDate") ?: "",
-        status = d.getString("status") ?: "نشط"
+        status = d.getString("status") ?: "نشط",
+        hizbs = d.getLong("hizbs")?.toInt() ?: 0
     )
 
     private fun toAttendance(d: DocumentSnapshot) = AttendanceRecord(
