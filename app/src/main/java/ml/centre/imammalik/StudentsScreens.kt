@@ -97,6 +97,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
     var logs by remember(student.id) { mutableStateOf(emptyList<QuranLog>()) }
     var addLog by remember { mutableStateOf(false) }
     var reportOpen by remember { mutableStateOf(false) }
+    var cardOpen by remember { mutableStateOf(false) }
     var payments by remember(student.id) { mutableStateOf(emptyList<Payment>()) }
     var grades by remember(student.id) { mutableStateOf(emptyList<Grade>()) }
     DisposableEffect(student.id) {
@@ -143,8 +144,19 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         item { StudentGradesCard(state, me, student, grades) }
         if (seesFees) item { StudentFeesCard(state, me, student, payments) }
         item {
-            OutlinedButton(onClick = { reportOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Assessment, null); Spacer(Modifier.width(6.dp)); Text("التقرير الشهري")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { reportOpen = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Assessment, null); Spacer(Modifier.width(4.dp)); Text("التقرير الشهري", maxLines = 1)
+                }
+                OutlinedButton(onClick = { cardOpen = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.PictureAsPdf, null); Spacer(Modifier.width(4.dp)); Text("كشف النتائج", maxLines = 1)
+                }
+            }
+        }
+        if (me.isStaff) item {
+            OutlinedButton(onClick = { shareCertificate(context, student) }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.WorkspacePremium, null, tint = Gold); Spacer(Modifier.width(6.dp))
+                Text(if (student.hizbs >= TOTAL_HIZBS) "شهادة ختم القرآن (PDF)" else "شهادة تقدير بالحفظ (PDF)")
             }
         }
         item {
@@ -178,6 +190,24 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         }
     }
     if (addLog) LogDialog(state, initialStudent = student) { addLog = false }
+    if (cardOpen) {
+        val terms = Terms.filter { t -> grades.any { it.term == t } }
+        AlertDialog(
+            onDismissRequest = { cardOpen = false },
+            title = { Text("كشف النتائج (PDF)") },
+            text = {
+                Column {
+                    Text("اختر الفترة:", fontWeight = FontWeight.Bold)
+                    (listOf<String?>(null) + terms).forEach { t ->
+                        TextButton(onClick = { cardOpen = false; shareReportCard(context, student, t, grades, attendance) },
+                            modifier = Modifier.fillMaxWidth()) { Text(t ?: "جميع الفصول") }
+                    }
+                    if (terms.isEmpty()) Text("لا توجد درجات بعد؛ سيتضمن الكشف الحفظ والحضور فقط.", fontSize = 12.sp, color = Color.Gray)
+                }
+            },
+            confirmButton = { TextButton(onClick = { cardOpen = false }) { Text("إغلاق") } }
+        )
+    }
     if (reportOpen) MonthlyReportDialog(student, attendance, logs, grades) { reportOpen = false }
 }
 
