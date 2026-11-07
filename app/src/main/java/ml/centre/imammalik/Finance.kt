@@ -189,7 +189,7 @@ private fun ExpenseDialog(state: AppState, initial: Expense, close: () -> Unit) 
                     }
                 }
                 AmountField(amount, { amount = it }, "المبلغ (فرنك)")
-                AppField(date, { date = it }, "التاريخ (2026-11-07)")
+                DateField(date, { date = it }, "التاريخ")
                 AppField(note, { note = it }, "ملاحظة (اختياري)")
                 if (initial.id.isNotBlank()) TextButton(onClick = { confirmDelete = true },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("حذف المصروف") }

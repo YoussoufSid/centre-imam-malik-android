@@ -38,6 +38,19 @@ class LogicTest {
         assertEquals("0 فرنك", money(0))
     }
 
+    @Test fun centre_contactLineAndCurrency() {
+        val saved = Triple(Centre.address, Centre.phone, Centre.currency)
+        try {
+            Centre.address = "باماكو"; Centre.phone = "76123456"; Centre.currency = "FCFA"
+            assertEquals("باماكو • هاتف: 76123456", Centre.contactLine())
+            assertEquals("2 500 FCFA", money(2500))
+            Centre.address = ""; Centre.phone = ""
+            assertEquals("", Centre.contactLine())
+        } finally {
+            Centre.address = saved.first; Centre.phone = saved.second; Centre.currency = saved.third
+        }
+    }
+
     @Test fun scoreText_dropsTrailingZero() {
         assertEquals("15", scoreText(15.0))
         assertEquals("12.5", scoreText(12.5))

@@ -5,6 +5,22 @@ import java.util.*
 
 const val ADMIN_EMAIL = "sidibey487@gmail.com"
 
+const val DEFAULT_CENTRE_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية"
+
+/** Centre identity, editable by the admin (settings/centre) and used in documents and messages. */
+object Centre {
+    var name = DEFAULT_CENTRE_NAME
+    var director = ""
+    var phone = ""
+    var address = ""
+    var academicYear = ""
+    var currency = "فرنك"
+
+    /** "Centre name • address • phone" footer for documents. */
+    fun contactLine(): String = listOf(address, phone.takeIf { it.isNotBlank() }?.let { "هاتف: $it" } ?: "")
+        .filter { it.isNotBlank() }.joinToString(" • ")
+}
+
 object Roles {
     const val ADMIN = "admin"
     const val TEACHER = "teacher"
@@ -161,7 +177,7 @@ fun monthName(key: String): String {
     return "${ArabicMonthNames.getOrElse(m - 1) { key }} ${parts[0]}"
 }
 
-fun money(amount: Int): String = "%,d".format(Locale.US, amount).replace(',', ' ') + " فرنك"
+fun money(amount: Int): String = "%,d".format(Locale.US, amount).replace(',', ' ') + " " + Centre.currency
 
 const val TOTAL_HIZBS = 60
 

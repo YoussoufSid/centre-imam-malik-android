@@ -115,7 +115,7 @@ fun StatsScreen(state: AppState, openProfile: (String) -> Unit) {
                             val wa = whatsappNumber(r.student.phone)
                             if (wa != null) IconButton(onClick = {
                                 val msg = "السلام عليكم ورحمة الله،\nنودّ إعلامكم بأن الطالب ${r.student.name}: ${r.reason}.\n" +
-                                    "نرجو التواصل مع المركز للمتابعة، جزاكم الله خيرًا.\nمركز الإمام مالك لتحفيظ القرآن الكريم"
+                                    "نرجو التواصل مع المركز للمتابعة، جزاكم الله خيرًا.\n${Centre.name}"
                                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa?text=" + Uri.encode(msg)))) }
                             }) { Icon(Icons.Default.Chat, "مراسلة ولي الأمر", tint = Green) }
                         }

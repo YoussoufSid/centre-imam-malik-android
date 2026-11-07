@@ -263,13 +263,13 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
                         RadioButton(selected = gender == g, onClick = { gender = g }); Text(g)
                     }
                 }
-                AppField(birthDate, { birthDate = it }, "تاريخ الميلاد: 2015-01-30")
+                DateField(birthDate, { birthDate = it }, "تاريخ الميلاد", optional = true)
                 AppField(level, { level = it }, "المستوى (مثال: الحزب 5)")
                 AppField(group, { group = it }, "الحلقة")
                 AppField(teacher, { teacher = it }, "المعلم أو المعلمة")
                 AppField(phone, { phone = it }, "هاتف ولي الأمر", KeyboardType.Phone)
                 AppField(address, { address = it }, "العنوان")
-                AppField(enrollmentDate, { enrollmentDate = it }, "تاريخ التسجيل")
+                DateField(enrollmentDate, { enrollmentDate = it }, "تاريخ التسجيل")
                 if (state.profile?.isAdmin == true) AppField(fee, { v -> fee = v.filter { it.isDigit() }.take(7) },
                     "الرسوم الشهرية بالفرنك (اتركها فارغة للإعفاء)", KeyboardType.Number)
                 if (state.profile?.isAdmin == true) AppField(regFee, { v -> regFee = v.filter { it.isDigit() }.take(7) },

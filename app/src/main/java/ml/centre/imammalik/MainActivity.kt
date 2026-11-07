@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
@@ -42,6 +43,7 @@ val Cream = Color(0xFFF7F5EC)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         FirebaseApp.initializeApp(this)
         FirebaseFirestore.getInstance().firestoreSettings = FirebaseFirestoreSettings.Builder()
@@ -136,6 +138,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var showUsers by rememberSaveable { mutableStateOf(false) }
     var showGrades by rememberSaveable { mutableStateOf(false) }
     var showStats by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var aboutOpen by remember { mutableStateOf(false) }
+    var logoutOpen by remember { mutableStateOf(false) }
     var announceOpen by remember { mutableStateOf(false) }
     var exportOpen by remember { mutableStateOf(false) }
     var quickLogOpen by remember { mutableStateOf(false) }
@@ -162,10 +167,10 @@ private fun Dashboard(state: AppState, me: AppUser) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; showGrades -> "إدخال الدرجات"; showStats -> "الإحصائيات"; else -> "مركز الإمام مالك" }) },
+                title = { Text(when { profileStudent != null -> profileStudent.name; showUsers -> "حسابات المستخدمين"; showGrades -> "إدخال الدرجات"; showStats -> "الإحصائيات"; showSettings -> "إعدادات المركز"; else -> "مركز الإمام مالك" }) },
                 navigationIcon = {
-                    if (profileStudent != null || showUsers || showGrades || showStats) IconButton(onClick = {
-                        if (profileStudent != null) profileId = null else { showUsers = false; showGrades = false; showStats = false }
+                    if (profileStudent != null || showUsers || showGrades || showStats || showSettings) IconButton(onClick = {
+                        if (profileStudent != null) profileId = null else { showUsers = false; showGrades = false; showStats = false; showSettings = false }
                     }) {
                         Icon(Icons.Default.ArrowForward, "رجوع", tint = Color.White)
                     }
@@ -185,18 +190,21 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     if (profileStudent != null && me.isStaff) IconButton(onClick = { editStudent = profileStudent }) {
                         Icon(Icons.Default.Edit, "تعديل", tint = Color.White)
                     }
-                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades && !showStats) IconButton(onClick = { exportOpen = true }) {
-                        Icon(Icons.Default.FileDownload, "تصدير", tint = Color.White)
-                    }
-                    if (me.isAdmin && profileStudent == null && !showUsers && !showGrades && !showStats) IconButton(onClick = { showUsers = true }) {
-                        Icon(Icons.Default.ManageAccounts, "الحسابات", tint = Color.White)
-                    }
-                    IconButton(onClick = state::logout) { Icon(Icons.Default.Logout, "خروج", tint = Color.White) }
+                    AppMenu(buildList {
+                        if (me.isAdmin) {
+                            add(MenuEntry("إعدادات المركز", Icons.Default.Settings) { profileId = null; showSettings = true })
+                            add(MenuEntry("تصدير البيانات", Icons.Default.FileDownload) { exportOpen = true })
+                            add(MenuEntry("حسابات المستخدمين", Icons.Default.ManageAccounts) { profileId = null; showUsers = true })
+                        }
+                        if (me.isStaff) add(MenuEntry("الإحصائيات", Icons.Default.Insights) { profileId = null; showStats = true })
+                        add(MenuEntry("حول التطبيق", Icons.Default.Info) { aboutOpen = true })
+                        add(MenuEntry("تسجيل الخروج", Icons.Default.Logout) { logoutOpen = true })
+                    })
                 }
             )
         },
         bottomBar = {
-            if (profileStudent == null && !showUsers && !showGrades && !showStats) NavigationBar {
+            if (profileStudent == null && !showUsers && !showGrades && !showStats && !showSettings) NavigationBar {
                 tabs.forEachIndexed { i, item ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i },
                         icon = { Icon(item.icon, item.title) }, label = { Text(item.title, maxLines = 1) })
@@ -204,7 +212,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             }
         },
         floatingActionButton = {
-            if (profileStudent == null && !showUsers && !showGrades && !showStats && me.isStaff && tabs[tab].title == "الطلاب")
+            if (profileStudent == null && !showUsers && !showGrades && !showStats && !showSettings && me.isStaff && tabs[tab].title == "الطلاب")
                 FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") }
         }
     ) { pad ->
@@ -212,6 +220,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
             if (profileStudent != null) {
                 BackHandler { profileId = null }
                 StudentProfileScreen(state, me, profileStudent)
+            } else if (showSettings) {
+                BackHandler { showSettings = false }
+                SettingsScreen(state) { showSettings = false }
             } else if (showStats) {
                 BackHandler { showStats = false }
                 StatsScreen(state) { profileId = it }
@@ -239,6 +250,8 @@ private fun Dashboard(state: AppState, me: AppUser) {
     if (addOpen) StudentDialog(state, null) { addOpen = false }
     if (announceOpen) AnnouncementDialog(state) { announceOpen = false }
     if (exportOpen) ExportDialog(state) { exportOpen = false }
+    if (aboutOpen) AboutDialog { aboutOpen = false }
+    if (logoutOpen) LogoutConfirm(state::logout) { logoutOpen = false }
     if (quickLogOpen) LogDialog(state, null) { quickLogOpen = false }
     editStudent?.let { s -> StudentDialog(state, s, onDeleted = { profileId = null }) { editStudent = null } }
 }

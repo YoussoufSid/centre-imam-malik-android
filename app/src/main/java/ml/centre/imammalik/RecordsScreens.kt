@@ -160,7 +160,7 @@ fun LogDialog(state: AppState, initialStudent: Student?, close: () -> Unit) {
                         }
                     }
                 }
-                AppField(date, { date = it }, "التاريخ")
+                DateField(date, { date = it }, "التاريخ")
                 OutlinedTextField(notes, { notes = it }, label = { Text("ملاحظات المعلم") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             }
         },

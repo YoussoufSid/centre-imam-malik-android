@@ -98,7 +98,7 @@ fun buildMonthlyReport(student: Student, month: String, attendance: List<Attenda
     val notes = ls.filter { it.notes.isNotBlank() }.take(3)
 
     return buildString {
-        appendLine("مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية")
+        appendLine(Centre.name)
         appendLine("التقرير الشهري — ${monthName(month)}")
         appendLine()
         appendLine("الطالب: ${student.name}")

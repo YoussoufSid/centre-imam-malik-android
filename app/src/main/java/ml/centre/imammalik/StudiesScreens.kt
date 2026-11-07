@@ -58,7 +58,7 @@ fun GradeEntryScreen(state: AppState, close: () -> Unit) {
                 groups.forEach { g -> FilterChip(group == g, { group = g }, { Text(g) }) }
             }
         }
-        AppField(date, { date = it }, "تاريخ الاختبار", modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+        DateField(date, { date = it }, "تاريخ الاختبار", modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
         Text("اكتب درجة كل طالب من $MAX_SCORE، واترك الخانة فارغة لمن لم يُختبر.", fontSize = 12.sp, color = Color.Gray)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(shown, key = { it.id }) { s ->
@@ -152,7 +152,7 @@ private fun GradeDialog(state: AppState, student: Student, close: () -> Unit) {
                     Text("الدرجة من $MAX_SCORE", Modifier.weight(1f))
                     ScoreField(score, { score = it }, Modifier.width(110.dp))
                 }
-                AppField(date, { date = it }, "التاريخ")
+                DateField(date, { date = it }, "التاريخ")
                 AppField(notes, { notes = it }, "ملاحظة (اختياري)")
             }
         },

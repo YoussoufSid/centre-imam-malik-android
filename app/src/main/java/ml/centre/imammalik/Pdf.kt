@@ -20,7 +20,6 @@ private const val GOLD = 0xFFD7A91E.toInt()
 private const val GREY = 0xFF555555.toInt()
 private const val LIGHT = 0xFFF7F5EC.toInt()
 
-private const val CENTRE_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية"
 
 /** Draws right-to-left text inside a box whose right edge is [right]; returns the text height. */
 private fun Canvas.rtlText(
@@ -80,7 +79,7 @@ fun shareReportCard(
     // Header band
     c.drawRect(0f, 0f, W, 110f, Paint().apply { color = GREEN })
     c.logo(context, M, 18f, 74f)
-    c.rtlText(CENTRE_NAME, right, 28f, width - 90f, 15f, 0xFFFFFFFF.toInt(), bold = true)
+    c.rtlText(Centre.name, right, 28f, width - 90f, 15f, 0xFFFFFFFF.toInt(), bold = true)
     c.rtlText("كشف النتائج" + (term?.let { " — $it" } ?: " — جميع الفصول"), right, 62f, width - 90f, 20f, GOLD, bold = true)
 
     var y = 130f
@@ -148,14 +147,19 @@ fun shareReportCard(
     repeat(3) { c.line(M, y + 14f, W - M, 0xFFBBBBBB.toInt()); y += 24f }
     y = maxOf(y + 20f, H - 150f)
     val third = width / 3
-    listOf("توقيع المعلم", "توقيع مدير المركز", "توقيع ولي الأمر").forEachIndexed { i, t ->
+    listOf("توقيع المعلم" + (if (student.teacher.isNotBlank()) "\n${student.teacher}" else ""),
+        "توقيع مدير المركز" + (if (Centre.director.isNotBlank()) "\n${Centre.director}" else ""),
+        "توقيع ولي الأمر").forEachIndexed { i, t ->
         val r = right - i * third
         c.rtlText(t, r, y, third - 10f, 12f, GREY, align = Layout.Alignment.ALIGN_CENTER)
         c.line(r - third + 20f, y + 50f, r - 20f, 0xFF999999.toInt())
     }
-    c.line(M, H - 50f, W - M, GOLD, 1.5f)
-    c.rtlText("حُرّر بتاريخ ${ltr(today())}" + hijriToday().let { if (it.isBlank()) "" else " الموافق $it" },
-        right, H - 42f, width, 10.5f, GREY, align = Layout.Alignment.ALIGN_CENTER)
+    c.line(M, H - 58f, W - M, GOLD, 1.5f)
+    c.rtlText("حُرّر بتاريخ ${ltr(today())}" + hijriToday().let { if (it.isBlank()) "" else " الموافق $it" } +
+        (if (Centre.academicYear.isNotBlank()) " • العام الدراسي ${Centre.academicYear}" else ""),
+        right, H - 50f, width, 10.5f, GREY, align = Layout.Alignment.ALIGN_CENTER)
+    if (Centre.contactLine().isNotBlank())
+        c.rtlText(Centre.contactLine(), right, H - 34f, width, 10f, GREY, align = Layout.Alignment.ALIGN_CENTER)
 
     doc.finishPage(page)
     sharePdf(context, doc, "report-${safeName(student.name)}.pdf")
@@ -174,7 +178,7 @@ fun shareCertificate(context: Context, student: Student) {
 
     val inner = W - 160f; val right = W - 80f
     c.logo(context, W / 2 - 42f, 52f, 84f)
-    c.rtlText(CENTRE_NAME, right, 146f, inner, 16f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText(Centre.name, right, 146f, inner, 16f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     val khatm = student.hizbs >= TOTAL_HIZBS
     c.rtlText(if (khatm) "شهادة ختم القرآن الكريم" else "شهادة تقدير", right, 182f, inner, 34f, GOLD, bold = true,
         align = Layout.Alignment.ALIGN_CENTER)
@@ -191,7 +195,8 @@ fun shareCertificate(context: Context, student: Student) {
 
     val date = "حُرّر بتاريخ ${ltr(today())}" + hijriToday().let { if (it.isBlank()) "" else "\nالموافق $it" }
     c.rtlText(date, right, 470f, 240f, 12f, GREY, align = Layout.Alignment.ALIGN_CENTER)
-    c.rtlText("مدير المركز", 80f + 240f, 470f, 240f, 13f, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText("مدير المركز" + (if (Centre.director.isNotBlank()) "\n${Centre.director}" else ""),
+        80f + 240f, 470f, 240f, 13f, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     c.line(80f + 30f, 530f, 80f + 210f, 0xFF999999.toInt())
     if (student.teacher.isNotBlank()) {
         c.rtlText("المعلم: ${student.teacher}", W / 2 + 100f, 470f, 200f, 13f, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER)

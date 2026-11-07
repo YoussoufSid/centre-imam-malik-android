@@ -134,7 +134,7 @@ fun FeesScreen(state: AppState, openProfile: (String) -> Unit) {
                             val wa = whatsappNumber(s.phone)
                             if (wa != null) IconButton(onClick = {
                                 val msg = "السلام عليكم ورحمة الله،\nنذكّركم بأن رسوم شهر ${monthName(month)} للطالب ${s.name} " +
-                                    "(${money(s.monthlyFee)}) لم تُسدَّد بعد.\nجزاكم الله خيرًا.\nمركز الإمام مالك لتحفيظ القرآن الكريم"
+                                    "(${money(s.monthlyFee)}) لم تُسدَّد بعد.\nجزاكم الله خيرًا.\n${Centre.name}"
                                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa?text=" + Uri.encode(msg)))) }
                             }) { Icon(Icons.Default.NotificationsActive, "تذكير عبر واتساب", tint = Gold) }
                             FilledTonalButton(onClick = { paying = s }) { Text("تسجيل الدفع") }
