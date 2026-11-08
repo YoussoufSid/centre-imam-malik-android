@@ -22,8 +22,8 @@ android {
         applicationId = "ml.centre.imammalik"
         minSdk = 24
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.2.0"
+        versionCode = 13
+        versionName = "2.3.0"
     }
     // Fixed debug key so every CI build can be installed over the previous one.
     signingConfigs {
@@ -67,4 +67,5 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

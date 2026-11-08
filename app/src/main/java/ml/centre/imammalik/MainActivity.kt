@@ -156,6 +156,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
         if (me.isAdmin) {
             add(QuickAction("المالية", Icons.Default.AccountBalanceWallet) { goTo("المالية") })
             add(QuickAction("إضافة جماعية", Icons.Default.GroupAdd) { open(Screens.BULK) })
+            add(QuickAction("المعلمون", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
             add(QuickAction("إعلان جديد", Icons.Default.Campaign) { announceOpen = true })
         }
     }
@@ -193,10 +194,12 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     AppMenu(buildList {
                         if (me.isStaff) add(MenuEntry("الحلقات", Icons.Default.Diversity3) { open(Screens.HALAQAT) })
                         if (me.isAdmin) {
+                            add(MenuEntry("المعلمون والرواتب", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
                             add(MenuEntry("إضافة طلاب دفعة واحدة", Icons.Default.GroupAdd) { open(Screens.BULK) })
                             add(MenuEntry("إعدادات المركز", Icons.Default.Settings) { open(Screens.SETTINGS) })
                             add(MenuEntry("تصدير البيانات", Icons.Default.FileDownload) { exportOpen = true })
                             add(MenuEntry("حسابات المستخدمين", Icons.Default.ManageAccounts) { open(Screens.USERS) })
+                            add(MenuEntry("سجل العمليات", Icons.Default.History) { open(Screens.AUDIT) })
                         }
                         if (me.isStaff) add(MenuEntry("الإحصائيات", Icons.Default.Insights) { open(Screens.STATS) })
                         add(MenuEntry("حول التطبيق", Icons.Default.Info) { aboutOpen = true })
@@ -231,6 +234,8 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     Screens.USERS -> UsersScreen(state)
                     Screens.HALAQAT -> HalaqatScreen(state, me, onBulk = { screen = Screens.BULK }) { profileId = it }
                     Screens.BULK -> BulkAddScreen(state) { screen = null }
+                    Screens.TEACHERS -> TeachersScreen(state)
+                    Screens.AUDIT -> AuditScreen(state)
                 }
             } else when (tabs[tab].title) {
                 "الرئيسية" -> HomeScreen(state, me, quickActions) { profileId = it.id }
@@ -264,6 +269,8 @@ object Screens {
     const val USERS = "users"
     const val HALAQAT = "halaqat"
     const val BULK = "bulk"
+    const val TEACHERS = "teachers"
+    const val AUDIT = "audit"
     fun title(s: String?): String? = when (s) {
         SETTINGS -> "إعدادات المركز"
         STATS -> "الإحصائيات"
@@ -271,6 +278,8 @@ object Screens {
         USERS -> "حسابات المستخدمين"
         HALAQAT -> "الحلقات"
         BULK -> "إضافة طلاب دفعة واحدة"
+        TEACHERS -> "المعلمون"
+        AUDIT -> "سجل العمليات"
         else -> null
     }
 }

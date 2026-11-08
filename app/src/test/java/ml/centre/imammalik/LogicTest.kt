@@ -164,6 +164,27 @@ class LogicTest {
         assertTrue(parseStudentLines("").isEmpty())
     }
 
+    // ---------- Backup ----------
+
+    @Test fun backupCodec_roundTripKeepsDatesListsAndMaps() {
+        val date = java.util.Date(1_762_000_000_000L)
+        val original = mapOf(
+            "name" to "أحمد", "hizbs" to 12, "score" to 15.5, "active" to true, "none" to null,
+            "createdAt" to date, "studentIds" to listOf("a", "b"), "nested" to mapOf("x" to 1)
+        )
+        val json = org.json.JSONObject(BackupCodec.encode(original).toString())
+        @Suppress("UNCHECKED_CAST")
+        val back = BackupCodec.decode(json) as Map<String, Any?>
+        assertEquals("أحمد", back["name"])
+        assertEquals(12, (back["hizbs"] as Number).toInt())
+        assertEquals(15.5, (back["score"] as Number).toDouble(), 0.0001)
+        assertEquals(true, back["active"])
+        assertNull(back["none"])
+        assertEquals(date, back["createdAt"])
+        assertEquals(listOf("a", "b"), back["studentIds"])
+        assertEquals(1, ((back["nested"] as Map<*, *>)["x"] as Number).toInt())
+    }
+
     // ---------- Analytics ----------
 
     @Test fun absenceStreak_countsLatestConsecutive() {

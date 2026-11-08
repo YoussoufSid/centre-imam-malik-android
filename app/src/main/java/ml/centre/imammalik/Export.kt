@@ -21,6 +21,22 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import java.io.File
 
+/** Writes bytes to the cache and opens the share sheet (save to Drive, WhatsApp, e-mail...). */
+fun shareFile(context: Context, fileName: String, mime: String, bytes: ByteArray) {
+    runCatching {
+        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+        val file = File(dir, fileName).apply { writeBytes(bytes) }
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, fileName)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "حفظ أو مشاركة الملف"))
+    }
+}
+
 /** Writes a CSV (UTF-8 with BOM so Excel shows Arabic correctly) and opens the share sheet. */
 fun shareCsv(context: Context, fileName: String, csv: String) {
     runCatching {

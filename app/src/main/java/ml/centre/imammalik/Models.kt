@@ -70,6 +70,22 @@ data class Student(
     val registrationFee: Int = 0
 )
 
+// ---------- Teachers ----------
+
+data class Teacher(
+    val id: String = "",
+    val name: String = "",
+    val phone: String = "",
+    val salary: Int = 0,
+    val hireDate: String = "",
+    val status: String = "نشط",
+    val notes: String = ""
+)
+
+const val SALARY_CATEGORY = "رواتب المعلمين"
+
+data class AuditEntry(val action: String = "", val details: String = "", val by: String = "", val at: Long = 0)
+
 // ---------- Halaqat (groups) ----------
 
 data class Halaqa(

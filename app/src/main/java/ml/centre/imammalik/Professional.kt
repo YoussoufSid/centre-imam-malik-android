@@ -89,6 +89,51 @@ fun SettingsScreen(state: AppState, close: () -> Unit) {
             modifier = Modifier.fillMaxWidth().height(50.dp)) {
             Icon(Icons.Default.Save, null); Spacer(Modifier.width(6.dp)); Text("حفظ الإعدادات")
         }
+        Spacer(Modifier.height(24.dp))
+        BackupSection(state)
+    }
+}
+
+@Composable
+private fun BackupSection(state: AppState) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var busy by remember { mutableStateOf(false) }
+    var pendingRestore by remember { mutableStateOf<String?>(null) }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        pendingRestore = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+        }.getOrNull()
+        if (pendingRestore == null) state.message = "تعذّرت قراءة الملف"
+    }
+    Text("النسخ الاحتياطي", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Green)
+    Text("احفظ نسخة من كل بيانات المركز (الطلاب، الحضور، الحفظ، الدرجات، المالية، المعلمون...) في ملف واحد، " +
+        "ويُنصح بذلك مرة كل شهر وحفظ الملف في Google Drive.", fontSize = 13.sp, color = Color.Gray,
+        modifier = Modifier.padding(bottom = 10.dp))
+    Button(onClick = {
+        busy = true
+        state.createBackup { json ->
+            busy = false
+            shareFile(context, "backup-${today()}.json", "application/json", json.toByteArray(Charsets.UTF_8))
+        }
+    }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.Backup, null); Spacer(Modifier.width(6.dp)); Text("إنشاء نسخة احتياطية الآن")
+    }
+    OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/*", "*/*")) }, enabled = !busy,
+        modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.SettingsBackupRestore, null); Spacer(Modifier.width(6.dp)); Text("استعادة من نسخة احتياطية")
+    }
+    if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp))
+    pendingRestore?.let { json ->
+        AlertDialog(
+            onDismissRequest = { pendingRestore = null },
+            title = { Text("استعادة النسخة الاحتياطية") },
+            text = { Text("ستُعاد كتابة المستندات الموجودة في النسخة بقيمها المحفوظة، وتبقى البيانات الأحدث غير الموجودة في النسخة كما هي. هل تريد المتابعة؟") },
+            confirmButton = { Button(onClick = { pendingRestore = null; state.restoreBackup(json) {} }) { Text("استعادة") } },
+            dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("إلغاء") } }
+        )
     }
 }
 

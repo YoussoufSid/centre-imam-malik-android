@@ -13,6 +13,8 @@ import com.google.firebase.firestore.QuerySnapshot
 import androidx.compose.runtime.mutableStateMapOf
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.WriteBatch
+import com.google.android.gms.tasks.Tasks
 import java.util.Date
 import java.util.Locale
 
@@ -63,6 +65,11 @@ class AppState {
     var expenseMonth by mutableStateOf(currentMonth())
     var monthExpenses by mutableStateOf(emptyList<Expense>())
     var halaqat by mutableStateOf(emptyList<Halaqa>())
+    var teachers by mutableStateOf(emptyList<Teacher>())
+    var teacherDate by mutableStateOf(today())
+    var teacherDayAttendance by mutableStateOf(emptyList<AttendanceRecord>())
+    var salaryMonth by mutableStateOf(currentMonth())
+    var salaryExpenses by mutableStateOf(emptyList<Expense>())
     var busy by mutableStateOf(false)
     /** Bumped whenever centre settings change, so screens showing them recompose. */
     var settingsVersion by mutableStateOf(0)
@@ -86,6 +93,8 @@ class AppState {
     private var dayListener: ListenerRegistration? = null
     private var feeListener: ListenerRegistration? = null
     private var expenseListener: ListenerRegistration? = null
+    private var teacherDayListener: ListenerRegistration? = null
+    private var salaryListener: ListenerRegistration? = null
     private val linkedListeners = mutableMapOf<String, ListenerRegistration>()
     private val linkedStudents = mutableMapOf<String, Student>()
 
@@ -157,11 +166,14 @@ class AppState {
         dayListener?.remove(); dayListener = null
         feeListener?.remove(); feeListener = null
         expenseListener?.remove(); expenseListener = null
+        teacherDayListener?.remove(); teacherDayListener = null
+        salaryListener?.remove(); salaryListener = null
         linkedListeners.values.forEach { it.remove() }; linkedListeners.clear(); linkedStudents.clear()
         pending.clear(); fromCache.clear()
         students = emptyList(); users = emptyList(); todayAttendance = emptyList()
         dayAttendance = emptyList(); recentLogs = emptyList()
         announcements = emptyList(); monthPayments = emptyList(); halaqat = emptyList()
+        teachers = emptyList(); teacherDayAttendance = emptyList(); salaryExpenses = emptyList()
         registrationPayments = emptyList(); monthExpenses = emptyList()
     }
 
@@ -183,6 +195,11 @@ class AppState {
                 announcements = snap?.documents?.map(::toAnnouncement)?.filter { Audience.visibleTo(it.audience, p) } ?: emptyList()
             }
         if (p.isAdmin) {
+            listeners += db.collection("teachers").addSnapshotListener { snap, _ ->
+                teachers = snap?.documents?.map(::toTeacher)?.sortedBy { it.name } ?: emptyList()
+            }
+            listenTeacherDay(teacherDate)
+            listenSalaries(salaryMonth)
             listenFees(feeMonth)
             listenExpenses(expenseMonth)
             listeners += db.collection("payments").whereEqualTo("type", PaymentType.REGISTRATION)
@@ -249,10 +266,27 @@ class AppState {
         if (n == TOTAL_HIZBS && student.hizbs < TOTAL_HIZBS) message = "مبارك! أتمّ ${student.name} حفظ القرآن الكريم 🎉"
     }
 
+    /** Deletes a student and everything linked to them, and unlinks them from parent accounts. */
     fun deleteStudent(student: Student, done: () -> Unit) {
-        done(); message = "تم حذف ${student.name}"
-        db.collection("students").document(student.id).delete()
-            .addOnFailureListener { message = arabicError(it.message) }
+        done(); message = "جارٍ حذف ${student.name} وسجلاته…"
+        val related = listOf("attendance", "quranLogs", "grades", "payments").map {
+            db.collection(it).whereEqualTo("studentId", student.id).get()
+        }
+        val parents = db.collection("users").whereArrayContains("studentIds", student.id).get()
+        Tasks.whenAllComplete(related + parents).addOnCompleteListener {
+            val refs = related.filter { it.isSuccessful }.flatMap { t -> t.result.documents.map { it.reference } }
+            val ops = refs.map { r -> { b: WriteBatch -> b.delete(r); Unit } } +
+                (if (parents.isSuccessful) parents.result.documents.map { d ->
+                    { b: WriteBatch -> b.update(d.reference, "studentIds", FieldValue.arrayRemove(student.id)); Unit }
+                } else emptyList()) +
+                listOf({ b: WriteBatch -> b.delete(db.collection("students").document(student.id)); Unit })
+            ops.chunked(450).forEach { chunk ->
+                val batch = db.batch(); chunk.forEach { it(batch) }
+                batch.commit().addOnFailureListener { e -> message = arabicError(e.message) }
+            }
+            message = "تم حذف ${student.name} و${refs.size} سجلًا مرتبطًا به"
+            audit("حذف طالب", "${student.name} (${student.group.ifBlank { "بدون حلقة" }}) مع ${refs.size} سجل")
+        }
     }
 
     // ---------- Attendance ----------
@@ -323,6 +357,7 @@ class AppState {
         db.collection("quranLogs").document(log.id).delete()
             .addOnSuccessListener { message = "تم حذف السجل" }
             .addOnFailureListener { message = arabicError(it.message) }
+        audit("حذف تسميع", "${log.studentName} — ${log.type} سورة ${log.surah} (${log.date})")
     }
 
     /** Live history of one student (used by the profile screen). Caller must remove the returned listeners. */
@@ -382,6 +417,7 @@ class AppState {
             "amount" to amount, "paidOn" to today(), "recordedBy" to (profile?.name ?: ""),
             "type" to PaymentType.MONTHLY, "updatedAt" to Date()
         )).addOnFailureListener { message = arabicError(it.message) }
+        audit("دفع رسوم شهرية", "${student.name} — ${monthName(month)} — ${money(amount)}")
     }
 
     fun saveRegistrationPayment(student: Student, amount: Int, done: () -> Unit) {
@@ -392,6 +428,7 @@ class AppState {
             "amount" to amount, "paidOn" to today(), "recordedBy" to (profile?.name ?: ""),
             "type" to PaymentType.REGISTRATION, "updatedAt" to Date()
         )).addOnFailureListener { message = arabicError(it.message) }
+        audit("دفع رسوم تسجيل", "${student.name} — ${money(amount)}")
     }
 
     // ---------- Expenses ----------
@@ -421,12 +458,14 @@ class AppState {
             "note" to e.note.trim(), "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date())
         val ref = if (e.id.isBlank()) db.collection("expenses").document() else db.collection("expenses").document(e.id)
         ref.set(data).addOnFailureListener { message = arabicError(it.message) }
+        audit(if (e.id.isBlank()) "تسجيل مصروف" else "تعديل مصروف", "${e.category} — ${money(e.amount)} (${date})")
     }
 
     fun deleteExpense(e: Expense) {
         db.collection("expenses").document(e.id).delete()
             .addOnSuccessListener { message = "تم حذف المصروف" }
             .addOnFailureListener { message = arabicError(it.message) }
+        audit("حذف مصروف", "${e.category} — ${money(e.amount)} (${e.date}) ${e.note}".trim())
     }
 
     /** Loads all payments and expenses of a year (yyyy) for the financial summary. */
@@ -444,6 +483,7 @@ class AppState {
         db.collection("payments").document(p.id).delete()
             .addOnSuccessListener { message = "تم إلغاء الدفع" }
             .addOnFailureListener { message = arabicError(it.message) }
+        audit("إلغاء دفع", "${p.studentName} — ${if (p.type == PaymentType.REGISTRATION) "رسوم تسجيل" else monthName(p.month)} — ${money(p.amount)}")
     }
 
     // ---------- Islamic studies grades ----------
@@ -474,6 +514,7 @@ class AppState {
         db.collection("grades").document(g.id).delete()
             .addOnSuccessListener { message = "تم حذف الدرجة" }
             .addOnFailureListener { message = arabicError(it.message) }
+        audit("حذف درجة", "${g.studentName} — ${g.subject} ${scoreText(g.score)}/$MAX_SCORE (${g.date})")
     }
 
     fun listenStudentGrades(studentId: String, onGrades: (List<Grade>) -> Unit): ListenerRegistration =
@@ -528,6 +569,7 @@ class AppState {
         db.collection("halaqat").document(h.id).delete()
             .addOnSuccessListener { message = "حُذفت الحلقة (يبقى طلابها بلا تغيير)" }
             .addOnFailureListener { message = arabicError(it.message) }
+        audit("حذف حلقة", h.name)
     }
 
     /** Adds many students at once; names that already exist in the same halaqa are skipped. */
@@ -550,7 +592,160 @@ class AppState {
             batch.commit().addOnFailureListener { message = arabicError(it.message) }
         }
         message = "تمت إضافة ${toAdd.size} طالب" + if (toAdd.size < list.size) " (تخطّي ${list.size - toAdd.size} مكرر)" else ""
+        audit("إضافة جماعية", "${toAdd.size} طالب إلى ${group.ifBlank { "بدون حلقة" }}")
         done(toAdd.size)
+    }
+
+    // ---------- Teachers (admin) ----------
+
+    private fun toTeacher(d: DocumentSnapshot) = Teacher(
+        id = d.id, name = d.getString("name") ?: "", phone = d.getString("phone") ?: "",
+        salary = d.getLong("salary")?.toInt() ?: 0, hireDate = d.getString("hireDate") ?: "",
+        status = d.getString("status") ?: "نشط", notes = d.getString("notes") ?: ""
+    )
+
+    fun saveTeacher(t: Teacher, done: () -> Unit) {
+        if (t.name.isBlank()) { message = "اسم المعلم مطلوب"; return }
+        val data = mapOf("name" to t.name.trim(), "phone" to t.phone.trim(), "salary" to t.salary,
+            "hireDate" to t.hireDate, "status" to t.status, "notes" to t.notes.trim(), "updatedAt" to Date())
+        val ref = if (t.id.isBlank()) db.collection("teachers").document() else db.collection("teachers").document(t.id)
+        ref.set(data).addOnFailureListener { message = arabicError(it.message) }
+        done(); message = if (t.id.isBlank()) "تمت إضافة المعلم ${t.name.trim()}" else "تم تحديث بيانات المعلم"
+        if (t.id.isBlank()) audit("إضافة معلم", t.name.trim())
+    }
+
+    fun deleteTeacher(t: Teacher) {
+        db.collection("teachers").document(t.id).delete()
+            .addOnSuccessListener { message = "تم حذف المعلم" }
+            .addOnFailureListener { message = arabicError(it.message) }
+        audit("حذف معلم", t.name)
+    }
+
+    fun changeTeacherDate(delta: Int) {
+        val next = shiftDay(teacherDate, delta)
+        if (next > today()) return
+        teacherDate = next; listenTeacherDay(next)
+    }
+
+    private fun listenTeacherDay(day: String) {
+        teacherDayListener?.remove()
+        teacherDayListener = db.collection("teacherAttendance").whereEqualTo("date", day).addSnapshotListener { snap, e ->
+            if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+            teacherDayAttendance = snap?.documents?.map { d ->
+                AttendanceRecord(d.id, d.getString("teacherId") ?: "", d.getString("name") ?: "", d.getString("date") ?: "",
+                    d.getString("status") ?: AttendanceStatus.PRESENT)
+            } ?: emptyList()
+        }
+    }
+
+    fun setTeacherAttendance(t: Teacher, status: String) {
+        db.collection("teacherAttendance").document("${teacherDate}_${t.id}").set(mapOf(
+            "teacherId" to t.id, "name" to t.name, "date" to teacherDate, "status" to status,
+            "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
+        )).addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun loadTeacherMonth(month: String, onReady: (Map<String, List<String>>) -> Unit) {
+        db.collection("teacherAttendance").whereGreaterThanOrEqualTo("date", "$month-01").whereLessThanOrEqualTo("date", "$month-31")
+            .get().addOnSuccessListener { snap ->
+                onReady(snap.documents.groupBy({ it.getString("teacherId") ?: "" }, { it.getString("status") ?: "" }))
+            }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    fun changeSalaryMonth(delta: Int) {
+        val next = shiftMonth(salaryMonth, delta)
+        if (next > currentMonth()) return
+        salaryMonth = next; listenSalaries(next)
+    }
+
+    private fun listenSalaries(month: String) {
+        salaryListener?.remove()
+        salaryListener = db.collection("expenses").whereEqualTo("salaryMonth", month).addSnapshotListener { snap, e ->
+            if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
+            salaryExpenses = snap?.documents?.map(::toExpense) ?: emptyList()
+        }
+    }
+
+    /** Pays a teacher's salary for [month]; recorded as an expense so finance totals include it. */
+    fun paySalary(t: Teacher, month: String, amount: Int, done: () -> Unit) {
+        if (amount <= 0) { message = "أدخل مبلغ الراتب"; return }
+        done(); message = "سُجّل راتب ${t.name} لشهر ${monthName(month)}"
+        db.collection("expenses").document("salary_${month}_${t.id}").set(mapOf(
+            "category" to SALARY_CATEGORY, "amount" to amount, "date" to today(), "month" to currentMonth(),
+            "note" to "راتب ${t.name} — ${monthName(month)}", "teacherId" to t.id, "salaryMonth" to month,
+            "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
+        )).addOnFailureListener { message = arabicError(it.message) }
+        audit("دفع راتب", "${t.name} — ${monthName(month)} — ${money(amount)}")
+    }
+
+    fun cancelSalary(e: Expense) {
+        deleteExpense(e)
+    }
+
+    // ---------- Audit log ----------
+
+    /** Records a sensitive operation (append-only; only the admin can read it). */
+    fun audit(action: String, details: String) {
+        if (profile?.isStaff != true) return
+        db.collection("auditLog").add(mapOf(
+            "action" to action, "details" to details,
+            "by" to (profile?.name?.ifBlank { null } ?: firebaseUser?.email ?: ""), "byUid" to (firebaseUser?.uid ?: ""),
+            "at" to Date()
+        ))
+    }
+
+    fun loadAudit(onReady: (List<AuditEntry>) -> Unit) {
+        db.collection("auditLog").orderBy("at", Query.Direction.DESCENDING).limit(300).get()
+            .addOnSuccessListener { snap ->
+                onReady(snap.documents.map { d ->
+                    AuditEntry(d.getString("action") ?: "", d.getString("details") ?: "", d.getString("by") ?: "",
+                        d.getDate("at")?.time ?: 0)
+                })
+            }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    // ---------- Backup & restore (admin) ----------
+
+    val backupCollections = listOf("settings", "halaqat", "students", "teachers", "attendance", "teacherAttendance",
+        "quranLogs", "grades", "payments", "expenses", "announcements", "users")
+
+    /** Reads every collection and returns a JSON backup (timestamps kept as {"__ts": millis}). */
+    fun createBackup(onReady: (String) -> Unit) {
+        val tasks = backupCollections.map { db.collection(it).get() }
+        Tasks.whenAllSuccess<QuerySnapshot>(tasks).addOnSuccessListener { snaps ->
+            val root = org.json.JSONObject()
+            root.put("_app", "centre-imam-malik"); root.put("_version", 1); root.put("_createdAt", System.currentTimeMillis())
+            var count = 0
+            backupCollections.zip(snaps).forEach { (name, snap) ->
+                val col = org.json.JSONObject()
+                snap.documents.forEach { d -> col.put(d.id, BackupCodec.encode(d.data ?: emptyMap<String, Any>())); count++ }
+                root.put(name, col)
+            }
+            audit("نسخة احتياطية", "$count مستند")
+            onReady(root.toString())
+        }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
+    /** Restores a backup produced by [createBackup]; documents are merged by id (nothing is deleted). */
+    fun restoreBackup(json: String, done: (Int) -> Unit) {
+        val root = runCatching { org.json.JSONObject(json) }.getOrNull()
+        if (root == null || root.optString("_app") != "centre-imam-malik") { message = "الملف ليس نسخة احتياطية صالحة للتطبيق"; return }
+        val ops = mutableListOf<(WriteBatch) -> Unit>()
+        backupCollections.filter { root.has(it) }.forEach { name ->
+            val col = root.getJSONObject(name)
+            col.keys().forEach { id ->
+                @Suppress("UNCHECKED_CAST")
+                val data = BackupCodec.decode(col.getJSONObject(id)) as Map<String, Any?>
+                ops += { b -> b.set(db.collection(name).document(id), data, SetOptions.merge()) }
+            }
+        }
+        ops.chunked(450).forEach { chunk ->
+            val batch = db.batch(); chunk.forEach { it(batch) }
+            batch.commit().addOnFailureListener { message = arabicError(it.message) }
+        }
+        message = "تمت استعادة ${ops.size} مستند"
+        audit("استعادة نسخة احتياطية", "${ops.size} مستند")
+        done(ops.size)
     }
 
     // ---------- Centre settings (admin) ----------
@@ -562,6 +757,7 @@ class AppState {
             "name" to name.trim(), "director" to director.trim(), "phone" to phone.trim(), "address" to address.trim(),
             "academicYear" to year.trim(), "currency" to currency.trim().ifBlank { "فرنك" }, "updatedAt" to Date()
         )).addOnFailureListener { message = arabicError(it.message) }
+        audit("تعديل إعدادات المركز", name.trim())
     }
 
     // ---------- Analytics ----------
@@ -658,6 +854,7 @@ class AppState {
             .update(mapOf("role" to role, "studentIds" to studentIds, "groups" to groups, "updatedAt" to FieldValue.serverTimestamp()))
             .addOnSuccessListener { message = "تم تحديث حساب ${user.name.ifBlank { user.email }}" }
             .addOnFailureListener { message = arabicError(it.message) }
+        audit("تعديل صلاحيات حساب", "${user.name.ifBlank { user.email }} ← ${Roles.label(role)}")
     }
 
     // ---------- Mapping ----------
