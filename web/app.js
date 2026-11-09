@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig } from "./firebase-config.js?v=3";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const DEFAULT_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -26,6 +26,8 @@ const academicMonths = (m) => { const [y, mm] = m.split("-").map(Number); const 
 const yearLabel = (m) => { const a = academicMonths(m); return `${a[0].slice(0, 4)} / ${a[11].slice(0, 4)}`; };
 // Left-to-right isolate so "1 520 000" is not shown as "000 520 1" inside Arabic text.
 const num = (n) => "\u2066" + Number(n || 0).toLocaleString("en-US").replace(/,/g, " ") + "\u2069";
+// "+30 000" / "−20 000": sign kept on the left of the number inside Arabic text.
+const signed = (n) => n === 0 ? "0" : "\u2066" + (n > 0 ? "+" : "−") + Number(Math.abs(n)).toLocaleString("en-US").replace(/,/g, " ") + "\u2069";
 const money = (n) => `${num(n)} ${state.settings.currency || "فرنك"}`;
 // Card amount: big number on one line, small currency label.
 const amt = (n) => `${num(n)}<span class="cur">${esc(state.settings.currency || "فرنك")}</span>`;
@@ -68,8 +70,8 @@ const db = initializeFirestore(fb, { localCache: persistentLocalCache() });
 // ---------------------------------------------------------------- state
 const state = {
   user: null, profile: null, settings: { name: DEFAULT_NAME, currency: "فرنك" },
-  students: [], halaqat: [], payments: [], expenses: [], unsub: [], loaded: false,
-  filters: { q: "", group: "", feeMonth: currentMonth(), expMonth: currentMonth(), year: currentMonth() }
+  students: [], halaqat: [], payments: [], expenses: [], staff: [], payroll: [], unsub: [], loaded: false,
+  filters: { q: "", group: "", feeMonth: currentMonth(), expMonth: currentMonth(), year: currentMonth(), payMonth: currentMonth() }
 };
 const isAdmin = () => state.user?.email?.toLowerCase() === ADMIN_EMAIL || state.profile?.role === "admin";
 const isStaff = () => isAdmin() || state.profile?.role === "teacher";
@@ -94,6 +96,9 @@ function listen() {
   if (isAdmin()) {
     sub(collection(db, "payments"), (q) => { state.payments = q.docs.map((d) => ({ id: d.id, type: "monthly", ...d.data() })); render(); });
     sub(collection(db, "expenses"), (q) => { state.expenses = q.docs.map((d) => ({ id: d.id, ...d.data() })); render(); });
+    sub(collection(db, "teachers"), (q) => { state.staff = q.docs.map((d) => ({ id: d.id, category: "مدرس", status: ACTIVE, ...d.data() }))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar")); render(); });
+    sub(collection(db, "payroll"), (q) => { state.payroll = q.docs.map((d) => ({ id: d.id, ...d.data() })); render(); });
   }
 }
 
@@ -143,7 +148,8 @@ function renderLogin() {
 const NAV = [
   ["home", "🏠", "الرئيسية", false], ["students", "👥", "الطلاب", false], ["halaqat", "🕌", "الحلقات", false],
   ["fees", "💰", "الرسوم الشهرية", true], ["registration", "📝", "رسوم التسجيل", true],
-  ["expenses", "🧾", "المصروفات", true], ["summary", "📊", "الملخص المالي", true]
+  ["expenses", "🧾", "المصروفات", true], ["summary", "📊", "الملخص المالي", true],
+  ["staff", "👨‍🏫", "الموظفون", true], ["payroll", "💵", "الرواتب", true]
 ];
 window.addEventListener("hashchange", () => render());
 const route = () => (location.hash.replace("#/", "") || "home");
@@ -151,7 +157,7 @@ const route = () => (location.hash.replace("#/", "") || "home");
 function render() {
   if (!state.user || !state.profile || !isStaff()) return;
   const r = route();
-  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary };
+  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll };
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   $("#app").innerHTML = `<div class="layout"><aside class="side">
@@ -505,3 +511,163 @@ bind.summary = () => {
   $("#py").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], -12); render(); };
   $("#ny").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], 12); render(); };
 };
+
+// ---------------------------------------------------------------- staff (teachers, administration, supervisors, workers)
+const STAFF_CATS = [["مدرس", "المدرسون"], ["إداري", "الإداريون"], ["مراقب", "المراقبون"], ["عامل", "العمال"]];
+const PAY_MODES = ["نقدًا", "Orange Money", "Moov Money", "تحويل بنكي"];
+const SALARY_CATEGORY = "رواتب المعلمين";
+
+function viewStaff() {
+  const total = state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).reduce((a, t) => a + (t.salary || 0), 0);
+  const section = ([cat, plural]) => {
+    const list = state.staff.filter((t) => (t.category || "مدرس") === cat);
+    if (!list.length) return "";
+    return `<div class="panel"><h3>${plural} (${list.length})</h3><div class="table-wrap"><table><thead><tr>
+      <th class="num">#</th><th>الاسم</th><th>الوظيفة</th><th>الهاتف</th>${cat === "مدرس" ? "<th>الحلقات</th><th class=\"num\">الطلاب</th>" : ""}
+      <th class="num">الراتب الأساسي</th><th>طريقة الدفع</th><th>تاريخ التعيين</th><th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
+      ${list.map((t, i) => { const hs = state.halaqat.filter((h) => (h.teacher || "").trim() === (t.name || "").trim());
+        const cnt = state.students.filter((s) => hs.some((h) => h.name === s.group) && (s.status || ACTIVE) === ACTIVE).length;
+        return `<tr data-st="${t.id}" style="cursor:pointer" title="اضغط لفتح ملف الموظف"><td class="num">${i + 1}</td><td><b>${esc(t.name)}</b>${t.notes ? `<div class="muted" style="font-size:12px">${esc(t.notes)}</div>` : ""}</td>
+        <td>${esc(t.function)}</td><td dir="ltr" style="text-align:right">${esc(t.phone)}</td>
+        ${cat === "مدرس" ? `<td>${hs.map((h) => esc(h.name)).join("، ") || '<span class="muted">—</span>'}</td><td class="num">${hs.length ? cnt : ""}</td>` : ""}
+        <td class="num">${num(t.salary)}</td><td>${esc(t.paymentMode)}</td><td>${esc(t.hireDate)}</td>
+        <td><span class="chip ${(t.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(t.status || ACTIVE)}</span></td>
+        <td class="actions no-print"><button class="btn small outline">تعديل</button></td></tr>`; }).join("")}
+      </tbody><tfoot><tr><td></td><td>المجموع</td><td colspan="${cat === "مدرس" ? 4 : 2}"></td><td class="num">${num(list.reduce((a, t) => a + (t.salary || 0), 0))}</td><td colspan="4"></td></tr></tfoot></table></div></div>`;
+  };
+  return `<h1>الموظفون</h1><div class="sub">المدرسون والإداريون والمراقبون والعمال</div>
+  <div class="cards"><div class="card stat green"><div class="l">الموظفون النشطون</div><div class="v">${state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length}</div></div>
+  ${STAFF_CATS.map(([c, p]) => `<div class="card stat"><div class="l">${p}</div><div class="v">${state.staff.filter((t) => (t.category || "مدرس") === c).length}</div></div>`).join("")}
+  <div class="card stat gold"><div class="l">مجموع الرواتب الشهرية</div><div class="v">${amt(total)}</div></div></div>
+  <div class="toolbar"><button class="btn" id="adds">+ إضافة موظف</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
+  ${STAFF_CATS.map(section).join("") || '<div class="panel muted">لا يوجد موظفون بعد</div>'}`;
+}
+bind.staff = () => {
+  $("#adds").onclick = () => staffForm({ category: "مدرس", status: ACTIVE, hireDate: today() });
+  document.querySelectorAll("[data-st]").forEach((b) => b.onclick = () => staffForm(state.staff.find((t) => t.id === b.dataset.st)));
+};
+function staffForm(t) {
+  openModal(`<h3>${t.id ? "ملف الموظف" : "موظف جديد"}</h3>
+    <label>الاسم الكامل</label><input id="n" value="${esc(t.name)}">
+    <div class="row2"><div><label>الفئة</label><select id="c">${STAFF_CATS.map(([c]) => `<option ${t.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+    <div><label>الوظيفة</label><input id="f" value="${esc(t.function)}" placeholder="مدرس الحلقة، سكرتير، طبّاخة…"></div></div>
+    <div class="row2"><div><label>الهاتف</label><input id="ph" dir="ltr" value="${esc(t.phone)}"></div>
+    <div><label>الراتب الأساسي</label><input id="sa" type="number" min="0" value="${t.salary || ""}"></div></div>
+    <div class="row2"><div><label>طريقة الدفع</label><select id="pm"><option value=""></option>${PAY_MODES.map((m) => `<option ${t.paymentMode === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
+    <div><label>الحالة</label><select id="st"><option ${t.status !== "متوقف" ? "selected" : ""}>نشط</option><option ${t.status === "متوقف" ? "selected" : ""}>متوقف</option></select></div></div>
+    <div class="row2"><div><label>تاريخ التعيين</label><input id="hd" type="date" value="${esc(t.hireDate)}"></div>
+    <div><label>تاريخ التوقف عن العمل</label><input id="cd" type="date" value="${esc(t.cessationDate)}"></div></div>
+    <label>ملاحظات (الاسم بالفرنسية، المؤهل…)</label><input id="no" value="${esc(t.notes)}">
+    <div class="modal-actions"><button class="btn" id="save">حفظ</button><button class="btn outline" id="cancel">إلغاء</button>
+    ${t.id ? '<button class="btn danger" id="del">حذف</button>' : ""}</div>`, (b) => {
+    const v = (id) => b.querySelector("#" + id).value.trim();
+    b.querySelector("#cancel").onclick = closeModal;
+    b.querySelector("#del") && (b.querySelector("#del").onclick = () => confirmBox(`حذف ملف «${t.name}»؟ تبقى رواتبه المسجلة. يُفضَّل تحديد تاريخ التوقف بدل الحذف.`, () =>
+      deleteDoc(doc(db, "teachers", t.id)).then(() => { audit("حذف معلم", t.name); toast("تم حذف الموظف"); }).catch(fail)));
+    b.querySelector("#save").onclick = () => {
+      if (!v("n")) { toast("الاسم مطلوب"); return; }
+      const ref = t.id ? doc(db, "teachers", t.id) : doc(collection(db, "teachers"));
+      const status = v("cd") ? "متوقف" : v("st");
+      setDoc(ref, { name: v("n"), category: v("c"), function: v("f"), phone: v("ph"), salary: +v("sa") || 0, paymentMode: v("pm"),
+        status, hireDate: v("hd"), cessationDate: v("cd"), notes: v("no"), updatedAt: new Date() }, { merge: true })
+        .then(() => { if (!t.id) audit("إضافة معلم", v("n")); toast("تم حفظ بيانات الموظف"); }).catch(fail);
+      closeModal();
+    };
+  });
+}
+
+// ---------------------------------------------------------------- payroll (same rules as the app)
+// net = base − advance; received − net = withdrawn from (−) / left in (+) the deposit held by the administration.
+function viewPayroll() {
+  const m = state.filters.payMonth;
+  const year = academicMonths(m);
+  const byId = {}; state.payroll.filter((p) => p.month === m).forEach((p) => { byId[p.staffId] = p; });
+  const staff = state.staff.filter((t) => ((t.status || ACTIVE) === ACTIVE && (!t.hireDate || t.hireDate.slice(0, 7) <= m)) || byId[t.id]);
+  const T = { base: 0, adv: 0, net: 0, rec: 0 };
+  const rows = (cat, plural) => {
+    const list = staff.filter((t) => (t.category || "مدرس") === cat); if (!list.length) return "";
+    const st = { base: 0, adv: 0, net: 0, rec: 0 };
+    const body = list.map((t) => { const p = byId[t.id]; const base = p?.base ?? t.salary ?? 0, adv = p?.advance || 0, net = base - adv, rec = p?.received || 0;
+      st.base += base; st.adv += adv; st.net += net; st.rec += p ? rec : 0;
+      const ch = p ? net - rec : 0;
+      return `<tr class="clickable" data-pay="${t.id}" style="cursor:pointer"><td><b>${esc(t.name)}</b><div class="muted" style="font-size:12px">${esc(t.function)}</div></td>
+        <td class="num">${num(base)}</td><td class="num">${adv ? num(adv) : "—"}</td><td class="num"><b>${num(net)}</b></td>
+        <td class="num">${p ? num(rec) : '<span class="chip no">لم يُسجَّل</span>'}</td>
+        <td class="num" style="color:${ch > 0 ? "#8a6d00" : ch < 0 ? "var(--red)" : "inherit"}">${p ? signed(ch) : ""}</td>
+        <td>${esc(p?.receivedDate || "")}</td><td>${esc(p?.paymentMode || t.paymentMode || "")}</td></tr>`; }).join("");
+    T.base += st.base; T.adv += st.adv; T.net += st.net; T.rec += st.rec;
+    return `<tr><td colspan="8" style="background:#f7f5ec;font-weight:800;color:var(--green)">${plural}</td></tr>${body}
+      <tr style="font-weight:700;background:#fafafa"><td>مجموع ${plural}</td><td class="num">${num(st.base)}</td><td class="num">${num(st.adv)}</td><td class="num">${num(st.net)}</td><td class="num">${num(st.rec)}</td><td colspan="3"></td></tr>`;
+  };
+  const table = STAFF_CATS.map(([c, p]) => rows(c, p)).join("");
+  const yp = state.payroll.filter((p) => p.month >= year[0] && p.month <= year[11]);
+  const deposits = state.staff.map((t) => { const mine = yp.filter((p) => p.staffId === t.id);
+    const due = mine.reduce((a, p) => a + (p.base || 0) - (p.advance || 0), 0), got = mine.reduce((a, p) => a + (p.received || 0), 0);
+    return { t, due, got, bal: due - got }; });
+  return `<h1>الرواتب</h1><div class="sub">${monthName(m)} — اضغط على اسم الموظف لتسجيل راتبه أو تعديله</div>
+  <div class="toolbar"><button class="btn outline small" id="ppm">◀</button><b>${monthName(m)}</b><button class="btn outline small" id="npm">▶</button>
+    <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة كشف الرواتب</button></div>
+  <div class="cards"><div class="card stat"><div class="l">الرواتب الأساسية</div><div class="v">${amt(T.base)}</div></div>
+    <div class="card stat gold"><div class="l">السلف</div><div class="v">${amt(T.adv)}</div></div>
+    <div class="card stat"><div class="l">صافي الرواتب</div><div class="v">${amt(T.net)}</div></div>
+    <div class="card stat green"><div class="l">المستلم فعلًا</div><div class="v">${amt(T.rec)}</div></div>
+    <div class="card stat red"><div class="l">لم يُسجَّل بعد</div><div class="v">${staff.filter((t) => !byId[t.id]).length}</div></div></div>
+  <div class="panel"><h3>كشف رواتب ${monthName(m)}</h3><div class="table-wrap"><table><thead><tr><th>الاسم</th><th class="num">الراتب الأساسي</th><th class="num">السلفة</th>
+    <th class="num">صافي الراتب</th><th class="num">المستلم فعلًا</th><th class="num">المتروك (+) / المسحوب (−)</th><th>تاريخ الاستلام</th><th>طريقة الدفع</th></tr></thead>
+    <tbody>${table || '<tr><td colspan="8" class="muted">لا يوجد موظفون — أضفهم من صفحة «الموظفون»</td></tr>'}</tbody>
+    <tfoot><tr><td>المجموع العام</td><td class="num">${num(T.base)}</td><td class="num">${num(T.adv)}</td><td class="num">${num(T.net)}</td><td class="num">${num(T.rec)}</td><td colspan="3"></td></tr></tfoot></table></div></div>
+  <div class="panel"><h3>الرواتب المتروكة أمانةً لدى الإدارة — العام الدراسي ${yearLabel(m)}</h3><div class="table-wrap"><table><thead><tr><th>الاسم</th>
+    <th class="num">مجموع المستحق</th><th class="num">مجموع ما استلمه</th><th class="num">الرصيد لدى الإدارة</th></tr></thead><tbody>
+    ${deposits.map((d) => `<tr><td>${esc(d.t.name)}</td><td class="num">${num(d.due)}</td><td class="num">${num(d.got)}</td>
+      <td class="num" style="color:${d.bal > 0 ? "#8a6d00" : "inherit"}"><b>${num(d.bal)}</b></td></tr>`).join("")}</tbody>
+    <tfoot><tr><td>المجموع</td><td class="num">${num(deposits.reduce((a, d) => a + d.due, 0))}</td><td class="num">${num(deposits.reduce((a, d) => a + d.got, 0))}</td>
+    <td class="num">${num(deposits.reduce((a, d) => a + d.bal, 0))}</td></tr></tfoot></table></div></div>`;
+}
+bind.payroll = () => {
+  $("#ppm").onclick = () => { state.filters.payMonth = shiftMonth(state.filters.payMonth, -1); render(); };
+  $("#npm").onclick = () => { state.filters.payMonth = shiftMonth(state.filters.payMonth, 1); render(); };
+  document.querySelectorAll("[data-pay]").forEach((r) => r.onclick = () => payrollForm(state.staff.find((t) => t.id === r.dataset.pay), state.filters.payMonth));
+};
+function payrollForm(t, m) {
+  const id = `${m}_${t.id}`; const p = state.payroll.find((x) => x.id === id);
+  const base0 = p?.base ?? t.salary ?? 0, adv0 = p?.advance || 0;
+  openModal(`<h3>راتب ${esc(t.name)} — ${monthName(m)}</h3>
+    <div class="row2"><div><label>الراتب الأساسي</label><input id="b" type="number" min="0" value="${base0 || ""}"></div>
+    <div><label>السلفة (تُخصم)</label><input id="a" type="number" min="0" value="${adv0 || ""}"></div></div>
+    <div id="netline" style="margin-top:8px;font-weight:700;color:var(--green)"></div>
+    <div class="row2"><div><label>المبلغ المستلم فعلًا</label><input id="r" type="number" min="0" value="${p ? p.received : ""}" placeholder="فارغ = الصافي كاملًا"></div>
+    <div><label>تاريخ الاستلام</label><input id="d" type="date" value="${esc(p?.receivedDate || today())}"></div></div>
+    <label>طريقة الدفع</label><select id="pm"><option value=""></option>${PAY_MODES.map((x) => `<option ${(p?.paymentMode || t.paymentMode) === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+    <div id="depline" class="muted" style="margin-top:8px"></div>
+    <div class="modal-actions"><button class="btn" id="save">حفظ</button><button class="btn outline" id="cancel">إلغاء</button>
+    ${p ? '<button class="btn danger" id="del">حذف سجل هذا الشهر</button>' : ""}</div>`, (b) => {
+    const val = (k) => +b.querySelector("#" + k).value || 0;
+    const upd = () => { const net = val("b") - val("a"); const rRaw = b.querySelector("#r").value; const r = rRaw === "" ? net : +rRaw;
+      b.querySelector("#netline").textContent = `صافي الراتب: ${money(net)}`;
+      const ch = net - r; b.querySelector("#depline").textContent = ch > 0 ? `سيُترك أمانةً لدى الإدارة: ${money(ch)}` : ch < 0 ? `سيُسحب من الأمانة: ${money(-ch)}` : ""; };
+    ["b", "a", "r"].forEach((k) => b.querySelector("#" + k).oninput = upd); upd();
+    b.querySelector("#cancel").onclick = closeModal;
+    b.querySelector("#del") && (b.querySelector("#del").onclick = () => confirmBox(`حذف راتب ${t.name} لشهر ${monthName(m)}؟`, async () => {
+      try { const batch = writeBatch(db); batch.delete(doc(db, "payroll", id)); batch.delete(doc(db, "expenses", "salary_" + id)); await batch.commit();
+        audit("حذف راتب", `${t.name} — ${monthName(m)}`); toast("حُذف سجل الراتب"); } catch (e) { fail(e); } }));
+    b.querySelector("#save").onclick = async () => {
+      const base = val("b"), advance = val("a"); if (base <= 0) { toast("أدخل الراتب الأساسي"); return; }
+      const rRaw = b.querySelector("#r").value; const received = rRaw === "" ? Math.max(0, base - advance) : +rRaw;
+      const date = b.querySelector("#d").value || today(), mode = b.querySelector("#pm").value;
+      try {
+        const batch = writeBatch(db);
+        batch.set(doc(db, "payroll", id), { staffId: t.id, name: t.name, month: m, base, advance, received, receivedDate: date,
+          paymentMode: mode, recordedBy: state.profile?.name || "", updatedAt: new Date() });
+        const cash = advance + received;  // cash actually paid → mirrored as an expense (same as the app)
+        if (cash > 0) batch.set(doc(db, "expenses", "salary_" + id), { category: SALARY_CATEGORY, amount: cash, date, month: date.slice(0, 7),
+          note: `راتب ${t.name} — ${monthName(m)}`, teacherId: t.id, salaryMonth: m, recordedBy: state.profile?.name || "", updatedAt: new Date() });
+        else batch.delete(doc(db, "expenses", "salary_" + id));
+        await batch.commit();
+        const left = base - advance - received;
+        audit("راتب", `${t.name} — ${monthName(m)}: أساسي ${money(base)}، سلفة ${money(advance)}، مستلم ${money(received)}` +
+          (left > 0 ? `، متروك أمانة ${money(left)}` : left < 0 ? `، مسحوب من الأمانة ${money(-left)}` : ""));
+        toast(`حُفظ راتب ${t.name}`); closeModal();
+      } catch (e) { fail(e); }
+    };
+  });
+}
