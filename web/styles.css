@@ -39,7 +39,8 @@ h1 { margin: 0 0 4px; font-size: 24px; color: var(--green); }
 .btn.small { padding: 5px 10px; font-size: 13px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px; }
 .card { background: var(--card); border-radius: var(--radius); padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
-.stat .v { font-size: 24px; font-weight: 800; margin-top: 4px; }
+.stat .v { font-size: 24px; font-weight: 800; margin-top: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stat .v .cur { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 2px; }
 .stat .l { color: var(--muted); font-size: 13px; }
 .stat.green .v { color: var(--green); } .stat.red .v { color: var(--red); } .stat.gold .v { color: #8a6d00; }
 .panel { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }

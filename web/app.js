@@ -27,6 +27,8 @@ const yearLabel = (m) => { const a = academicMonths(m); return `${a[0].slice(0, 
 // Left-to-right isolate so "1 520 000" is not shown as "000 520 1" inside Arabic text.
 const num = (n) => "\u2066" + Number(n || 0).toLocaleString("en-US").replace(/,/g, " ") + "\u2069";
 const money = (n) => `${num(n)} ${state.settings.currency || "فرنك"}`;
+// Card amount: big number on one line, small currency label.
+const amt = (n) => `${num(n)}<span class="cur">${esc(state.settings.currency || "فرنك")}</span>`;
 const ACTIVE = "نشط";
 
 function toast(msg) {
@@ -174,7 +176,7 @@ function viewHome() {
     <div class="card stat green"><div class="l">الطلاب النشطون</div><div class="v">${active.length}</div></div>
     <div class="card stat"><div class="l">الطلاب / الطالبات</div><div class="v">${active.filter((s) => s.gender === "ذكر").length} / ${active.filter((s) => s.gender === "أنثى").length}</div></div>
     <div class="card stat"><div class="l">الحلقات</div><div class="v">${groups().length}</div></div>
-    ${isAdmin() ? `<div class="card stat green"><div class="l">رسوم ${monthName(m)}</div><div class="v">${money(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</div></div>
+    ${isAdmin() ? `<div class="card stat green"><div class="l">رسوم ${monthName(m)}</div><div class="v">${amt(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</div></div>
     <div class="card stat red"><div class="l">لم يدفعوا هذا الشهر</div><div class="v">${unpaid.length}</div></div>` : ""}
   </div>
   <div class="panel"><h3>الحلقات</h3><div class="table-wrap"><table><thead><tr><th>الحلقة</th><th>المعلم</th><th class="num">الطلاب</th><th class="num">ذكور</th><th class="num">إناث</th></tr></thead><tbody>
@@ -332,9 +334,9 @@ function viewFees() {
   }).join("");
   const colTotals = months.map((m) => list.reduce((a, s) => a + (pay[`${m}_${s.id}`]?.amount || 0), 0));
   return `<h1>الرسوم الشهرية</h1><div class="sub">العام الدراسي ${yearLabel(state.filters.year)} — اضغط على خانة الشهر لتسجيل الدفع أو إلغائه</div>
-  <div class="cards"><div class="card stat green"><div class="l">المحصَّل (${dueMonths} أشهر مستحقة)</div><div class="v">${money(totPaid)}</div></div>
-    <div class="card stat"><div class="l">المستحق حتى الآن</div><div class="v">${money(totDue)}</div></div>
-    <div class="card stat red"><div class="l">المتأخرات</div><div class="v">${money(totLate)}</div></div></div>
+  <div class="cards"><div class="card stat green"><div class="l">المحصَّل (${dueMonths} أشهر مستحقة)</div><div class="v">${amt(totPaid)}</div></div>
+    <div class="card stat"><div class="l">المستحق حتى الآن</div><div class="v">${amt(totDue)}</div></div>
+    <div class="card stat red"><div class="l">المتأخرات</div><div class="v">${amt(totLate)}</div></div></div>
   <div class="toolbar"><button class="btn outline small" id="py">◀ السنة السابقة</button><b>${yearLabel(state.filters.year)}</b>
     <button class="btn outline small" id="ny">السنة التالية ▶</button>
     <input id="fq" placeholder="🔍 بحث" value="${esc(state.filters.q)}">${groupSelect()}
@@ -383,8 +385,8 @@ function viewRegistration() {
   const paid = list.reduce((a, s) => a + (reg[s.id]?.amount || 0), 0);
   const rest = list.filter((s) => !reg[s.id]).reduce((a, s) => a + (s.registrationFee || 0), 0);
   return `<h1>رسوم التسجيل</h1><div class="sub">تُدفع مرة واحدة لكل طالب</div>
-  <div class="cards"><div class="card stat green"><div class="l">المحصَّل</div><div class="v">${money(paid)}</div></div>
-  <div class="card stat red"><div class="l">المتبقي</div><div class="v">${money(rest)}</div></div>
+  <div class="cards"><div class="card stat green"><div class="l">المحصَّل</div><div class="v">${amt(paid)}</div></div>
+  <div class="card stat red"><div class="l">المتبقي</div><div class="v">${amt(rest)}</div></div>
   <div class="card stat"><div class="l">لم يدفعوا</div><div class="v">${list.filter((s) => !reg[s.id]).length}</div></div></div>
   <div class="toolbar"><input id="fq" placeholder="🔍 بحث" value="${esc(state.filters.q)}">${groupSelect()}<button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الطالب</th><th>الحلقة</th><th class="num">المستحق</th><th class="num">المدفوع</th><th>تاريخ الدفع</th><th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
@@ -410,8 +412,8 @@ function viewExpenses() {
   return `<h1>المصروفات</h1><div class="sub">${monthName(m)}</div>
   <div class="toolbar"><button class="btn outline small" id="pm">◀</button><b>${monthName(m)}</b><button class="btn outline small" id="nm">▶</button>
     <button class="btn" id="adde">+ تسجيل مصروف</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
-  <div class="cards"><div class="card stat red"><div class="l">مجموع المصروفات</div><div class="v">${money(total)}</div></div>
-  ${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<div class="card stat"><div class="l">${esc(c)}</div><div class="v" style="font-size:18px">${money(v)}</div></div>`).join("")}</div>
+  <div class="cards"><div class="card stat red"><div class="l">مجموع المصروفات</div><div class="v">${amt(total)}</div></div>
+  ${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<div class="card stat"><div class="l">${esc(c)}</div><div class="v" style="font-size:18px">${amt(v)}</div></div>`).join("")}</div>
   <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th class="num">المبلغ</th><th>سجّله</th><th class="no-print"></th></tr></thead><tbody>
   ${list.map((e) => `<tr><td>${esc(e.date)}</td><td>${esc(e.category)}</td><td>${esc(e.note)}${e.observation ? ` <span class="muted">(${esc(e.observation)})</span>` : ""}</td>
     <td class="num"><b>${num(e.amount)}</b></td><td>${esc(e.recordedBy)}</td>
@@ -471,11 +473,11 @@ function viewSummary() {
   return `<h1>الملخص المالي</h1><div class="sub">العام الدراسي ${yearLabel(state.filters.year)} (سبتمبر – أوت)</div>
   <div class="toolbar"><button class="btn outline small" id="py">◀ السنة السابقة</button><b>${yearLabel(state.filters.year)}</b>
     <button class="btn outline small" id="ny">السنة التالية ▶</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
-  <div class="cards"><div class="card stat green"><div class="l">الرسوم الشهرية</div><div class="v">${money(monthly)}</div></div>
-    <div class="card stat green"><div class="l">رسوم التسجيل</div><div class="v">${money(reg)}</div></div>
-    <div class="card stat"><div class="l">إجمالي الإيرادات</div><div class="v">${money(monthly + reg)}</div></div>
-    <div class="card stat red"><div class="l">المصروفات</div><div class="v">${money(exp)}</div></div>
-    <div class="card stat ${monthly + reg - exp >= 0 ? "green" : "red"}"><div class="l">الرصيد الصافي</div><div class="v">${money(monthly + reg - exp)}</div></div></div>
+  <div class="cards"><div class="card stat green"><div class="l">الرسوم الشهرية</div><div class="v">${amt(monthly)}</div></div>
+    <div class="card stat green"><div class="l">رسوم التسجيل</div><div class="v">${amt(reg)}</div></div>
+    <div class="card stat"><div class="l">إجمالي الإيرادات</div><div class="v">${amt(monthly + reg)}</div></div>
+    <div class="card stat red"><div class="l">المصروفات</div><div class="v">${amt(exp)}</div></div>
+    <div class="card stat ${monthly + reg - exp >= 0 ? "green" : "red"}"><div class="l">الرصيد الصافي</div><div class="v">${amt(monthly + reg - exp)}</div></div></div>
   <div class="panel"><h3>حسب الشهر</h3><div class="table-wrap"><table><thead><tr><th>الشهر</th><th class="num">الرسوم الشهرية</th><th class="num">عدد الدافعين</th>
     <th class="num">رسوم التسجيل</th><th class="num">الإيرادات</th><th class="num">المصروفات</th><th class="num">الصافي</th></tr></thead>
     <tbody>${rows}</tbody><tfoot><tr><td>المجموع</td><td class="num">${num(monthly)}</td><td></td><td class="num">${num(reg)}</td>

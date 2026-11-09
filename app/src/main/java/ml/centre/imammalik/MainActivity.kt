@@ -289,7 +289,15 @@ fun StatCard(title: String, value: String, icon: ImageVector, modifier: Modifier
     Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(14.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, null, tint = tint)
-            Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            // Amounts: number on one line (size adapted to its length), currency smaller underneath,
+            // so every card looks the same instead of wrapping differently.
+            val suffix = " " + Centre.currency
+            val isAmount = value.endsWith(suffix)
+            val number = if (isAmount) value.removeSuffix(suffix) else value
+            val digits = number.count { it.isDigit() }
+            Text(number, fontSize = when { digits >= 8 -> 17.sp; digits >= 6 -> 20.sp; else -> 22.sp },
+                fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            if (isAmount) Text(Centre.currency, fontSize = 12.sp, color = Color.Gray, maxLines = 1)
             Text(title, fontSize = 13.sp, color = Color.DarkGray, maxLines = 1)
         }
     }
