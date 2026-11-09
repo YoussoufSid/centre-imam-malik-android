@@ -5,6 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
@@ -78,32 +83,108 @@ private fun AuthScreen(state: AppState) {
     var password by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var registering by remember { mutableStateOf(false) }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-    ) {
-        Spacer(Modifier.height(24.dp))
-        Image(painterResource(R.drawable.centre_logo), "شعار المركز", Modifier.size(150.dp), contentScale = ContentScale.Fit)
-        Spacer(Modifier.height(16.dp))
-        Text("مركز الإمام مالك", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Green)
-        Text("لتحفيظ القرآن الكريم والدراسات الإسلامية", color = Color.DarkGray)
-        Spacer(Modifier.height(28.dp))
-        if (registering) AppField(name, { name = it }, "الاسم الكامل")
-        AppField(email, { email = it }, "البريد الإلكتروني", KeyboardType.Email)
-        OutlinedTextField(password, { password = it }, label = { Text("كلمة المرور") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-        state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = { if (registering) state.register(email, password, name) else state.login(email, password) },
-            enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            if (state.busy) CircularProgressIndicator(Modifier.size(22.dp), color = Color.White)
-            else Text(if (registering) "إنشاء الحساب" else "تسجيل الدخول")
+    var showPassword by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        // Centre building with welcome message
+        // Slow zoom on the building photo (Ken Burns) and rotating welcome slides
+        val zoom by androidx.compose.animation.core.rememberInfiniteTransition(label = "kb").animateFloat(
+            initialValue = 1f, targetValue = 1.15f, label = "zoom",
+            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                androidx.compose.animation.core.tween(14000), androidx.compose.animation.core.RepeatMode.Reverse))
+        var slide by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) { while (true) { delay(6000); slide = (slide + 1) % 4 } }
+        Box(Modifier.fillMaxWidth().height(360.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))) {
+            Image(painterResource(R.drawable.centre_building), "مبنى المركز",
+                Modifier.fillMaxSize().graphicsLayer { scaleX = zoom; scaleY = zoom }, contentScale = ContentScale.Crop)
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(
+                listOf(Green.copy(alpha = .25f), Green.copy(alpha = .93f)))))
+            Column(Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 34.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(painterResource(R.drawable.centre_logo), "شعار المركز",
+                    Modifier.size(74.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.White))
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.animation.AnimatedContent(targetState = slide, label = "slides",
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(700)) +
+                            androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(700)) { it / 3 })
+                            .togetherWith(androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500)))
+                    }) { i ->
+                    Column(Modifier.fillMaxWidth().heightIn(min = 120.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center) {
+                        when (i) {
+                            0 -> {
+                                Text(WELCOME_TEXT, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center, lineHeight = 28.sp)
+                                Text("بسم الله الرحمن الرحيم", color = Color.White.copy(.85f), modifier = Modifier.padding(top = 6.dp))
+                            }
+                            1 -> {
+                                Text("﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾", color = Color.White, fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 30.sp)
+                                Text(HADITH_TEXT, color = Gold, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                            }
+                            2 -> Text("🤲 $DUA_TEXT", color = Color.White, fontSize = 14.5.sp, textAlign = TextAlign.Center, lineHeight = 24.sp)
+                            else -> {
+                                Text("حلقات تحفيظ القرآن الكريم والدراسات الإسلامية", color = Color.White, fontSize = 19.sp,
+                                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 28.sp)
+                                Text("📍 داودابوغو، باماكو", color = Gold, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
+                            }
+                        }
+                    }
+                }
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    repeat(4) { k ->
+                        Box(Modifier.height(8.dp).width(if (k == slide) 24.dp else 8.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (k == slide) Gold else Color.White.copy(alpha = .5f))
+                            .clickable { slide = k })
+                    }
+                }
+            }
         }
-        TextButton(onClick = { registering = !registering; state.message = null }) {
-            Text(if (registering) "لدي حساب بالفعل" else "إنشاء حساب جديد")
+        // Login form
+        Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp).offset(y = (-18).dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(6.dp)) {
+            Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (registering) "إنشاء حساب جديد" else "تسجيل الدخول", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Green)
+                Spacer(Modifier.height(12.dp))
+                if (registering) AppField(name, { name = it }, "الاسم الكامل")
+                AppField(email, { email = it }, "البريد الإلكتروني", KeyboardType.Email)
+                OutlinedTextField(password, { password = it }, label = { Text("كلمة المرور") }, singleLine = true,
+                    visualTransformation = if (showPassword) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, "إظهار كلمة المرور", tint = Green)
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp), textAlign = TextAlign.Center) }
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { if (registering) state.register(email, password, name) else state.login(email, password) },
+                    enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    if (state.busy) CircularProgressIndicator(Modifier.size(22.dp), color = Color.White)
+                    else Text(if (registering) "إنشاء الحساب" else "تسجيل الدخول", fontSize = 16.sp)
+                }
+                Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { registering = !registering; state.message = null }) {
+                        Text(if (registering) "لدي حساب بالفعل" else "إنشاء حساب جديد")
+                    }
+                    if (!registering) TextButton(onClick = { state.resetPassword(email) }) { Text("نسيت كلمة المرور؟") }
+                }
+            }
         }
-        if (!registering) TextButton(onClick = { state.resetPassword(email) }) { Text("نسيت كلمة المرور؟") }
+        // Prayer for the founder
+        DuaCard(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        Text("بسم الله الرحمن الرحيم", Modifier.fillMaxWidth().padding(16.dp), textAlign = TextAlign.Center, color = Green.copy(alpha = .8f))
+    }
+}
+
+@Composable
+fun DuaCard(modifier: Modifier = Modifier) {
+    Card(modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEA))) {
+        Row(Modifier.padding(14.dp)) {
+            Text("🤲", fontSize = 20.sp); Spacer(Modifier.width(8.dp))
+            Text(DUA_TEXT, fontSize = 14.sp, lineHeight = 24.sp, color = Color(0xFF3B2E00))
+        }
     }
 }
 
@@ -341,6 +422,7 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
             }
         }
         if (quickActions.isNotEmpty()) item { QuickActions(quickActions) }
+        item { DuaCard() }
         if (me.isStaff) {
             item { Text("ملخص اليوم • ${ltr(today())}", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             item {
