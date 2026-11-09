@@ -33,9 +33,9 @@ private val Red = Color(0xFFC53030)
 @Composable
 fun FinanceScreen(state: AppState, openProfile: (String) -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("الشهرية", "التسجيل", "المصروفات", "الملخص")
+    val tabs = listOf("الشهرية", "التسجيل", "المصروفات", "العُهَد", "الملخص")
     Column(Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab, containerColor = Color.White, contentColor = Green) {
+        ScrollableTabRow(selectedTabIndex = tab, containerColor = Color.White, contentColor = Green, edgePadding = 8.dp) {
             tabs.forEachIndexed { i, t ->
                 Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t, maxLines = 1, fontSize = 14.sp) })
             }
@@ -45,6 +45,7 @@ fun FinanceScreen(state: AppState, openProfile: (String) -> Unit) {
                 0 -> FeesScreen(state, openProfile)
                 1 -> RegistrationTab(state, openProfile)
                 2 -> ExpensesTab(state)
+                3 -> AdvancesTab(state)
                 else -> SummaryTab(state)
             }
         }

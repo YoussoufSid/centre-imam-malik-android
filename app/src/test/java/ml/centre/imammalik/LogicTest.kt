@@ -164,6 +164,31 @@ class LogicTest {
         assertTrue(parseStudentLines("").isEmpty())
     }
 
+    // ---------- Payroll & petty cash ----------
+
+    @Test fun academicYear_runsSeptemberToAugust() {
+        val nov = academicYearMonths("2026-11")
+        assertEquals("2026-09", nov.first()); assertEquals("2027-08", nov.last()); assertEquals(12, nov.size)
+        assertEquals(nov, academicYearMonths("2027-03"))
+        assertEquals("2027-09", academicYearMonths("2027-09").first())
+        assertEquals("2026 / 2027", academicYearLabel("2027-01"))
+    }
+
+    @Test fun payroll_netAndDeposit() {
+        val sep = PayrollEntry(month = "2026-09", base = 100000, advance = 20000, received = 50000) // net 80k, leaves 30k
+        val oct = PayrollEntry(month = "2026-10", base = 100000, advance = 0, received = 120000)   // withdraws 20k
+        assertEquals(80000, sep.net); assertEquals(30000, sep.depositChange)
+        assertEquals(-20000, oct.depositChange)
+        assertEquals(10000, depositBalance(listOf(sep, oct)))
+        assertEquals(0, depositBalance(emptyList()))
+    }
+
+    @Test fun advance_remainingOrDeficit() {
+        val a = CashAdvance(amount = 50000)
+        assertEquals(12500, advanceBalance(a, 37500))   // reste
+        assertEquals(-5000, advanceBalance(a, 55000))   // déficit
+    }
+
     // ---------- Backup ----------
 
     @Test fun backupCodec_roundTripKeepsDatesListsAndMaps() {

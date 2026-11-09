@@ -156,7 +156,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
         if (me.isAdmin) {
             add(QuickAction("المالية", Icons.Default.AccountBalanceWallet) { goTo("المالية") })
             add(QuickAction("إضافة جماعية", Icons.Default.GroupAdd) { open(Screens.BULK) })
-            add(QuickAction("المعلمون", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
+            add(QuickAction("الموظفون والرواتب", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
             add(QuickAction("إعلان جديد", Icons.Default.Campaign) { announceOpen = true })
         }
     }
@@ -194,7 +194,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     AppMenu(buildList {
                         if (me.isStaff) add(MenuEntry("الحلقات", Icons.Default.Diversity3) { open(Screens.HALAQAT) })
                         if (me.isAdmin) {
-                            add(MenuEntry("المعلمون والرواتب", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
+                            add(MenuEntry("الموظفون والرواتب", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
                             add(MenuEntry("إضافة طلاب دفعة واحدة", Icons.Default.GroupAdd) { open(Screens.BULK) })
                             add(MenuEntry("إعدادات المركز", Icons.Default.Settings) { open(Screens.SETTINGS) })
                             add(MenuEntry("تصدير البيانات", Icons.Default.FileDownload) { exportOpen = true })
@@ -278,7 +278,7 @@ object Screens {
         USERS -> "حسابات المستخدمين"
         HALAQAT -> "الحلقات"
         BULK -> "إضافة طلاب دفعة واحدة"
-        TEACHERS -> "المعلمون"
+        TEACHERS -> "الموظفون والرواتب"
         AUDIT -> "سجل العمليات"
         else -> null
     }

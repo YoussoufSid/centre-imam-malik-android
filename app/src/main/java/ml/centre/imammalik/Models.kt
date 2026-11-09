@@ -72,15 +72,68 @@ data class Student(
 
 // ---------- Teachers ----------
 
+/** A staff member: teacher, supervisor or worker. */
 data class Teacher(
     val id: String = "",
     val name: String = "",
     val phone: String = "",
+    /** Base monthly salary. */
     val salary: Int = 0,
     val hireDate: String = "",
     val status: String = "نشط",
-    val notes: String = ""
+    val notes: String = "",
+    val category: String = StaffCategory.TEACHER,
+    /** Job title, e.g. "مدرس الحلقة ونائب المدير". */
+    val function: String = "",
+    val cessationDate: String = "",
+    val paymentMode: String = ""
 )
+
+object StaffCategory {
+    const val TEACHER = "مدرس"
+    const val SUPERVISOR = "مراقب"
+    const val WORKER = "عامل"
+    val all = listOf(TEACHER, SUPERVISOR, WORKER)
+    fun plural(c: String) = when (c) { SUPERVISOR -> "المراقبون"; WORKER -> "العمال"; else -> "المدرسون" }
+    fun french(c: String) = when (c) { SUPERVISOR -> "Surveillants"; WORKER -> "Ouvriers"; else -> "Enseignants" }
+}
+
+val PaymentModes = listOf("نقدًا", "Orange Money", "Moov Money", "تحويل بنكي")
+
+/**
+ * One month of salary for one staff member.
+ * net = base − advance; the part of net not taken is left in deposit with the administration
+ * (received > net means the employee withdrew from an earlier deposit).
+ */
+data class PayrollEntry(
+    val id: String = "",
+    val staffId: String = "",
+    val name: String = "",
+    /** yyyy-MM */
+    val month: String = "",
+    val base: Int = 0,
+    val advance: Int = 0,
+    val received: Int = 0,
+    val receivedDate: String = "",
+    val paymentMode: String = ""
+) {
+    val net get() = base - advance
+    /** + left in deposit / − withdrawn from deposit. */
+    val depositChange get() = net - received
+}
+
+/** Academic year months, September to August, containing [month] (yyyy-MM). */
+fun academicYearMonths(month: String): List<String> {
+    val y = month.take(4).toIntOrNull() ?: 2026
+    val m = month.drop(5).toIntOrNull() ?: 9
+    val start = if (m >= 9) y else y - 1
+    return (9..12).map { "%d-%02d".format(Locale.US, start, it) } + (1..8).map { "%d-%02d".format(Locale.US, start + 1, it) }
+}
+
+fun academicYearLabel(month: String): String = academicYearMonths(month).let { "${it.first().take(4)} / ${it.last().take(4)}" }
+
+/** Deposit balance held by the administration = Σ net − Σ received. */
+fun depositBalance(entries: List<PayrollEntry>): Int = entries.sumOf { it.depositChange }
 
 const val SALARY_CATEGORY = "رواتب المعلمين"
 
@@ -157,7 +210,7 @@ object PaymentType {
 }
 
 val ExpenseCategories = listOf("رواتب المعلمين", "الإيجار", "الكهرباء والماء", "المصاحف والكتب",
-    "الأدوات واللوازم", "الصيانة", "النقل", "أخرى")
+    "الأدوات واللوازم", "الصيانة", "النقل", "مصروفات يومية", "أخرى")
 
 data class Expense(
     val id: String = "",
@@ -167,8 +220,31 @@ data class Expense(
     /** yyyy-MM */
     val month: String = "",
     val note: String = "",
-    val recordedBy: String = ""
+    val recordedBy: String = "",
+    /** Set when the expense is a line of a petty-cash register (عهدة). */
+    val registerId: String = "",
+    val observation: String = ""
 )
+
+const val DAILY_EXPENSES_CATEGORY = "مصروفات يومية"
+
+/** Petty-cash advance (عهدة) handed by the administration and justified by daily expense lines. */
+data class CashAdvance(
+    val id: String = "",
+    /** yyyy-MM */
+    val month: String = "",
+    val week: String = "",
+    val receivedDate: String = "",
+    val amount: Int = 0,
+    val remisPar: String = "",
+    val recuPar: String = "",
+    val settlementAmount: Int = 0,
+    val settlementDate: String = "",
+    val closed: Boolean = false
+)
+
+/** Positive = remaining with the beneficiary, negative = deficit owed to them. */
+fun advanceBalance(a: CashAdvance, spent: Int): Int = a.amount - spent
 
 // ---------- Islamic studies ----------
 

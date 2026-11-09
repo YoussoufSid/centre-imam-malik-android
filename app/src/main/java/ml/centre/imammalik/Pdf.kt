@@ -206,3 +206,238 @@ fun shareCertificate(context: Context, student: Student) {
     doc.finishPage(page)
     sharePdf(context, doc, "certificate-${safeName(student.name)}.pdf")
 }
+
+// =====================================================================
+// Administrative documents (bilingual Arabic / French), matching the centre's paper forms
+// =====================================================================
+
+private val FrenchMonths = listOf("Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août",
+    "Septembre", "Octobre", "Novembre", "Décembre")
+
+private fun frenchMonth(m: String): String {
+    val i = m.drop(5).toIntOrNull() ?: return m
+    return "${FrenchMonths.getOrElse(i - 1) { m }} ${m.take(4)}"
+}
+
+private fun num(n: Int, dashIfZero: Boolean = false): String =
+    if (n == 0 && dashIfZero) "-" else "%,d".format(java.util.Locale.US, n)
+
+private fun frDate(d: String): String = if (d.length == 10) "${d.substring(8, 10)}/${d.substring(5, 7)}/${d.take(4)}" else d
+
+private val CENTRE_FR = "Centre Imam Malik pour la mémorisation du Saint Coran et les études islamiques"
+
+/** Simple table cell: border + centred (or right-aligned) text. */
+private fun Canvas.cell(left: Float, top: Float, w: Float, h: Float, text: String, size: Float = 9.5f,
+                        bold: Boolean = false, fill: Int? = null, color: Int = 0xFF222222.toInt(),
+                        align: Layout.Alignment = Layout.Alignment.ALIGN_CENTER) {
+    if (fill != null) drawRect(left, top, left + w, top + h, Paint().apply { this.color = fill })
+    drawRect(left, top, left + w, top + h, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = .7f; this.color = 0xFF888888.toInt()
+    })
+    if (text.isNotEmpty()) {
+        val est = text.split("\n").size * size * 1.25f   // approximate height to centre vertically
+        rtlText(text, left + w - 3f, top + ((h - est) / 2).coerceAtLeast(1f), w - 6f, size, color, bold, align)
+    }
+}
+
+/** Bilingual page header used by the administrative documents. */
+private fun Canvas.adminHeader(context: Context, W: Float, titleAr: String, titleFr: String): Float {
+    drawRect(0f, 0f, W, 74f, Paint().apply { color = GREEN })
+    logo(context, 18f, 7f, 60f)
+    rtlText(Centre.name + if (Centre.address.isNotBlank()) " — ${Centre.address}" else "", W - 20f, 10f, W - 110f, 12.5f,
+        0xFFFFFFFF.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    rtlText(CENTRE_FR + if (Centre.address.isNotBlank()) " — ${Centre.address}" else "", W - 20f, 30f, W - 110f, 9.5f,
+        0xFFEEEEEE.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    rtlText(titleAr, W - 20f, 84f, W - 40f, 14f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    rtlText(titleFr, W - 20f, 104f, W - 40f, 10.5f, GREY, align = Layout.Alignment.ALIGN_CENTER)
+    return 126f
+}
+
+/** "État des salaires" of one month + recap by category + deposits of the academic year. */
+fun sharePayrollStatement(context: Context, month: String, staff: List<Teacher>, entries: List<PayrollEntry>, year: List<PayrollEntry>) {
+    val W = 842f; val H = 595f; val M = 20f
+    val doc = PdfDocument()
+    var pageNo = 1
+    var page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create())
+    var c = page.canvas
+    val byId = entries.associateBy { it.staffId }
+    val titleAr = "كشف رواتب المدرسين والمراقبين والعمال — شهر ${monthName(month)} (المبالغ ب${Centre.currency})"
+    val titleFr = "État des salaires des enseignants, surveillants et ouvriers — ${frenchMonth(month)} (montants en FCFA)"
+    var y = c.adminHeader(context, W, titleAr, titleFr)
+    // columns from right to left
+    val cols = listOf(28f to "م\nN°", 140f to "الاسم الكامل\nNom complet", 135f to "الوظيفة\nFonction",
+        72f to "الراتب الأساسي\nSalaire de base", 60f to "السلفة\nAvance", 72f to "صافي الراتب\nSalaire net",
+        72f to "المستلم فعلًا\nMontant perçu", 72f to "طريقة الدفع\nMode de paiement", 66f to "تاريخ التعيين\nDate d'embauche",
+        66f to "تاريخ التوقف\nDate de cessation")
+    val tableW = cols.sumOf { it.first.toDouble() }.toFloat()
+    val right0 = W - (W - tableW) / 2
+    fun row(values: List<String>, h: Float, bold: Boolean = false, fill: Int? = null) {
+        if (y + h > H - 30f) {
+            doc.finishPage(page); pageNo++
+            page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create()); c = page.canvas; y = 30f
+        }
+        var r = right0
+        cols.forEachIndexed { i, (w, _) -> c.cell(r - w, y, w, h, values.getOrElse(i) { "" }, 9f, bold, fill); r -= w }
+        y += h
+    }
+    fun span(text: String, h: Float, fill: Int, bold: Boolean = true) {
+        c.cell(right0 - tableW, y, tableW, h, text, 9.5f, bold, fill, align = Layout.Alignment.ALIGN_NORMAL); y += h
+    }
+    row(cols.map { it.second }, 30f, bold = true, fill = 0xFFE8F0EC.toInt())
+    var n = 0
+    data class Tot(var base: Int = 0, var adv: Int = 0, var net: Int = 0, var rec: Int = 0)
+    val grand = Tot()
+    StaffCategory.all.forEach { cat ->
+        val list = staff.filter { it.category == cat }
+        if (list.isEmpty()) return@forEach
+        span("${StaffCategory.plural(cat)} — ${StaffCategory.french(cat)}", 18f, 0xFFF7F5EC.toInt())
+        val t = Tot()
+        list.forEach { s ->
+            n++
+            val e = byId[s.id]
+            val base = e?.base ?: s.salary; val adv = e?.advance ?: 0; val rec = e?.received ?: 0
+            t.base += base; t.adv += adv; t.net += base - adv; t.rec += rec
+            row(listOf("$n", s.name, s.function.ifBlank { s.category }, num(base), num(adv, true), num(base - adv),
+                if (e == null) "" else num(rec), e?.paymentMode?.ifBlank { null } ?: s.paymentMode, frDate(s.hireDate), frDate(s.cessationDate)), 24f)
+        }
+        row(listOf("", "مجموع ${StaffCategory.plural(cat)}\nTotal ${StaffCategory.french(cat).lowercase()}", "", num(t.base), num(t.adv, true),
+            num(t.net), num(t.rec)), 26f, bold = true, fill = 0xFFFAFAFA.toInt())
+        grand.base += t.base; grand.adv += t.adv; grand.net += t.net; grand.rec += t.rec
+    }
+    row(listOf("", "المجموع العام\nTotal général", "", num(grand.base), num(grand.adv, true), num(grand.net), num(grand.rec)),
+        28f, bold = true, fill = 0xFFFFF4D6.toInt())
+
+    // ---- page 2: recap + deposits
+    doc.finishPage(page); pageNo++
+    page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create()); c = page.canvas
+    y = c.adminHeader(context, W, "ملخص رواتب شهر ${monthName(month)}", "Récapitulatif des salaires — ${frenchMonth(month)}")
+    val rc = listOf(170f to "الفئة\nCatégorie", 110f to "عدد الموظفين\nNombre d'employés", 150f to "إجمالي الرواتب الأساسية\nTotal des salaires de base",
+        120f to "إجمالي السلف\nTotal des avances", 120f to "صافي المدفوع\nNet payé")
+    val rw = rc.sumOf { it.first.toDouble() }.toFloat(); val rr = W - (W - rw) / 2
+    fun rrow(v: List<String>, h: Float, bold: Boolean = false, fill: Int? = null) {
+        var r = rr; rc.forEachIndexed { i, (w, _) -> c.cell(r - w, y, w, h, v.getOrElse(i) { "" }, 9.5f, bold, fill); r -= w }; y += h
+    }
+    rrow(rc.map { it.second }, 30f, true, 0xFFE8F0EC.toInt())
+    var cnt = 0; var sb = 0; var sa = 0
+    StaffCategory.all.forEach { cat ->
+        val list = staff.filter { it.category == cat }; if (list.isEmpty()) return@forEach
+        val b = list.sumOf { byId[it.id]?.base ?: it.salary }; val a = list.sumOf { byId[it.id]?.advance ?: 0 }
+        cnt += list.size; sb += b; sa += a
+        rrow(listOf("${StaffCategory.plural(cat)}\n${StaffCategory.french(cat)}", "${list.size}", num(b), num(a, true), num(b - a)), 28f)
+    }
+    rrow(listOf("المجموع\nTotal", "$cnt", num(sb), num(sa, true), num(sb - sa)), 28f, true, 0xFFFFF4D6.toInt())
+
+    y += 22f
+    c.rtlText("الرواتب المتروكة أمانةً لدى إدارة المركز — العام الدراسي ${academicYearLabel(month)}", W - 20f, y, W - 40f, 13f, GREEN,
+        bold = true, align = Layout.Alignment.ALIGN_CENTER); y += 18f
+    c.rtlText("Salaires laissés en dépôt auprès de l'administration — Année scolaire ${academicYearLabel(month)}", W - 20f, y, W - 40f, 10f,
+        GREY, align = Layout.Alignment.ALIGN_CENTER); y += 20f
+    val dc = listOf(30f to "م\nN°", 200f to "الاسم\nNom", 130f to "مجموع المستحق\nTotal dû", 130f to "مجموع ما استلمه\nTotal perçu",
+        150f to "الرصيد المتروك لدى الإدارة\nSolde en dépôt")
+    val dw = dc.sumOf { it.first.toDouble() }.toFloat(); val dr = W - (W - dw) / 2
+    fun drow(v: List<String>, h: Float, bold: Boolean = false, fill: Int? = null) {
+        var r = dr; dc.forEachIndexed { i, (w, _) -> c.cell(r - w, y, w, h, v.getOrElse(i) { "" }, 9.5f, bold, fill); r -= w }; y += h
+    }
+    drow(dc.map { it.second }, 30f, true, 0xFFE8F0EC.toInt())
+    var td = 0; var tp = 0
+    staff.forEachIndexed { i, s ->
+        val mine = year.filter { it.staffId == s.id }
+        val due = mine.sumOf { it.net }; val got = mine.sumOf { it.received }; td += due; tp += got
+        if (y < H - 40f) drow(listOf("${i + 1}", s.name, num(due), num(got), num(due - got)), 20f)
+    }
+    if (y < H - 40f) drow(listOf("", "المجموع\nTotal", num(td), num(tp), num(td - tp)), 26f, true, 0xFFFFF4D6.toInt())
+    doc.finishPage(page)
+    sharePdf(context, doc, "salaires-$month.pdf")
+}
+
+/** "Fiche de réception du salaire mensuel" for one employee over the academic year. */
+fun shareSalaryCard(context: Context, t: Teacher, entries: List<PayrollEntry>, month: String) {
+    val W = 842f; val H = 595f
+    val doc = PdfDocument()
+    val page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), 1).create())
+    val c = page.canvas
+    val months = academicYearMonths(month)
+    var y = c.adminHeader(context, W, "بطاقة استلام الراتب الشهري — العام الدراسي ${academicYearLabel(month)}",
+        "Fiche de réception du salaire mensuel — Année scolaire ${academicYearLabel(month)} (${frenchMonth(months.first())} – ${frenchMonth(months.last())})")
+    val byMonth = entries.associateBy { it.month }
+    val bal = depositBalance(entries)
+    val third = (W - 40f) / 3
+    fun info(col: Int, row: Int, text: String) = c.rtlText(text, W - 20f - col * third, y + row * 20f, third - 8f, 10.5f)
+    info(0, 0, "الاسم الكامل / Nom complet: ${t.name}")
+    info(1, 0, "الوظيفة / Fonction: ${t.function.ifBlank { t.category }}")
+    info(2, 0, "الراتب الأساسي / Salaire de base: ${num(t.salary)} FCFA")
+    info(0, 1, "تاريخ التعيين / Date d'embauche: ${frDate(t.hireDate)}")
+    info(1, 1, "الرصيد لدى الإدارة / Solde en dépôt: ${num(bal)} FCFA")
+    info(2, 1, "تاريخ التوقف / Date de cessation: ${frDate(t.cessationDate)}")
+    y += 48f
+    val cols = listOf(92f to "الشهر\nMois", 70f to "الراتب الأساسي\nSalaire de base", 58f to "السلفة\nAvance",
+        74f to "المستلم فعلًا\nMontant perçu", 80f to "المتروك (+) / المسحوب (−)\nLaissé (+) / Retiré (−)",
+        84f to "الرصيد لدى الإدارة\nSolde en dépôt", 66f to "تاريخ الاستلام\nDate de réception",
+        92f to "توقيع المدرس\nSignature de l'employé(e)", 92f to "توقيع السكرتير\nSignature du secrétaire", 92f to "توقيع المدير\nSignature du directeur")
+    val tw = cols.sumOf { it.first.toDouble() }.toFloat(); val r0 = W - (W - tw) / 2
+    fun row(v: List<String>, h: Float, bold: Boolean = false, fill: Int? = null) {
+        var r = r0; cols.forEachIndexed { i, (w, _) -> c.cell(r - w, y, w, h, v.getOrElse(i) { "" }, 8.5f, bold, fill); r -= w }; y += h
+    }
+    row(cols.map { it.second }, 34f, true, 0xFFE8F0EC.toInt())
+    var running = 0
+    months.forEach { m ->
+        val e = byMonth[m]
+        if (e != null) running += e.depositChange
+        val ch = e?.depositChange ?: 0
+        row(listOf("${monthName(m)}\n${frenchMonth(m)}", num(e?.base ?: t.salary), if (e == null) "" else num(e.advance, true),
+            if (e == null) "" else num(e.received), if (e == null) "" else (if (ch > 0) "+${num(ch)}" else if (ch < 0) "−${num(-ch)}" else "0"),
+            if (e == null) "" else num(running), if (e == null) "" else frDate(e.receivedDate)), 30f)
+    }
+    doc.finishPage(page)
+    sharePdf(context, doc, "fiche-salaire-${safeName(t.name)}.pdf")
+}
+
+/** "Registre des dépenses journalières" for one petty-cash advance. */
+fun shareExpenseRegister(context: Context, a: CashAdvance, lines: List<Expense>) {
+    val W = 595f; val H = 842f; val M = 30f
+    val doc = PdfDocument()
+    val page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), 1).create())
+    val c = page.canvas
+    var y = c.adminHeader(context, W, "سجل المصروفات اليومية", "Registre des dépenses journalières")
+    val tw = W - 2 * M; val q = tw / 4
+    fun pair(lab: String, v: String, lab2: String, v2: String) {
+        c.cell(W - M - q, y, q, 30f, lab, 8.5f, true, 0xFFF7F5EC.toInt()); c.cell(W - M - 2 * q, y, q, 30f, v, 9.5f)
+        c.cell(W - M - 3 * q, y, q, 30f, lab2, 8.5f, true, 0xFFF7F5EC.toInt()); c.cell(M, y, q, 30f, v2, 9.5f); y += 30f
+    }
+    pair("العام\nAnnée", academicYearLabel(a.month.ifBlank { currentMonth() }), "الشهر\nMois", "${monthName(a.month)}\n${frenchMonth(a.month)}")
+    pair("الأسبوع\nSemaine", a.week, "تاريخ الاستلام\nDate de réception", frDate(a.receivedDate))
+    pair("المبلغ المستلم من الإدارة\nMontant reçu (FCFA)", num(a.amount), "المستلم منه\nRemis par", a.remisPar)
+    pair("المستلم\nReçu par", a.recuPar, "توقيع المستلم\nSignature du bénéficiaire", "")
+    y += 12f
+    val cols = listOf(30f to "م\nN°", 220f to "البيان\nLibellé", 85f to "المبلغ (فرنك)\nMontant (FCFA)", 75f to "التاريخ\nDate",
+        tw - 410f to "ملاحظات\nObservations")
+    fun row(v: List<String>, h: Float, bold: Boolean = false, fill: Int? = null) {
+        var r = W - M; cols.forEachIndexed { i, (w, _) -> c.cell(r - w, y, w, h, v.getOrElse(i) { "" }, 9f, bold, fill); r -= w }; y += h
+    }
+    row(cols.map { it.second }, 30f, true, 0xFFE8F0EC.toInt())
+    val rows = maxOf(lines.size, 20)
+    val rh = if (rows > 20) ((H - y - 210f) / rows).coerceAtLeast(14f) else 19f
+    for (i in 0 until rows) {
+        val l = lines.getOrNull(i)
+        row(listOf("${i + 1}", l?.note ?: "", l?.let { num(it.amount) } ?: "", l?.let { frDate(it.date) } ?: "", l?.observation ?: ""), rh)
+    }
+    val spent = lines.sumOf { it.amount }
+    c.cell(W - M - 250f, y, 250f, 24f, "مجموع المصروفات / Total des dépenses", 9.5f, true, 0xFFFFF4D6.toInt())
+    c.cell(W - M - 335f, y, 85f, 24f, num(spent), 10f, true, 0xFFFFF4D6.toInt()); y += 34f
+    val bal = advanceBalance(a, spent)
+    pair("الباقي\nReste", if (bal > 0) num(bal) else "", "العجز\nDéficit", if (bal < 0) num(-bal) else "")
+    pair("المبلغ المُعاد أو المدفوع للتسوية\nMontant restitué ou payé", if (a.settlementAmount > 0) num(a.settlementAmount) else "",
+        "تاريخ التسوية\nDate de règlement", frDate(a.settlementDate))
+    c.cell(W - M - q, y, q, 30f, "تصفية الحساب\nClôture du compte", 8.5f, true, 0xFFF7F5EC.toInt())
+    c.cell(M, y, tw - q, 30f, if (a.closed) "☑ الحساب مُصفّى / Compte soldé      ☐ غير مُصفّى / Non soldé"
+        else "☐ الحساب مُصفّى / Compte soldé      ☑ غير مُصفّى / Non soldé", 9.5f); y += 46f
+    val third = tw / 3
+    listOf("المستلم\nLe Bénéficiaire", "السكرتير\nLe Secrétaire", "المدير\nLe Directeur" + if (Centre.director.isNotBlank()) "\n${Centre.director}" else "")
+        .forEachIndexed { i, t ->
+            val r = W - M - i * third
+            c.rtlText(t, r, y, third - 10f, 10f, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+            c.line(r - third + 25f, y + 62f, r - 25f, 0xFF999999.toInt())
+        }
+    doc.finishPage(page)
+    sharePdf(context, doc, "registre-depenses-${a.receivedDate.ifBlank { today() }}.pdf")
+}

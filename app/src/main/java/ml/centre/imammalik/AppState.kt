@@ -69,7 +69,8 @@ class AppState {
     var teacherDate by mutableStateOf(today())
     var teacherDayAttendance by mutableStateOf(emptyList<AttendanceRecord>())
     var salaryMonth by mutableStateOf(currentMonth())
-    var salaryExpenses by mutableStateOf(emptyList<Expense>())
+    var monthPayroll by mutableStateOf(emptyList<PayrollEntry>())
+    var advances by mutableStateOf(emptyList<CashAdvance>())
     var busy by mutableStateOf(false)
     /** Bumped whenever centre settings change, so screens showing them recompose. */
     var settingsVersion by mutableStateOf(0)
@@ -173,7 +174,7 @@ class AppState {
         students = emptyList(); users = emptyList(); todayAttendance = emptyList()
         dayAttendance = emptyList(); recentLogs = emptyList()
         announcements = emptyList(); monthPayments = emptyList(); halaqat = emptyList()
-        teachers = emptyList(); teacherDayAttendance = emptyList(); salaryExpenses = emptyList()
+        teachers = emptyList(); teacherDayAttendance = emptyList(); monthPayroll = emptyList(); advances = emptyList()
         registrationPayments = emptyList(); monthExpenses = emptyList()
     }
 
@@ -197,6 +198,9 @@ class AppState {
         if (p.isAdmin) {
             listeners += db.collection("teachers").addSnapshotListener { snap, _ ->
                 teachers = snap?.documents?.map(::toTeacher)?.sortedBy { it.name } ?: emptyList()
+            }
+            listeners += db.collection("cashAdvances").addSnapshotListener { snap, _ ->
+                advances = snap?.documents?.map(::toAdvance)?.sortedByDescending { it.receivedDate } ?: emptyList()
             }
             listenTeacherDay(teacherDate)
             listenSalaries(salaryMonth)
@@ -457,7 +461,7 @@ class AppState {
         val data = mapOf("category" to e.category, "amount" to e.amount, "date" to date, "month" to date.take(7),
             "note" to e.note.trim(), "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date())
         val ref = if (e.id.isBlank()) db.collection("expenses").document() else db.collection("expenses").document(e.id)
-        ref.set(data).addOnFailureListener { message = arabicError(it.message) }
+        ref.set(data, SetOptions.merge()).addOnFailureListener { message = arabicError(it.message) }
         audit(if (e.id.isBlank()) "تسجيل مصروف" else "تعديل مصروف", "${e.category} — ${money(e.amount)} (${date})")
     }
 
@@ -596,18 +600,89 @@ class AppState {
         done(toAdd.size)
     }
 
+    // ---------- Petty-cash register (عُهَد) ----------
+
+    private fun toAdvance(d: DocumentSnapshot) = CashAdvance(
+        id = d.id, month = d.getString("month") ?: "", week = d.getString("week") ?: "",
+        receivedDate = d.getString("receivedDate") ?: "", amount = d.getLong("amount")?.toInt() ?: 0,
+        remisPar = d.getString("remisPar") ?: "", recuPar = d.getString("recuPar") ?: "",
+        settlementAmount = d.getLong("settlementAmount")?.toInt() ?: 0, settlementDate = d.getString("settlementDate") ?: "",
+        closed = d.getBoolean("closed") ?: false
+    )
+
+    /** Creates or updates an advance; returns its id (new ids are generated locally, so it works offline). */
+    fun saveAdvance(a: CashAdvance): String? {
+        if (a.amount <= 0) { message = "أدخل المبلغ المستلم"; return null }
+        if (a.recuPar.isBlank()) { message = "اكتب اسم المستلم"; return null }
+        val date = a.receivedDate.ifBlank { today() }
+        val ref = if (a.id.isBlank()) db.collection("cashAdvances").document() else db.collection("cashAdvances").document(a.id)
+        ref.set(mapOf(
+            "month" to date.take(7), "week" to a.week.trim(), "receivedDate" to date, "amount" to a.amount,
+            "remisPar" to a.remisPar.trim(), "recuPar" to a.recuPar.trim(), "settlementAmount" to a.settlementAmount,
+            "settlementDate" to a.settlementDate, "closed" to a.closed, "updatedAt" to Date()
+        ), SetOptions.merge()).addOnFailureListener { message = arabicError(it.message) }
+        if (a.id.isBlank()) { message = "تم فتح عهدة ${money(a.amount)} لـ ${a.recuPar.trim()}"; audit("فتح عهدة", "${a.recuPar.trim()} — ${money(a.amount)}") }
+        return ref.id
+    }
+
+    fun listenAdvanceLines(id: String, onLines: (List<Expense>) -> Unit): ListenerRegistration =
+        db.collection("expenses").whereEqualTo("registerId", id).addSnapshotListener { snap, _ ->
+            onLines(snap?.documents?.map(::toExpense)?.sortedWith(compareBy({ it.date }, { it.id })) ?: emptyList())
+        }
+
+    /** Adds (or edits) a line of the register; it is also a normal expense of the centre. */
+    fun saveAdvanceLine(a: CashAdvance, line: Expense, done: () -> Unit) {
+        if (line.note.isBlank()) { message = "اكتب البيان"; return }
+        if (line.amount <= 0) { message = "أدخل المبلغ"; return }
+        val date = line.date.ifBlank { today() }
+        val ref = if (line.id.isBlank()) db.collection("expenses").document() else db.collection("expenses").document(line.id)
+        ref.set(mapOf(
+            "category" to line.category.ifBlank { DAILY_EXPENSES_CATEGORY }, "amount" to line.amount, "date" to date,
+            "month" to date.take(7), "note" to line.note.trim(), "observation" to line.observation.trim(),
+            "registerId" to a.id, "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
+        ), SetOptions.merge()).addOnFailureListener { message = arabicError(it.message) }
+        done()
+    }
+
+    fun closeAdvance(a: CashAdvance, spent: Int, settlementAmount: Int, settlementDate: String, closed: Boolean) {
+        db.collection("cashAdvances").document(a.id).update(mapOf(
+            "settlementAmount" to settlementAmount, "settlementDate" to settlementDate.ifBlank { today() },
+            "closed" to closed, "updatedAt" to Date()
+        )).addOnFailureListener { message = arabicError(it.message) }
+        message = if (closed) "تمت تصفية العهدة ✅" else "حُفظت التسوية"
+        val bal = advanceBalance(a, spent)
+        audit(if (closed) "تصفية عهدة" else "تسوية عهدة", "${a.recuPar} — مستلم ${money(a.amount)}، مصروف ${money(spent)}، " +
+            (if (bal >= 0) "باقٍ ${money(bal)}" else "عجز ${money(-bal)}") + "، تسوية ${money(settlementAmount)}")
+    }
+
+    /** Deletes an advance together with its expense lines. */
+    fun deleteAdvance(a: CashAdvance) {
+        db.collection("expenses").whereEqualTo("registerId", a.id).get().addOnCompleteListener { t ->
+            val batch = db.batch()
+            if (t.isSuccessful) t.result.documents.forEach { batch.delete(it.reference) }
+            batch.delete(db.collection("cashAdvances").document(a.id))
+            batch.commit().addOnFailureListener { message = arabicError(it.message) }
+        }
+        message = "تم حذف العهدة ومصروفاتها"
+        audit("حذف عهدة", "${a.recuPar} — ${money(a.amount)} (${a.receivedDate})")
+    }
+
     // ---------- Teachers (admin) ----------
 
     private fun toTeacher(d: DocumentSnapshot) = Teacher(
         id = d.id, name = d.getString("name") ?: "", phone = d.getString("phone") ?: "",
         salary = d.getLong("salary")?.toInt() ?: 0, hireDate = d.getString("hireDate") ?: "",
-        status = d.getString("status") ?: "نشط", notes = d.getString("notes") ?: ""
+        status = d.getString("status") ?: "نشط", notes = d.getString("notes") ?: "",
+        category = d.getString("category") ?: StaffCategory.TEACHER, function = d.getString("function") ?: "",
+        cessationDate = d.getString("cessationDate") ?: "", paymentMode = d.getString("paymentMode") ?: ""
     )
 
     fun saveTeacher(t: Teacher, done: () -> Unit) {
         if (t.name.isBlank()) { message = "اسم المعلم مطلوب"; return }
         val data = mapOf("name" to t.name.trim(), "phone" to t.phone.trim(), "salary" to t.salary,
-            "hireDate" to t.hireDate, "status" to t.status, "notes" to t.notes.trim(), "updatedAt" to Date())
+            "hireDate" to t.hireDate, "status" to t.status, "notes" to t.notes.trim(), "category" to t.category,
+            "function" to t.function.trim(), "cessationDate" to t.cessationDate, "paymentMode" to t.paymentMode,
+            "updatedAt" to Date())
         val ref = if (t.id.isBlank()) db.collection("teachers").document() else db.collection("teachers").document(t.id)
         ref.set(data).addOnFailureListener { message = arabicError(it.message) }
         done(); message = if (t.id.isBlank()) "تمت إضافة المعلم ${t.name.trim()}" else "تم تحديث بيانات المعلم"
@@ -658,28 +733,61 @@ class AppState {
         salaryMonth = next; listenSalaries(next)
     }
 
+    private fun toPayroll(d: DocumentSnapshot) = PayrollEntry(
+        id = d.id, staffId = d.getString("staffId") ?: "", name = d.getString("name") ?: "", month = d.getString("month") ?: "",
+        base = d.getLong("base")?.toInt() ?: 0, advance = d.getLong("advance")?.toInt() ?: 0,
+        received = d.getLong("received")?.toInt() ?: 0, receivedDate = d.getString("receivedDate") ?: "",
+        paymentMode = d.getString("paymentMode") ?: ""
+    )
+
     private fun listenSalaries(month: String) {
         salaryListener?.remove()
-        salaryListener = db.collection("expenses").whereEqualTo("salaryMonth", month).addSnapshotListener { snap, e ->
+        salaryListener = db.collection("payroll").whereEqualTo("month", month).addSnapshotListener { snap, e ->
             if (e != null) { message = arabicError(e.message); return@addSnapshotListener }
-            salaryExpenses = snap?.documents?.map(::toExpense) ?: emptyList()
+            monthPayroll = snap?.documents?.map(::toPayroll) ?: emptyList()
         }
     }
 
-    /** Pays a teacher's salary for [month]; recorded as an expense so finance totals include it. */
-    fun paySalary(t: Teacher, month: String, amount: Int, done: () -> Unit) {
-        if (amount <= 0) { message = "أدخل مبلغ الراتب"; return }
-        done(); message = "سُجّل راتب ${t.name} لشهر ${monthName(month)}"
-        db.collection("expenses").document("salary_${month}_${t.id}").set(mapOf(
-            "category" to SALARY_CATEGORY, "amount" to amount, "date" to today(), "month" to currentMonth(),
-            "note" to "راتب ${t.name} — ${monthName(month)}", "teacherId" to t.id, "salaryMonth" to month,
-            "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
-        )).addOnFailureListener { message = arabicError(it.message) }
-        audit("دفع راتب", "${t.name} — ${monthName(month)} — ${money(amount)}")
+    /** Payroll entries of the academic year (Sep–Aug) containing [month]. */
+    fun loadPayrollYear(month: String, onReady: (List<PayrollEntry>) -> Unit) {
+        val ms = academicYearMonths(month)
+        db.collection("payroll").whereGreaterThanOrEqualTo("month", ms.first()).whereLessThanOrEqualTo("month", ms.last())
+            .get().addOnSuccessListener { snap -> onReady(snap.documents.map(::toPayroll)) }
+            .addOnFailureListener { message = arabicError(it.message) }
     }
 
-    fun cancelSalary(e: Expense) {
-        deleteExpense(e)
+    /**
+     * Records a month's salary. The cash actually paid (advance + received) is mirrored as an expense
+     * "رواتب المعلمين" so the financial summary stays accurate.
+     */
+    fun savePayroll(t: Teacher, month: String, base: Int, advance: Int, received: Int, date: String, mode: String, done: () -> Unit) {
+        if (base <= 0) { message = "أدخل الراتب الأساسي"; return }
+        if (advance < 0 || received < 0) { message = "المبالغ لا تكون سالبة"; return }
+        val id = "${month}_${t.id}"
+        db.collection("payroll").document(id).set(mapOf(
+            "staffId" to t.id, "name" to t.name, "month" to month, "base" to base, "advance" to advance,
+            "received" to received, "receivedDate" to date.ifBlank { today() }, "paymentMode" to mode,
+            "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
+        )).addOnFailureListener { message = arabicError(it.message) }
+        val cash = advance + received
+        val exp = db.collection("expenses").document("salary_$id")
+        if (cash > 0) exp.set(mapOf(
+            "category" to SALARY_CATEGORY, "amount" to cash, "date" to date.ifBlank { today() },
+            "month" to date.ifBlank { today() }.take(7), "note" to "راتب ${t.name} — ${monthName(month)}",
+            "teacherId" to t.id, "salaryMonth" to month, "recordedBy" to (profile?.name ?: ""), "updatedAt" to Date()
+        )) else exp.delete()
+        done()
+        val left = base - advance - received
+        message = "حُفظ راتب ${t.name} لشهر ${monthName(month)}"
+        audit("راتب", "${t.name} — ${monthName(month)}: أساسي ${money(base)}، سلفة ${money(advance)}، مستلم ${money(received)}" +
+            when { left > 0 -> "، متروك أمانة ${money(left)}"; left < 0 -> "، مسحوب من الأمانة ${money(-left)}"; else -> "" })
+    }
+
+    fun deletePayroll(e: PayrollEntry) {
+        db.collection("payroll").document(e.id).delete().addOnFailureListener { message = arabicError(it.message) }
+        db.collection("expenses").document("salary_${e.id}").delete()
+        message = "حُذف سجل الراتب"
+        audit("حذف راتب", "${e.name} — ${monthName(e.month)}")
     }
 
     // ---------- Audit log ----------
@@ -707,7 +815,7 @@ class AppState {
     // ---------- Backup & restore (admin) ----------
 
     val backupCollections = listOf("settings", "halaqat", "students", "teachers", "attendance", "teacherAttendance",
-        "quranLogs", "grades", "payments", "expenses", "announcements", "users")
+        "quranLogs", "grades", "payments", "expenses", "cashAdvances", "payroll", "announcements", "users")
 
     /** Reads every collection and returns a JSON backup (timestamps kept as {"__ts": millis}). */
     fun createBackup(onReady: (String) -> Unit) {
@@ -903,7 +1011,9 @@ class AppState {
         date = d.getString("date") ?: "",
         month = d.getString("month") ?: "",
         note = d.getString("note") ?: "",
-        recordedBy = d.getString("recordedBy") ?: ""
+        recordedBy = d.getString("recordedBy") ?: "",
+        registerId = d.getString("registerId") ?: "",
+        observation = d.getString("observation") ?: ""
     )
 
     private fun toAttendance(d: DocumentSnapshot) = AttendanceRecord(

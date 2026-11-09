@@ -54,6 +54,12 @@ service cloud.firestore {
       allow read: if isStaff();
       allow write: if isAdmin();
     }
+    match /payroll/{entryId} {
+      allow read, write: if isAdmin();
+    }
+    match /cashAdvances/{advanceId} {
+      allow read, write: if isAdmin();
+    }
     match /teachers/{teacherId} {
       allow read, write: if isAdmin();
     }
