@@ -5,4 +5,11 @@
         <item name="android:statusBarColor">#075B3A</item>
         <item name="android:navigationBarColor">#F7F5EC</item>
     </style>
+
+    <!-- Launch screen: centre badge on brand green, then the normal theme. -->
+    <style name="Theme.ImamMalik.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_green</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.ImamMalik</item>
+    </style>
 </resources>

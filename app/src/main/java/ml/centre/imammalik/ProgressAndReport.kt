@@ -83,16 +83,7 @@ private fun monthKey(offset: Int): String {
     return SimpleDateFormat("yyyy-MM", Locale.US).format(cal.time)
 }
 
-private val ArabicMonths = listOf("يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
-    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر")
-
-private fun monthName(key: String): String {
-    val parts = key.split("-")
-    val m = parts.getOrNull(1)?.toIntOrNull() ?: return key
-    return "${ArabicMonths.getOrElse(m - 1) { key }} ${parts[0]}"
-}
-
-fun buildMonthlyReport(student: Student, month: String, attendance: List<AttendanceRecord>, logs: List<QuranLog>): String {
+fun buildMonthlyReport(student: Student, month: String, attendance: List<AttendanceRecord>, logs: List<QuranLog>, grades: List<Grade> = emptyList()): String {
     val att = attendance.filter { it.date.startsWith(month) }
     val ls = logs.filter { it.date.startsWith(month) }
     val present = att.count { it.status == AttendanceStatus.PRESENT }
@@ -107,7 +98,7 @@ fun buildMonthlyReport(student: Student, month: String, attendance: List<Attenda
     val notes = ls.filter { it.notes.isNotBlank() }.take(3)
 
     return buildString {
-        appendLine("مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية")
+        appendLine(Centre.name)
         appendLine("التقرير الشهري — ${monthName(month)}")
         appendLine()
         appendLine("الطالب: ${student.name}")
@@ -126,10 +117,15 @@ fun buildMonthlyReport(student: Student, month: String, attendance: List<Attenda
         if (surahs.isNotEmpty()) appendLine("السور التي حفظ منها: ${surahs.joinToString("، ")}")
         if (topGrade != null) appendLine("التقدير الغالب: $topGrade")
         appendLine("التقدم الإجمالي: ${hizbLabel(student.hizbs)}")
+        val gradeLines = gradesReportLines(grades, month)
+        if (gradeLines.isNotEmpty()) {
+            appendLine()
+            gradeLines.forEach { appendLine(it) }
+        }
         if (notes.isNotEmpty()) {
             appendLine()
             appendLine("📝 ملاحظات المعلم")
-            notes.forEach { appendLine("• ${it.date}: ${it.notes}") }
+            notes.forEach { appendLine("• ${ltr(it.date)}: ${it.notes}") }
         }
         appendLine()
         append("جزاكم الله خيرًا على متابعتكم.")
@@ -137,7 +133,7 @@ fun buildMonthlyReport(student: Student, month: String, attendance: List<Attenda
 }
 
 /** Mali numbers are 8 digits; add the country code when it is missing. */
-private fun whatsappNumber(phone: String): String? {
+fun whatsappNumber(phone: String): String? {
     var d = phone.filter { it.isDigit() }
     if (d.startsWith("00")) d = d.drop(2)
     if (d.length == 8) d = "223$d"
@@ -145,10 +141,10 @@ private fun whatsappNumber(phone: String): String? {
 }
 
 @Composable
-fun MonthlyReportDialog(student: Student, attendance: List<AttendanceRecord>, logs: List<QuranLog>, close: () -> Unit) {
+fun MonthlyReportDialog(student: Student, attendance: List<AttendanceRecord>, logs: List<QuranLog>, grades: List<Grade> = emptyList(), close: () -> Unit) {
     var offset by remember { mutableIntStateOf(0) }
     val month = monthKey(offset)
-    val report = buildMonthlyReport(student, month, attendance, logs)
+    val report = buildMonthlyReport(student, month, attendance, logs, grades)
     val context = LocalContext.current
     val wa = whatsappNumber(student.phone)
 

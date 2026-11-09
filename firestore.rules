@@ -38,6 +38,48 @@ service cloud.firestore {
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
+    match /grades/{gradeId} {
+      allow read: if isStaff() || linkedTo(resource.data.studentId);
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || linkedTo(resource.data.studentId);
+      allow write: if isAdmin();
+    }
+    match /expenses/{expenseId} {
+      allow read, write: if isAdmin();
+    }
+    match /halaqat/{halaqaId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    match /payroll/{entryId} {
+      allow read, write: if isAdmin();
+    }
+    match /cashAdvances/{advanceId} {
+      allow read, write: if isAdmin();
+    }
+    match /teachers/{teacherId} {
+      allow read, write: if isAdmin();
+    }
+    match /teacherAttendance/{recordId} {
+      allow read, write: if isAdmin();
+    }
+    // Append-only audit trail: staff can add entries, only the admin can read them, nobody can change them.
+    match /auditLog/{entryId} {
+      allow create: if isStaff();
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /settings/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
     match /quranLogs/{recordId} {
       allow read: if isStaff() || linkedTo(resource.data.studentId);
       allow create, update: if isStaff();

@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
@@ -41,6 +43,7 @@ val Cream = Color(0xFFF7F5EC)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         FirebaseApp.initializeApp(this)
         FirebaseFirestore.getInstance().firestoreSettings = FirebaseFirestoreSettings.Builder()
@@ -53,7 +56,11 @@ class MainActivity : ComponentActivity() {
 fun ImamMalikApp() {
     val state = remember { AppState() }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Gold, background = Cream, surface = Color.White)) {
+        MaterialTheme(
+            colorScheme = lightColorScheme(primary = Green, secondary = Gold, background = Cream, surface = Color.White,
+                secondaryContainer = Green.copy(alpha = .12f), onSecondaryContainer = Green),
+            shapes = Shapes(small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp))
+        ) {
             Surface(Modifier.fillMaxSize(), color = Cream) {
                 when {
                     state.firebaseUser == null -> AuthScreen(state)
@@ -121,39 +128,88 @@ private fun Dashboard(state: AppState, me: AppUser) {
             add(Tab("الحضور", Icons.Default.FactCheck))
             add(Tab("الحفظ", Icons.Default.MenuBook))
         }
-        if (me.isAdmin) add(Tab("الحسابات", Icons.Default.ManageAccounts))
+        if (me.isAdmin) add(Tab("المالية", Icons.Default.AccountBalanceWallet))
     }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     if (tab >= tabs.size) tab = 0
     var addOpen by remember { mutableStateOf(false) }
     var profileId by rememberSaveable { mutableStateOf<String?>(null) }
     var editStudent by remember { mutableStateOf<Student?>(null) }
+    /** Secondary full screen shown above the tabs (null = tabs). */
+    var screen by rememberSaveable { mutableStateOf<String?>(null) }
+    var aboutOpen by remember { mutableStateOf(false) }
+    var logoutOpen by remember { mutableStateOf(false) }
+    var announceOpen by remember { mutableStateOf(false) }
+    var exportOpen by remember { mutableStateOf(false) }
+    var quickLogOpen by remember { mutableStateOf(false) }
+    fun goTo(title: String) { tabs.indexOfFirst { it.title == title }.takeIf { it >= 0 }?.let { tab = it } }
+    fun open(s: String) { profileId = null; screen = s }
+    val quickActions = buildList {
+        if (me.isStaff) {
+            add(QuickAction("تسجيل الحضور", Icons.Default.FactCheck) { goTo("الحضور") })
+            add(QuickAction("تسميع جديد", Icons.Default.MenuBook) { quickLogOpen = true })
+            add(QuickAction("إضافة طالب", Icons.Default.PersonAdd) { addOpen = true })
+            add(QuickAction("إدخال درجات", Icons.Default.School) { open(Screens.GRADES) })
+            add(QuickAction("الإحصائيات", Icons.Default.Insights) { open(Screens.STATS) })
+            add(QuickAction("الحلقات", Icons.Default.Diversity3) { open(Screens.HALAQAT) })
+        }
+        if (me.isAdmin) {
+            add(QuickAction("المالية", Icons.Default.AccountBalanceWallet) { goTo("المالية") })
+            add(QuickAction("إضافة جماعية", Icons.Default.GroupAdd) { open(Screens.BULK) })
+            add(QuickAction("الموظفون والرواتب", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
+            add(QuickAction("إعلان جديد", Icons.Default.Campaign) { announceOpen = true })
+        }
+    }
 
     LaunchedEffect(state.message) { if (state.message != null) { delay(3500); state.message = null } }
 
     val profileStudent = profileId?.let { id -> state.students.firstOrNull { it.id == id } }
     if (profileId != null && profileStudent == null && state.students.isNotEmpty()) profileId = null
+    val onMain = profileStudent == null && screen == null
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (profileStudent != null) profileStudent.name else "مركز الإمام مالك") },
+                title = { Text(profileStudent?.name ?: Screens.title(screen) ?: "مركز الإمام مالك", maxLines = 1) },
                 navigationIcon = {
-                    if (profileStudent != null) IconButton(onClick = { profileId = null }) {
+                    if (!onMain) IconButton(onClick = { if (profileStudent != null) profileId = null else screen = null }) {
                         Icon(Icons.Default.ArrowForward, "رجوع", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Green, titleContentColor = Color.White),
                 actions = {
+                    if (me.isStaff) {
+                        val (icon, msg) = when {
+                            state.hasPendingWrites -> Icons.Default.CloudUpload to "توجد تغييرات محفوظة على الهاتف بانتظار الاتصال بالإنترنت، وستُرسل تلقائيًا."
+                            state.isOffline -> Icons.Default.CloudOff to "لا يوجد اتصال؛ تعرض البيانات المحفوظة على الهاتف، ويمكنك متابعة العمل."
+                            else -> Icons.Default.CloudDone to "كل البيانات متزامنة مع الخادم ✅"
+                        }
+                        IconButton(onClick = { state.message = msg }) {
+                            Icon(icon, "حالة المزامنة", tint = if (state.hasPendingWrites || state.isOffline) Gold else Color.White)
+                        }
+                    }
                     if (profileStudent != null && me.isStaff) IconButton(onClick = { editStudent = profileStudent }) {
                         Icon(Icons.Default.Edit, "تعديل", tint = Color.White)
                     }
-                    IconButton(onClick = state::logout) { Icon(Icons.Default.Logout, "خروج", tint = Color.White) }
+                    AppMenu(buildList {
+                        if (me.isStaff) add(MenuEntry("الحلقات", Icons.Default.Diversity3) { open(Screens.HALAQAT) })
+                        if (me.isAdmin) {
+                            add(MenuEntry("الموظفون والرواتب", Icons.Default.CoPresent) { open(Screens.TEACHERS) })
+                            add(MenuEntry("إضافة طلاب دفعة واحدة", Icons.Default.GroupAdd) { open(Screens.BULK) })
+                            add(MenuEntry("إعدادات المركز", Icons.Default.Settings) { open(Screens.SETTINGS) })
+                            add(MenuEntry("تصدير البيانات", Icons.Default.FileDownload) { exportOpen = true })
+                            add(MenuEntry("حسابات المستخدمين", Icons.Default.ManageAccounts) { open(Screens.USERS) })
+                            add(MenuEntry("سجل العمليات", Icons.Default.History) { open(Screens.AUDIT) })
+                        }
+                        if (me.isStaff) add(MenuEntry("الإحصائيات", Icons.Default.Insights) { open(Screens.STATS) })
+                        add(MenuEntry("حول التطبيق", Icons.Default.Info) { aboutOpen = true })
+                        add(MenuEntry("تسجيل الخروج", Icons.Default.Logout) { logoutOpen = true })
+                    })
                 }
             )
         },
         bottomBar = {
-            if (profileStudent == null) NavigationBar {
+            if (onMain) NavigationBar {
                 tabs.forEachIndexed { i, item ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i },
                         icon = { Icon(item.icon, item.title) }, label = { Text(item.title, maxLines = 1) })
@@ -161,7 +217,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
             }
         },
         floatingActionButton = {
-            if (profileStudent == null && me.isStaff && tabs[tab].title == "الطلاب")
+            if (onMain && me.isStaff && tabs[tab].title == "الطلاب")
                 FloatingActionButton(onClick = { addOpen = true }, containerColor = Gold) { Icon(Icons.Default.PersonAdd, "إضافة طالب") }
         }
     ) { pad ->
@@ -169,12 +225,25 @@ private fun Dashboard(state: AppState, me: AppUser) {
             if (profileStudent != null) {
                 BackHandler { profileId = null }
                 StudentProfileScreen(state, me, profileStudent)
+            } else if (screen != null) {
+                BackHandler { screen = null }
+                when (screen) {
+                    Screens.SETTINGS -> SettingsScreen(state) { screen = null }
+                    Screens.STATS -> StatsScreen(state) { profileId = it }
+                    Screens.GRADES -> GradeEntryScreen(state) { screen = null }
+                    Screens.USERS -> UsersScreen(state)
+                    Screens.HALAQAT -> HalaqatScreen(state, me, onBulk = { screen = Screens.BULK }) { profileId = it }
+                    Screens.BULK -> BulkAddScreen(state) { screen = null }
+                    Screens.TEACHERS -> TeachersScreen(state)
+                    Screens.AUDIT -> AuditScreen(state)
+                }
             } else when (tabs[tab].title) {
-                "الرئيسية" -> HomeScreen(state, me) { profileId = it.id }
-                "الطلاب", "أبنائي" -> StudentsScreen(state, me) { profileId = it.id }
+                "الرئيسية" -> HomeScreen(state, me, quickActions) { profileId = it.id }
+                "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { open(Screens.GRADES) },
+                    onBulkAdd = { open(Screens.BULK) }) { profileId = it.id }
                 "الحضور" -> AttendanceScreen(state)
                 "الحفظ" -> QuranScreen(state) { profileId = it }
-                "الحسابات" -> UsersScreen(state)
+                "المالية" -> FinanceScreen(state) { profileId = it }
             }
             state.message?.let { msg ->
                 Card(
@@ -185,7 +254,34 @@ private fun Dashboard(state: AppState, me: AppUser) {
         }
     }
     if (addOpen) StudentDialog(state, null) { addOpen = false }
+    if (announceOpen) AnnouncementDialog(state) { announceOpen = false }
+    if (exportOpen) ExportDialog(state) { exportOpen = false }
+    if (aboutOpen) AboutDialog { aboutOpen = false }
+    if (logoutOpen) LogoutConfirm(state::logout) { logoutOpen = false }
+    if (quickLogOpen) LogDialog(state, null) { quickLogOpen = false }
     editStudent?.let { s -> StudentDialog(state, s, onDeleted = { profileId = null }) { editStudent = null } }
+}
+
+object Screens {
+    const val SETTINGS = "settings"
+    const val STATS = "stats"
+    const val GRADES = "grades"
+    const val USERS = "users"
+    const val HALAQAT = "halaqat"
+    const val BULK = "bulk"
+    const val TEACHERS = "teachers"
+    const val AUDIT = "audit"
+    fun title(s: String?): String? = when (s) {
+        SETTINGS -> "إعدادات المركز"
+        STATS -> "الإحصائيات"
+        GRADES -> "إدخال الدرجات"
+        USERS -> "حسابات المستخدمين"
+        HALAQAT -> "الحلقات"
+        BULK -> "إضافة طلاب دفعة واحدة"
+        TEACHERS -> "الموظفون والرواتب"
+        AUDIT -> "سجل العمليات"
+        else -> null
+    }
 }
 
 @Composable
@@ -193,14 +289,22 @@ fun StatCard(title: String, value: String, icon: ImageVector, modifier: Modifier
     Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(14.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, null, tint = tint)
-            Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            // Amounts: number on one line (size adapted to its length), currency smaller underneath,
+            // so every card looks the same instead of wrapping differently.
+            val suffix = " " + Centre.currency
+            val isAmount = value.endsWith(suffix)
+            val number = if (isAmount) value.removeSuffix(suffix) else value
+            val digits = number.count { it.isDigit() }
+            Text(number, fontSize = when { digits >= 8 -> 17.sp; digits >= 6 -> 20.sp; else -> 22.sp },
+                fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            if (isAmount) Text(Centre.currency, fontSize = 12.sp, color = Color.Gray, maxLines = 1)
             Text(title, fontSize = 13.sp, color = Color.DarkGray, maxLines = 1)
         }
     }
 }
 
 @Composable
-private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
+private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAction>, open: (Student) -> Unit) {
     val active = state.students.filter { it.status == "نشط" }
     val present = state.todayAttendance.count { AttendanceStatus.isPresent(it.status) }
     val absent = state.todayAttendance.count { it.status == AttendanceStatus.ABSENT }
@@ -216,8 +320,17 @@ private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
                         Text("السلام عليكم ورحمة الله وبركاته", color = Color.White, fontWeight = FontWeight.Bold)
                         Text(me.name.ifBlank { me.email }, color = Color.White.copy(.9f))
                         Text("الصفة: ${Roles.label(me.role)}", color = Gold, fontSize = 13.sp)
+                        val hijri = remember { hijriToday() }
+                        if (hijri.isNotBlank()) Text(hijri, color = Color.White.copy(.85f), fontSize = 13.sp)
                     }
                 }
+            }
+        }
+        if (state.announcements.isNotEmpty()) {
+            item { Text("الإعلانات", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+            items(state.announcements.take(5).size) { i ->
+                val a = state.announcements[i]
+                AnnouncementCard(a, canDelete = me.isAdmin) { state.deleteAnnouncement(a) }
             }
         }
         item {
@@ -227,8 +340,9 @@ private fun HomeScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
                     textAlign = TextAlign.Center)
             }
         }
+        if (quickActions.isNotEmpty()) item { QuickActions(quickActions) }
         if (me.isStaff) {
-            item { Text("ملخص اليوم • ${today()}", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+            item { Text("ملخص اليوم • ${ltr(today())}", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatCard("طلاب نشطون", active.size.toString(), Icons.Default.Groups, Modifier.weight(1f))

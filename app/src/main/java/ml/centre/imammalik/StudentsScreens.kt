@@ -40,7 +40,7 @@ fun StudentRow(s: Student, open: () -> Unit) {
                     }
                 }
             },
-            leadingContent = { Icon(Icons.Default.Person, null, tint = if (s.status == "نشط") Green else Color.Gray) },
+            leadingContent = { Avatar(s.name) },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (s.status != "نشط") Text(s.status, color = Color.Gray, fontSize = 12.sp)
@@ -54,7 +54,7 @@ fun StudentRow(s: Student, open: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudentsScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
+fun StudentsScreen(state: AppState, me: AppUser, onGradeEntry: () -> Unit = {}, onBulkAdd: () -> Unit = {}, open: (Student) -> Unit) {
     var query by remember { mutableStateOf("") }
     var group by remember { mutableStateOf<String?>(null) }
     val groups = state.students.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
@@ -64,6 +64,14 @@ fun StudentsScreen(state: AppState, me: AppUser, open: (Student) -> Unit) {
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         if (me.isStaff) {
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (me.isAdmin) OutlinedButton(onClick = onBulkAdd, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.GroupAdd, null); Spacer(Modifier.width(4.dp)); Text("إضافة جماعية", maxLines = 1)
+                }
+                if (state.students.isNotEmpty()) OutlinedButton(onClick = onGradeEntry, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.School, null); Spacer(Modifier.width(4.dp)); Text("إدخال درجات", maxLines = 1)
+                }
+            }
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 10.dp),
                 placeholder = { Text("بحث بالاسم أو الهاتف") }, singleLine = true,
                 leadingIcon = { Icon(Icons.Default.Search, null) })
@@ -94,6 +102,18 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
     var logs by remember(student.id) { mutableStateOf(emptyList<QuranLog>()) }
     var addLog by remember { mutableStateOf(false) }
     var reportOpen by remember { mutableStateOf(false) }
+    var cardOpen by remember { mutableStateOf(false) }
+    var payments by remember(student.id) { mutableStateOf(emptyList<Payment>()) }
+    var grades by remember(student.id) { mutableStateOf(emptyList<Grade>()) }
+    DisposableEffect(student.id) {
+        val reg = state.listenStudentGrades(student.id) { grades = it }
+        onDispose { reg.remove() }
+    }
+    val seesFees = me.isAdmin || !me.isStaff
+    DisposableEffect(student.id, seesFees) {
+        val reg = if (seesFees) state.listenStudentPayments(student.id) { payments = it } else null
+        onDispose { reg?.remove() }
+    }
     DisposableEffect(student.id) {
         val regs: List<ListenerRegistration> = state.listenStudentHistory(student.id, { attendance = it }, { logs = it })
         onDispose { regs.forEach { it.remove() } }
@@ -126,9 +146,22 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
             }
         }
         item { HizbProgressCard(state, me, student) }
+        item { StudentGradesCard(state, me, student, grades) }
+        if (seesFees) item { StudentFeesCard(state, me, student, payments) }
         item {
-            OutlinedButton(onClick = { reportOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Assessment, null); Spacer(Modifier.width(6.dp)); Text("التقرير الشهري")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { reportOpen = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Assessment, null); Spacer(Modifier.width(4.dp)); Text("التقرير الشهري", maxLines = 1)
+                }
+                OutlinedButton(onClick = { cardOpen = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.PictureAsPdf, null); Spacer(Modifier.width(4.dp)); Text("كشف النتائج", maxLines = 1)
+                }
+            }
+        }
+        if (me.isStaff) item {
+            OutlinedButton(onClick = { shareCertificate(context, student) }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.WorkspacePremium, null, tint = Gold); Spacer(Modifier.width(6.dp))
+                Text(if (student.hizbs >= TOTAL_HIZBS) "شهادة ختم القرآن (PDF)" else "شهادة تقدير بالحفظ (PDF)")
             }
         }
         item {
@@ -155,14 +188,32 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         items(attendance.take(30), key = { "att_" + it.id }) { r ->
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(r.date, Modifier.weight(1f))
+                    Text(ltr(r.date), Modifier.weight(1f))
                     StatusBadge(r.status)
                 }
             }
         }
     }
     if (addLog) LogDialog(state, initialStudent = student) { addLog = false }
-    if (reportOpen) MonthlyReportDialog(student, attendance, logs) { reportOpen = false }
+    if (cardOpen) {
+        val terms = Terms.filter { t -> grades.any { it.term == t } }
+        AlertDialog(
+            onDismissRequest = { cardOpen = false },
+            title = { Text("كشف النتائج (PDF)") },
+            text = {
+                Column {
+                    Text("اختر الفترة:", fontWeight = FontWeight.Bold)
+                    (listOf<String?>(null) + terms).forEach { t ->
+                        TextButton(onClick = { cardOpen = false; shareReportCard(context, student, t, grades, attendance) },
+                            modifier = Modifier.fillMaxWidth()) { Text(t ?: "جميع الفصول") }
+                    }
+                    if (terms.isEmpty()) Text("لا توجد درجات بعد؛ سيتضمن الكشف الحفظ والحضور فقط.", fontSize = 12.sp, color = Color.Gray)
+                }
+            },
+            confirmButton = { TextButton(onClick = { cardOpen = false }) { Text("إغلاق") } }
+        )
+    }
+    if (reportOpen) MonthlyReportDialog(student, attendance, logs, grades) { reportOpen = false }
 }
 
 @Composable
@@ -199,8 +250,11 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
     var address by remember { mutableStateOf(existing?.address ?: "") }
     var enrollmentDate by remember { mutableStateOf(existing?.enrollmentDate ?: today()) }
     var status by remember { mutableStateOf(existing?.status ?: "نشط") }
+    var fee by remember { mutableStateOf(existing?.monthlyFee?.takeIf { it > 0 }?.toString() ?: "") }
+    var regFee by remember { mutableStateOf(existing?.registrationFee?.takeIf { it > 0 }?.toString() ?: "") }
     var confirmDelete by remember { mutableStateOf(false) }
-    val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status)
+    val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status,
+        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0, registrationFee = regFee.toIntOrNull() ?: 0)
 
     AlertDialog(
         onDismissRequest = close,
@@ -214,13 +268,17 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
                         RadioButton(selected = gender == g, onClick = { gender = g }); Text(g)
                     }
                 }
-                AppField(birthDate, { birthDate = it }, "تاريخ الميلاد: 2015-01-30")
+                DateField(birthDate, { birthDate = it }, "تاريخ الميلاد", optional = true)
                 AppField(level, { level = it }, "المستوى (مثال: الحزب 5)")
-                AppField(group, { group = it }, "الحلقة")
+                GroupField(state, group, { group = it }) { t -> if (teacher.isBlank()) teacher = t }
                 AppField(teacher, { teacher = it }, "المعلم أو المعلمة")
                 AppField(phone, { phone = it }, "هاتف ولي الأمر", KeyboardType.Phone)
                 AppField(address, { address = it }, "العنوان")
-                AppField(enrollmentDate, { enrollmentDate = it }, "تاريخ التسجيل")
+                DateField(enrollmentDate, { enrollmentDate = it }, "تاريخ التسجيل")
+                if (state.profile?.isAdmin == true) AppField(fee, { v -> fee = v.filter { it.isDigit() }.take(7) },
+                    "الرسوم الشهرية بالفرنك (اتركها فارغة للإعفاء)", KeyboardType.Number)
+                if (state.profile?.isAdmin == true) AppField(regFee, { v -> regFee = v.filter { it.isDigit() }.take(7) },
+                    "رسوم التسجيل بالفرنك (مرة واحدة)", KeyboardType.Number)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("الحالة:", fontWeight = FontWeight.Bold)
                     listOf("نشط", "متوقف").forEach { st ->
