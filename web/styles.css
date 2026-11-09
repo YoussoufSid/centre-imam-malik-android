@@ -133,3 +133,36 @@ input, select, textarea { transition: border-color .15s, box-shadow .15s; }
 .hnums { display: flex; gap: 14px; margin-top: 4px; } .hnums b { font-size: 18px; }
 .login { border-top: 6px solid var(--green); }
 body:has(.login) { background: radial-gradient(circle at 30% 20%, #e8f2ec, var(--cream) 60%); }
+
+/* ---------- Login page with the centre building ---------- */
+.login-page { display: grid; grid-template-columns: 1.15fr 1fr; min-height: 100vh; }
+.login-hero { background-size: cover; background-position: center; display: flex; align-items: flex-end; color: #fff; }
+.login-hero-text { padding: 48px 44px; max-width: 640px; }
+.hero-logo { width: 84px; height: 84px; border-radius: 50%; background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+.login-hero h1 { color: #fff; font-size: 30px; line-height: 1.5; margin: 18px 0 8px; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.hadith { color: #f4d77a; font-size: 20px; font-weight: 700; margin: 6px 0 14px; }
+.dua { background: rgba(255,255,255,.12); border-right: 4px solid var(--gold); border-radius: 12px; padding: 14px 16px;
+  line-height: 2; font-size: 15.5px; backdrop-filter: blur(2px); }
+.login-side { display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: radial-gradient(circle at 70% 20%, #e8f2ec, var(--cream) 65%); }
+.login-side .login { margin: 0; width: 100%; max-width: 400px; }
+.login-foot { margin-top: 18px; color: var(--green); font-size: 14px; opacity: .8; }
+@media (max-width: 900px) {
+  .login-page { grid-template-columns: 1fr; }
+  .login-hero { min-height: 360px; }
+  .login-hero-text { padding: 28px 22px; }
+  .login-hero h1 { font-size: 22px; }
+}
+
+/* ---------- Home banner ---------- */
+.banner { display: grid; grid-template-columns: 1.6fr 1fr; border-radius: 20px; overflow: hidden; margin-bottom: 18px;
+  background: linear-gradient(135deg, #075B3A, #0b7a4f); color: #fff; box-shadow: 0 8px 24px rgba(7,91,58,.18); min-height: 250px; }
+.banner-text { padding: 26px 30px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.banner-text h1 { color: #fff; font-size: 26px; margin: 4px 0; }
+.banner-text p { margin: 2px 0; font-size: 16px; opacity: .95; }
+.banner-text .hadith { font-size: 18px; }
+.banner-text .dua { margin-top: 10px; font-size: 14.5px; }
+.banner-date { color: #f4d77a; font-size: 13px; font-weight: 700; }
+.banner-img { background-size: cover; background-position: center 30%; min-height: 220px; }
+@media (max-width: 900px) { .banner { grid-template-columns: 1fr; } }
+@media print { .banner { display: none; } }

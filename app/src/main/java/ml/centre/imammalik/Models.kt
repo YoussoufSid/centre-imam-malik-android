@@ -5,6 +5,11 @@ import java.util.*
 
 const val ADMIN_EMAIL = "sidibey487@gmail.com"
 
+const val WELCOME_TEXT = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية"
+const val HADITH_TEXT = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»"
+const val DUA_TEXT = "اللهم اجزِ مؤسِّس هذا المركز الحاج بانيما يارا خيرَ الجزاء، واجعل هذا العمل في ميزان حسناته، " +
+    "واغفر له ولوالديه، ولجميع المسلمين والمسلمات، الأحياء منهم والأموات. آمين"
+
 const val DEFAULT_CENTRE_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية"
 
 /** Centre identity, editable by the admin (settings/centre) and used in documents and messages. */

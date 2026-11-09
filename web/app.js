@@ -7,9 +7,13 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=4";
+import { firebaseConfig } from "./firebase-config.js?v=5";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
+const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
+const HADITH = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»";
+const DUA = "اللهم اجزِ مؤسِّس هذا المركز الحاج بانيما يارا خيرَ الجزاء، واجعل هذا العمل في ميزان حسناته، " +
+  "واغفر له ولوالديه، ولجميع المسلمين والمسلمات، الأحياء منهم والأموات. آمين";
 const DEFAULT_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const AR_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const EXPENSE_CATEGORIES = ["رواتب المعلمين", "الإيجار", "الكهرباء والماء", "المصاحف والكتب", "الأدوات واللوازم", "الصيانة", "النقل", "مصروفات يومية", "أخرى"];
@@ -118,13 +122,25 @@ onAuthStateChanged(auth, (u) => {
 
 // ---------------------------------------------------------------- login
 function renderLogin() {
-  $("#app").innerHTML = `<div class="login"><img src="logo.png" alt=""><h2>مركز الإمام مالك</h2>
-    <div class="muted">لوحة الإدارة</div>
-    <label>البريد الإلكتروني</label><input id="em" type="email" dir="ltr">
-    <label>كلمة المرور</label><div style="position:relative"><input id="pw" type="password" dir="ltr" style="padding-left:44px">
-    <button type="button" id="eye" title="إظهار كلمة المرور" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px">👁</button></div>
-    <button class="btn" id="go">تسجيل الدخول</button>
-    <div style="margin-top:10px"><a href="#" id="reset">نسيت كلمة المرور؟</a></div><div class="error" id="err"></div></div>`;
+  $("#app").innerHTML = `<div class="login-page">
+    <section class="login-hero" style="background-image:linear-gradient(180deg,rgba(5,60,38,.35),rgba(5,60,38,.92)),url(building.jpg)">
+      <div class="login-hero-text">
+        <img src="logo.png" alt="" class="hero-logo">
+        <h1>${WELCOME}</h1>
+        <p class="hadith">${HADITH}</p>
+        <div class="dua">🤲 ${DUA}</div>
+      </div>
+    </section>
+    <section class="login-side"><div class="login">
+      <img src="logo.png" alt=""><h2>مركز الإمام مالك</h2>
+      <div class="muted">لوحة الإدارة — داودابوغو، باماكو</div>
+      <label>البريد الإلكتروني</label><input id="em" type="email" dir="ltr" autocomplete="username">
+      <label>كلمة المرور</label><div style="position:relative"><input id="pw" type="password" dir="ltr" autocomplete="current-password" style="padding-left:44px">
+      <button type="button" id="eye" title="إظهار كلمة المرور" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px">👁</button></div>
+      <button class="btn" id="go">تسجيل الدخول</button>
+      <div style="margin-top:10px"><a href="#" id="reset">نسيت كلمة المرور؟</a></div><div class="error" id="err"></div>
+      <div class="login-foot">بسم الله الرحمن الرحيم</div>
+    </div></section></div>`;
   $("#eye").onclick = () => { const p = $("#pw"); p.type = p.type === "password" ? "text" : "password"; p.focus(); };
   const go = () => {
     if (!$("#em").value.trim()) { $("#err").textContent = "اكتب البريد الإلكتروني"; return; }
@@ -206,9 +222,16 @@ function viewHome() {
   let hijri = ""; try { hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
   const shortcuts = [["#/students", "👥", "الطلاب"], ["#/halaqat", "🕌", "الحلقات"],
     ...(isAdmin() ? [["#/fees", "💰", "تسجيل الرسوم"], ["#/expenses", "🧾", "مصروف جديد"], ["#/payroll", "💵", "الرواتب"], ["#/summary", "📊", "الملخص المالي"]] : [])];
-  return `<div class="hero"><div><h1>السلام عليكم ورحمة الله وبركاته</h1>
-      <div class="sub">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div></div>
-      <img src="logo.png" alt=""></div>
+  return `<div class="banner">
+      <div class="banner-text">
+        <div class="banner-date">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div>
+        <h1>السلام عليكم ورحمة الله وبركاته</h1>
+        <p>${WELCOME}</p>
+        <p class="hadith">${HADITH}</p>
+        <div class="dua">🤲 ${DUA}</div>
+      </div>
+      <div class="banner-img" style="background-image:url(building.jpg)"></div>
+    </div>
   <div class="cards">
     <div class="card stat green"><div class="l">الطلاب النشطون</div><div class="v">${active.length}</div></div>
     <div class="card stat"><div class="l">الطلاب / الطالبات</div><div class="v">${active.filter((s) => s.gender === "ذكر").length} / ${active.filter((s) => s.gender === "أنثى").length}</div></div>
