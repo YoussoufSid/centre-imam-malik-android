@@ -55,3 +55,13 @@
 كل حساب جديد يُنشأ بصفة «طالب» دون ربط؛ تقوم الإدارة من تبويب «الحسابات» بتغيير الصفة وربط الحساب.
 
 قبل الاستخدام الفعلي، انشر ملف `firestore.rules` في Firebase Console (أو `firebase deploy --only firestore:rules`).
+
+## لوحة الإدارة على الحاسوب (web/)
+
+موقع ويب يعمل على نفس بيانات Firebase: الطلاب، الحلقات، جدول الرسوم الشهرية (مثل ملف Excel)، رسوم التسجيل، المصروفات، والملخص المالي للعام الدراسي، مع الطباعة.
+
+الإعداد مرة واحدة:
+1. Firebase Console ← Project settings ← Add app ← Web، ثم ضع `apiKey` و`appId` في `web/firebase-config.js`.
+2. Firebase ← Authentication ← Settings ← Authorized domains ← أضف `youssoufsid.github.io`.
+3. GitHub ← Settings ← Pages ← Source: **GitHub Actions**.
+4. عند الدفع إلى `main` يُنشر الموقع على: https://youssoufsid.github.io/centre-imam-malik-android/

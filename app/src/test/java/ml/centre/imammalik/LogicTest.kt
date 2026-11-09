@@ -32,10 +32,13 @@ class LogicTest {
 
     // ---------- Money & grades ----------
 
+    private fun plain(s: String) = s.replace("\u2066", "").replace("\u2069", "")
+
     @Test fun money_groupsThousands() {
-        assertEquals("5 000 فرنك", money(5000))
-        assertEquals("1 250 000 فرنك", money(1250000))
-        assertEquals("0 فرنك", money(0))
+        assertEquals("5 000 فرنك", plain(money(5000)))
+        assertEquals("1 250 000 فرنك", plain(money(1250000)))
+        assertEquals("0 فرنك", plain(money(0)))
+        assertTrue(money(5000).startsWith("\u2066"))   // number kept left-to-right
     }
 
     @Test fun centre_contactLineAndCurrency() {
@@ -43,7 +46,7 @@ class LogicTest {
         try {
             Centre.address = "باماكو"; Centre.phone = "76123456"; Centre.currency = "FCFA"
             assertEquals("باماكو • هاتف: 76123456", Centre.contactLine())
-            assertEquals("2 500 FCFA", money(2500))
+            assertEquals("2 500 FCFA", plain(money(2500)))
             Centre.address = ""; Centre.phone = ""
             assertEquals("", Centre.contactLine())
         } finally {

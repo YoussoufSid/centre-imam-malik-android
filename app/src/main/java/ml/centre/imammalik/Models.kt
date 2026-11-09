@@ -303,7 +303,8 @@ fun monthName(key: String): String {
     return "${ArabicMonthNames.getOrElse(m - 1) { key }} ${parts[0]}"
 }
 
-fun money(amount: Int): String = "%,d".format(Locale.US, amount).replace(',', ' ') + " " + Centre.currency
+/** "1 520 000 فرنك" — the number is isolated left-to-right so Arabic text doesn't show "000 520 1". */
+fun money(amount: Int): String = ltr("%,d".format(Locale.US, amount).replace(',', ' ')) + " " + Centre.currency
 
 const val TOTAL_HIZBS = 60
 
