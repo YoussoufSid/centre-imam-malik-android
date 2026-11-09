@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=3";
+import { firebaseConfig } from "./firebase-config.js?v=4";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const DEFAULT_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -145,12 +145,21 @@ function renderLogin() {
 }
 
 // ---------------------------------------------------------------- shell
+// [route, icon, label, adminOnly, section]
 const NAV = [
-  ["home", "🏠", "الرئيسية", false], ["students", "👥", "الطلاب", false], ["halaqat", "🕌", "الحلقات", false],
-  ["fees", "💰", "الرسوم الشهرية", true], ["registration", "📝", "رسوم التسجيل", true],
-  ["expenses", "🧾", "المصروفات", true], ["summary", "📊", "الملخص المالي", true],
-  ["staff", "👨‍🏫", "الموظفون", true], ["payroll", "💵", "الرواتب", true]
+  ["home", "🏠", "الرئيسية", false, ""],
+  ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"],
+  ["fees", "💰", "الرسوم الشهرية", true, "المالية"], ["registration", "📝", "رسوم التسجيل", true, "المالية"],
+  ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"],
+  ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"]
 ];
+function navHtml(active) {
+  let last = null;
+  return NAV.filter((n) => !n[3] || isAdmin()).map((n) => {
+    const head = n[4] && n[4] !== last ? `<div class="nav-sec">${n[4]}</div>` : ""; last = n[4];
+    return `${head}<a href="#/${n[0]}" class="${n[0] === active ? "active" : ""}"><span class="ico">${n[1]}</span>${n[2]}</a>`;
+  }).join("");
+}
 window.addEventListener("hashchange", () => render());
 const route = () => (location.hash.replace("#/", "") || "home");
 
@@ -162,7 +171,7 @@ function render() {
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   $("#app").innerHTML = `<div class="layout"><aside class="side">
       <div class="brand"><img src="logo.png" alt=""><b>${esc(state.settings.name || DEFAULT_NAME)}</b></div>
-      <nav>${NAV.filter((n) => !n[3] || isAdmin()).map((n) => `<a href="#/${n[0]}" class="${n[0] === allowed ? "active" : ""}">${n[1]} ${n[2]}</a>`).join("")}</nav>
+      <nav>${navHtml(allowed)}</nav>
       <div class="user">${esc(state.profile?.name || state.user.email)}<br>${isAdmin() ? "الإدارة" : "معلم"}<br>
       <button id="logout">تسجيل الخروج</button></div></aside>
     <main><div class="print-head"><img src="logo.png" alt=""><h3>${esc(state.settings.name || DEFAULT_NAME)}</h3>
@@ -188,20 +197,35 @@ function viewHome() {
   const m = currentMonth();
   const monthly = state.payments.filter((p) => p.type === "monthly" && p.month === m);
   const billable = active.filter((s) => (s.monthlyFee || 0) > 0);
-  const unpaid = billable.filter((s) => !monthly.some((p) => p.studentId === s.id));
-  return `<h1>السلام عليكم ورحمة الله وبركاته</h1><div class="sub">${esc(state.settings.name || DEFAULT_NAME)} — العام الدراسي ${yearLabel(m)}</div>
+  const paidIds = new Set(monthly.map((p) => p.studentId));
+  const paidCount = billable.filter((s) => paidIds.has(s.id)).length;
+  const unpaid = billable.length - paidCount;
+  const pct = billable.length ? Math.round(paidCount * 100 / billable.length) : 0;
+  const d = new Date();
+  const dateAr = d.toLocaleDateString("ar", { weekday: "long", day: "numeric", month: "long", year: "numeric", numberingSystem: "latn" });
+  let hijri = ""; try { hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
+  const shortcuts = [["#/students", "👥", "الطلاب"], ["#/halaqat", "🕌", "الحلقات"],
+    ...(isAdmin() ? [["#/fees", "💰", "تسجيل الرسوم"], ["#/expenses", "🧾", "مصروف جديد"], ["#/payroll", "💵", "الرواتب"], ["#/summary", "📊", "الملخص المالي"]] : [])];
+  return `<div class="hero"><div><h1>السلام عليكم ورحمة الله وبركاته</h1>
+      <div class="sub">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div></div>
+      <img src="logo.png" alt=""></div>
   <div class="cards">
     <div class="card stat green"><div class="l">الطلاب النشطون</div><div class="v">${active.length}</div></div>
     <div class="card stat"><div class="l">الطلاب / الطالبات</div><div class="v">${active.filter((s) => s.gender === "ذكر").length} / ${active.filter((s) => s.gender === "أنثى").length}</div></div>
     <div class="card stat"><div class="l">الحلقات</div><div class="v">${groups().length}</div></div>
-    ${isAdmin() ? `<div class="card stat green"><div class="l">رسوم ${monthName(m)}</div><div class="v">${amt(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</div></div>
-    <div class="card stat red"><div class="l">لم يدفعوا هذا الشهر</div><div class="v">${unpaid.length}</div></div>` : ""}
+    ${isAdmin() ? `<div class="card stat gold"><div class="l">الموظفون</div><div class="v">${state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length}</div></div>` : ""}
   </div>
-  <div class="panel"><h3>الحلقات</h3><div class="table-wrap"><table><thead><tr><th>الحلقة</th><th>المعلم</th><th class="num">الطلاب</th><th class="num">ذكور</th><th class="num">إناث</th></tr></thead><tbody>
-  ${groups().map((g) => { const l = active.filter((s) => s.group === g); const h = state.halaqat.find((x) => x.name === g);
-    return `<tr><td><a href="#/students" data-g="${esc(g)}" class="glink">${esc(g)}</a></td><td>${esc(h?.teacher || "")}</td><td class="num">${l.length}</td>
-    <td class="num">${l.filter((s) => s.gender === "ذكر").length}</td><td class="num">${l.filter((s) => s.gender === "أنثى").length}</td></tr>`; }).join("")}
-  </tbody></table></div></div>`;
+  ${isAdmin() ? `<div class="panel"><div class="row-between"><h3>رسوم ${monthName(m)}</h3><a href="#/fees" class="btn small outline">فتح جدول الرسوم ←</a></div>
+    <div class="progress"><div style="width:${pct}%"></div></div>
+    <div class="row-between muted" style="margin-top:6px"><span>دفع <b style="color:var(--green)">${paidCount}</b> من ${billable.length} (${pct}٪) — المحصَّل ${money(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</span>
+    <span>لم يدفع <b style="color:var(--red)">${unpaid}</b></span></div></div>` : ""}
+  <div class="shortcuts">${shortcuts.map(([h, i, t]) => `<a href="${h}" class="shortcut"><span>${i}</span>${t}</a>`).join("")}</div>
+  <h3 class="sec-title">الحلقات</h3>
+  <div class="halaqa-cards">${groups().map((g) => { const l = active.filter((s) => s.group === g); const h = state.halaqat.find((x) => x.name === g);
+    const boys = l.filter((s) => s.gender === "ذكر").length, girls = l.filter((s) => s.gender === "أنثى").length;
+    return `<a href="#/students" data-g="${esc(g)}" class="glink hcard"><b>${esc(g)}</b>
+      <div class="muted">${h?.teacher ? "👤 " + esc(h.teacher) : "لم يُحدَّد المعلم"}${h?.schedule ? " • 🕒 " + esc(h.schedule) : ""}</div>
+      <div class="hnums"><span><b>${l.length}</b> طالب</span><span>👦 ${boys}</span><span>👧 ${girls}</span></div></a>`; }).join("")}</div>`;
 }
 bind.home = () => document.querySelectorAll(".glink").forEach((a) => a.onclick = () => { state.filters.group = a.dataset.g; });
 
