@@ -91,11 +91,12 @@ data class Teacher(
 
 object StaffCategory {
     const val TEACHER = "مدرس"
+    const val ADMIN = "إداري"
     const val SUPERVISOR = "مراقب"
     const val WORKER = "عامل"
-    val all = listOf(TEACHER, SUPERVISOR, WORKER)
-    fun plural(c: String) = when (c) { SUPERVISOR -> "المراقبون"; WORKER -> "العمال"; else -> "المدرسون" }
-    fun french(c: String) = when (c) { SUPERVISOR -> "Surveillants"; WORKER -> "Ouvriers"; else -> "Enseignants" }
+    val all = listOf(TEACHER, ADMIN, SUPERVISOR, WORKER)
+    fun plural(c: String) = when (c) { ADMIN -> "الإداريون"; SUPERVISOR -> "المراقبون"; WORKER -> "العمال"; else -> "المدرسون" }
+    fun french(c: String) = when (c) { ADMIN -> "Personnel administratif"; SUPERVISOR -> "Surveillants"; WORKER -> "Ouvriers"; else -> "Enseignants" }
 }
 
 val PaymentModes = listOf("نقدًا", "Orange Money", "Moov Money", "تحويل بنكي")
