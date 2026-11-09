@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -83,17 +86,59 @@ private fun AuthScreen(state: AppState) {
     var showPassword by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // Centre building with welcome message
-        Box(Modifier.fillMaxWidth().height(330.dp)) {
-            Image(painterResource(R.drawable.centre_building), "مبنى المركز", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        // Slow zoom on the building photo (Ken Burns) and rotating welcome slides
+        val zoom by androidx.compose.animation.core.rememberInfiniteTransition(label = "kb").animateFloat(
+            initialValue = 1f, targetValue = 1.15f, label = "zoom",
+            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                androidx.compose.animation.core.tween(14000), androidx.compose.animation.core.RepeatMode.Reverse))
+        var slide by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) { while (true) { delay(6000); slide = (slide + 1) % 4 } }
+        Box(Modifier.fillMaxWidth().height(360.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))) {
+            Image(painterResource(R.drawable.centre_building), "مبنى المركز",
+                Modifier.fillMaxSize().graphicsLayer { scaleX = zoom; scaleY = zoom }, contentScale = ContentScale.Crop)
             Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(
                 listOf(Green.copy(alpha = .25f), Green.copy(alpha = .93f)))))
-            Column(Modifier.align(Alignment.BottomCenter).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 34.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(painterResource(R.drawable.centre_logo), "شعار المركز",
-                    Modifier.size(78.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.White))
+                    Modifier.size(74.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.White))
                 Spacer(Modifier.height(10.dp))
-                Text(WELCOME_TEXT, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center, lineHeight = 28.sp)
-                Text(HADITH_TEXT, color = Gold, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                androidx.compose.animation.AnimatedContent(targetState = slide, label = "slides",
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(700)) +
+                            androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(700)) { it / 3 })
+                            .togetherWith(androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500)))
+                    }) { i ->
+                    Column(Modifier.fillMaxWidth().heightIn(min = 120.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center) {
+                        when (i) {
+                            0 -> {
+                                Text(WELCOME_TEXT, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center, lineHeight = 28.sp)
+                                Text("بسم الله الرحمن الرحيم", color = Color.White.copy(.85f), modifier = Modifier.padding(top = 6.dp))
+                            }
+                            1 -> {
+                                Text("﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾", color = Color.White, fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 30.sp)
+                                Text(HADITH_TEXT, color = Gold, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                            }
+                            2 -> Text("🤲 $DUA_TEXT", color = Color.White, fontSize = 14.5.sp, textAlign = TextAlign.Center, lineHeight = 24.sp)
+                            else -> {
+                                Text("حلقات تحفيظ القرآن الكريم والدراسات الإسلامية", color = Color.White, fontSize = 19.sp,
+                                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 28.sp)
+                                Text("📍 داودابوغو، باماكو", color = Gold, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
+                            }
+                        }
+                    }
+                }
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    repeat(4) { k ->
+                        Box(Modifier.height(8.dp).width(if (k == slide) 24.dp else 8.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (k == slide) Gold else Color.White.copy(alpha = .5f))
+                            .clickable { slide = k })
+                    }
+                }
             }
         }
         // Login form

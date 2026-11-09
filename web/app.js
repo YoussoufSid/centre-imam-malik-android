@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=5";
+import { firebaseConfig } from "./firebase-config.js?v=6";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -123,12 +123,18 @@ onAuthStateChanged(auth, (u) => {
 // ---------------------------------------------------------------- login
 function renderLogin() {
   $("#app").innerHTML = `<div class="login-page">
-    <section class="login-hero" style="background-image:linear-gradient(180deg,rgba(5,60,38,.35),rgba(5,60,38,.92)),url(building.jpg)">
+    <section class="login-hero">
+      <div class="kb" style="background-image:url(building.jpg)"></div><div class="kb-shade"></div>
       <div class="login-hero-text">
         <img src="logo.png" alt="" class="hero-logo">
-        <h1>${WELCOME}</h1>
-        <p class="hadith">${HADITH}</p>
-        <div class="dua">🤲 ${DUA}</div>
+        <div class="slides">
+          <div class="slide active"><h1>${WELCOME}</h1><p class="slide-sub">بسم الله الرحمن الرحيم</p></div>
+          <div class="slide"><h1 class="ayah">﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾</h1><p class="hadith">${HADITH}</p></div>
+          <div class="slide"><div class="dua">🤲 ${DUA}</div></div>
+          <div class="slide"><h1>حلقات تحفيظ القرآن الكريم والدراسات الإسلامية</h1>
+            <p class="slide-sub">📍 داودابوغو، باماكو • 🕌 تعليم كتاب الله لأبنائنا وبناتنا</p></div>
+        </div>
+        <div class="dots">${[0, 1, 2, 3].map((i) => `<button class="dot ${i ? "" : "on"}" data-i="${i}" aria-label="الشريحة ${i + 1}"></button>`).join("")}</div>
       </div>
     </section>
     <section class="login-side"><div class="login">
@@ -141,6 +147,17 @@ function renderLogin() {
       <div style="margin-top:10px"><a href="#" id="reset">نسيت كلمة المرور؟</a></div><div class="error" id="err"></div>
       <div class="login-foot">بسم الله الرحمن الرحيم</div>
     </div></section></div>`;
+  // Rotating welcome slides
+  clearInterval(state.slideTimer);
+  let idx = 0;
+  const show = (i) => {
+    idx = (i + 4) % 4;
+    document.querySelectorAll(".slide").forEach((el, k) => el.classList.toggle("active", k === idx));
+    document.querySelectorAll(".dot").forEach((el, k) => el.classList.toggle("on", k === idx));
+  };
+  document.querySelectorAll(".dot").forEach((d) => d.onclick = () => { show(+d.dataset.i); clearInterval(state.slideTimer);
+    state.slideTimer = setInterval(() => show(idx + 1), 6500); });
+  state.slideTimer = setInterval(() => { if (!document.querySelector(".slides")) return clearInterval(state.slideTimer); show(idx + 1); }, 6500);
   $("#eye").onclick = () => { const p = $("#pw"); p.type = p.type === "password" ? "text" : "password"; p.focus(); };
   const go = () => {
     if (!$("#em").value.trim()) { $("#err").textContent = "اكتب البريد الإلكتروني"; return; }
@@ -230,7 +247,7 @@ function viewHome() {
         <p class="hadith">${HADITH}</p>
         <div class="dua">🤲 ${DUA}</div>
       </div>
-      <div class="banner-img" style="background-image:url(building.jpg)"></div>
+      <div class="banner-img"><div class="kb" style="background-image:url(building.jpg)"></div></div>
     </div>
   <div class="cards">
     <div class="card stat green"><div class="l">الطلاب النشطون</div><div class="v">${active.length}</div></div>
