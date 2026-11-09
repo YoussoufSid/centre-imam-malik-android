@@ -116,12 +116,24 @@ function renderLogin() {
   $("#app").innerHTML = `<div class="login"><img src="logo.png" alt=""><h2>مركز الإمام مالك</h2>
     <div class="muted">لوحة الإدارة</div>
     <label>البريد الإلكتروني</label><input id="em" type="email" dir="ltr">
-    <label>كلمة المرور</label><input id="pw" type="password" dir="ltr">
+    <label>كلمة المرور</label><div style="position:relative"><input id="pw" type="password" dir="ltr" style="padding-left:44px">
+    <button type="button" id="eye" title="إظهار كلمة المرور" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px">👁</button></div>
     <button class="btn" id="go">تسجيل الدخول</button>
     <div style="margin-top:10px"><a href="#" id="reset">نسيت كلمة المرور؟</a></div><div class="error" id="err"></div></div>`;
-  const go = () => signInWithEmailAndPassword(auth, $("#em").value.trim(), $("#pw").value)
-    .catch(() => { $("#err").textContent = "البريد أو كلمة المرور غير صحيحة"; });
-  $("#go").onclick = go; $("#pw").onkeydown = (e) => e.key === "Enter" && go();
+  $("#eye").onclick = () => { const p = $("#pw"); p.type = p.type === "password" ? "text" : "password"; p.focus(); };
+  const go = () => {
+    if (!$("#em").value.trim()) { $("#err").textContent = "اكتب البريد الإلكتروني"; return; }
+    if (!$("#pw").value) { $("#err").textContent = "اكتب كلمة المرور"; return; }
+    $("#err").textContent = "";
+    signInWithEmailAndPassword(auth, $("#em").value.trim(), $("#pw").value).catch((e) => {
+      const c = e?.code || "";
+      $("#err").textContent = c.includes("network") ? "لا يوجد اتصال بالإنترنت"
+        : c.includes("too-many-requests") ? "محاولات كثيرة؛ انتظر قليلًا أو استعمل «نسيت كلمة المرور»"
+        : c.includes("credential") || c.includes("password") || c.includes("user-not-found") ? "البريد أو كلمة المرور غير صحيحة (تحقق من لغة لوحة المفاتيح)"
+        : "تعذّر الدخول: " + c;
+    });
+  };
+  $("#go").onclick = go; $("#pw").onkeydown = (e) => { if (e.key === "Enter") go(); };  // must not return false: that would block typing
   $("#reset").onclick = (e) => { e.preventDefault(); const em = $("#em").value.trim();
     if (!em) { $("#err").textContent = "اكتب البريد أولًا"; return; }
     sendPasswordResetEmail(auth, em).then(() => toast("أُرسل رابط الاستعادة إلى بريدك")).catch(fail); };
