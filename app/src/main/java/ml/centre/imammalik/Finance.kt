@@ -214,15 +214,18 @@ private fun ExpenseDialog(state: AppState, initial: Expense, close: () -> Unit) 
 
 @Composable
 private fun SummaryTab(state: AppState) {
-    var year by rememberSaveable { mutableIntStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
+    // Academic year September–August, like the centre's fee register.
+    var anchor by rememberSaveable { mutableStateOf(currentMonth()) }
+    val yearMonths = academicYearMonths(anchor)
     var payments by remember { mutableStateOf<List<Payment>?>(null) }
     var expenses by remember { mutableStateOf(emptyList<Expense>()) }
     // Reload whenever the year changes or live data (this month) changes.
-    LaunchedEffect(year, state.monthPayments, state.registrationPayments, state.monthExpenses) {
-        state.loadYear(year.toString()) { p, e -> payments = p; expenses = e }
+    LaunchedEffect(anchor, state.monthPayments, state.registrationPayments, state.monthExpenses) {
+        state.loadMonths(yearMonths.first(), yearMonths.last()) { p, e -> payments = p; expenses = e }
     }
-    val months = (1..12).map { "%d-%02d".format(Locale.US, year, it) }.filter { it <= currentMonth() }
     val ps = payments.orEmpty()
+    // Months already reached, plus later months that already have payments (fees paid in advance).
+    val months = yearMonths.filter { m -> m <= currentMonth() || ps.any { it.month == m } || expenses.any { it.month == m } }
     val monthlyIncome = ps.filter { it.type == PaymentType.MONTHLY }.sumOf { it.amount }
     val regIncome = ps.filter { it.type == PaymentType.REGISTRATION }.sumOf { it.amount }
     val totalExp = expenses.sumOf { it.amount }
@@ -231,8 +234,9 @@ private fun SummaryTab(state: AppState) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
-            MonthSwitcher("الملخص المالي لسنة $year", year < Calendar.getInstance().get(Calendar.YEAR),
-                { year--; payments = null }, { year++; payments = null })
+            MonthSwitcher("الملخص المالي ${academicYearLabel(anchor)}", yearMonths.last() < currentMonth(),
+                { anchor = shiftMonth(yearMonths.first(), -12); payments = null },
+                { anchor = shiftMonth(yearMonths.first(), 12); payments = null })
         }
         if (payments == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         item {

@@ -473,10 +473,13 @@ class AppState {
     }
 
     /** Loads all payments and expenses of a year (yyyy) for the financial summary. */
-    fun loadYear(year: String, onReady: (List<Payment>, List<Expense>) -> Unit) {
-        db.collection("payments").whereGreaterThanOrEqualTo("month", "$year-01").whereLessThanOrEqualTo("month", "$year-12")
+    fun loadYear(year: String, onReady: (List<Payment>, List<Expense>) -> Unit) = loadMonths("$year-01", "$year-12", onReady)
+
+    /** Payments and expenses whose month is between [first] and [last] (yyyy-MM, inclusive). */
+    fun loadMonths(first: String, last: String, onReady: (List<Payment>, List<Expense>) -> Unit) {
+        db.collection("payments").whereGreaterThanOrEqualTo("month", first).whereLessThanOrEqualTo("month", last)
             .get().addOnSuccessListener { ps ->
-                db.collection("expenses").whereGreaterThanOrEqualTo("month", "$year-01").whereLessThanOrEqualTo("month", "$year-12")
+                db.collection("expenses").whereGreaterThanOrEqualTo("month", first).whereLessThanOrEqualTo("month", last)
                     .get().addOnSuccessListener { es ->
                         onReady(ps.documents.map(::toPayment), es.documents.map(::toExpense))
                     }.addOnFailureListener { message = arabicError(it.message) }
@@ -943,16 +946,22 @@ class AppState {
         }.addOnFailureListener { message = arabicError(it.message) }
     }
 
-    fun financeSummaryCsv(year: String, onReady: (String) -> Unit) = loadYear(year) { ps, es ->
-        val rows = (1..12).map { "%s-%02d".format(Locale.US, year, it) }.map { m ->
+    /** Summary of the academic year (September–August) containing [month]. */
+    fun financeSummaryCsv(month: String, onReady: (String) -> Unit) {
+        val ms = academicYearMonths(month)
+        loadMonths(ms.first(), ms.last()) { ps, es -> onReady(summaryCsv(ms, ps, es)) }
+    }
+
+    private fun summaryCsv(months: List<String>, ps: List<Payment>, es: List<Expense>): String {
+        val rows = months.map { m ->
             val monthly = ps.filter { it.month == m && it.type == PaymentType.MONTHLY }.sumOf { it.amount }
             val reg = ps.filter { it.month == m && it.type == PaymentType.REGISTRATION }.sumOf { it.amount }
             val exp = es.filter { it.month == m }.sumOf { it.amount }
             listOf(monthName(m), monthly, reg, monthly + reg, exp, monthly + reg - exp)
         }
         val totals = (1..5).map { i -> rows.sumOf { it[i] as Int } }
-        onReady(csv(listOf(listOf("الشهر", "الرسوم الشهرية", "رسوم التسجيل", "مجموع الإيرادات", "المصروفات", "الصافي")) +
-            rows + listOf(listOf<Any?>("المجموع") + totals)))
+        return csv(listOf(listOf("الشهر", "الرسوم الشهرية", "رسوم التسجيل", "مجموع الإيرادات", "المصروفات", "الصافي")) +
+            rows + listOf(listOf<Any?>("المجموع") + totals))
     }
 
     // ---------- Users (admin) ----------

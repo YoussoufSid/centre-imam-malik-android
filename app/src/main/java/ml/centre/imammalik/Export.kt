@@ -99,8 +99,8 @@ fun ExportDialog(state: AppState, close: () -> Unit) {
                 ExportRow(Icons.Default.ReceiptLong, "المصروفات", "مصروفات ${monthName(month)} مع المجموع") {
                     loading = true; state.expensesCsv(month, done("expenses-$month.csv"))
                 }
-                ExportRow(Icons.Default.AccountBalanceWallet, "الملخص المالي السنوي", "الإيرادات والمصروفات والصافي لسنة ${month.take(4)}") {
-                    loading = true; state.financeSummaryCsv(month.take(4), done("finance-${month.take(4)}.csv"))
+                ExportRow(Icons.Default.AccountBalanceWallet, "الملخص المالي للعام الدراسي", "الإيرادات والمصروفات والصافي — ${academicYearLabel(month)}") {
+                    loading = true; state.financeSummaryCsv(month, done("finance-${academicYearLabel(month).replace(" / ", "-")}.csv"))
                 }
                 ExportRow(Icons.Default.School, "درجات الدراسات الإسلامية", "كل الدرجات المسجلة") {
                     loading = true; state.gradesCsv(done("grades.csv"))
