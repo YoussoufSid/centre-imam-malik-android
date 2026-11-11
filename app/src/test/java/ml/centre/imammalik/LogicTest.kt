@@ -267,4 +267,10 @@ class LogicTest {
         assertFalse(isNewerVersion("2.4.9", "2.5.0"))
         assertFalse(isNewerVersion("", "2.5.0"))
     }
+
+    @Test
+    fun studentNumbers() {
+        assertEquals("S001", studentNumber("s001"))
+        assertEquals("XY12AB", studentNumber("aBcDeFgH9xy12ab"))
+    }
 }

@@ -10,6 +10,12 @@ const val HADITH_TEXT = "«خيرُكم مَن تعلَّم القرآنَ وع�
 const val DUA_TEXT = "اللهم اجزِ مؤسِّس هذا المركز الحاج بانيما يارا خيرَ الجزاء، واجعل هذا العمل في ميزان حسناته، " +
     "واغفر له ولوالديه، ولجميع المسلمين والمسلمات، الأحياء منهم والأموات. آمين"
 
+/** Short student number for ID cards: "s001" → "S001"; long generated ids → last 6 characters. */
+fun studentNumber(id: String): String {
+    val t = id.trim()
+    return (if (Regex("^[sS]\\d+$").matches(t)) t else t.takeLast(6)).uppercase()
+}
+
 // ---------- Updates ----------
 
 /** Always the newest phone app (public GitHub Release asset, no login needed). */
@@ -90,7 +96,9 @@ data class Student(
     /** Monthly fee in FCFA (0 = exempt / not set). */
     val monthlyFee: Int = 0,
     /** One-time registration fee in FCFA (0 = none). */
-    val registrationFee: Int = 0
+    val registrationFee: Int = 0,
+    /** Small JPEG data URL for the ID card ("" = no photo). */
+    val photo: String = ""
 )
 
 // ---------- Teachers ----------

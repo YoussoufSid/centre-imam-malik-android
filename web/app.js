@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=9";
+import { firebaseConfig } from "./firebase-config.js?v=12";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -255,8 +255,7 @@ function printCertificate(s) {
     : h === 0 ? "تقديرًا لجهده ومواظبته في حلقات تحفيظ القرآن الكريم."
     : `قد أتمّ حفظ ${h} حزبًا من كتاب الله تعالى${h >= 2 ? ` (≈ ${Math.floor(h / 2)} جزءًا)` : ""}، تقديرًا لجهده ومواظبته.`;
   let hijri = ""; try { hijri = new Date().toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
-  const box = document.createElement("div"); box.id = "cert";
-  box.innerHTML = `<div class="cert"><div class="cert-in">
+  showPrintOverlay(`<div class="cert"><div class="cert-in">
     <span class="corner tl">۞</span><span class="corner tr">۞</span><span class="corner bl">۞</span><span class="corner br">۞</span>
     <img src="logo.png" alt=""><div class="cert-centre">${esc(state.settings.name || DEFAULT_NAME)}</div>
     <div class="cert-title">${khatm ? "شهادة ختم القرآن الكريم" : "شهادة تقدير"}</div>
@@ -266,11 +265,44 @@ function printCertificate(s) {
     <p class="muted">نسأل الله أن يجعله من أهل القرآن الذين هم أهل الله وخاصته.</p>
     <div class="cert-sign"><div>حُرّر بتاريخ \u2066${today()}\u2069${hijri ? `<br>الموافق ${esc(hijri)}` : ""}</div>
       ${s.teacher ? `<div>المعلم<br><b>${esc(s.teacher)}</b><hr></div>` : ""}<div>مدير المركز<br><b>${esc(state.settings.director || "")}</b><hr></div></div>
-  </div></div><div class="no-print cert-actions"><button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button></div>`;
+  </div></div>`);
+}
+
+// ---------------------------------------------------------------- student ID cards
+/** "s001" → "S001"; generated ids → last 6 characters. Same rule as the phone app. */
+const studentNumber = (id) => (/^[sS]\d+$/.test(id) ? id : String(id).slice(-6)).toUpperCase();
+const ltrText = (t) => `\u2066${esc(t)}\u2069`;
+const CENTRE_FR = "Centre Imam Malik pour la mémorisation du Saint Coran et les études islamiques";
+const frDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : (d || "");
+/** Bilingual (Arabic / French) student ID card. French text uses a Latin font (class "fr"). */
+const fr = (t) => `<span class="fr">${esc(t)}</span>`;
+function cardHtml(s) {
+  const year = yearLabel(currentMonth());
+  const row = (ar, frLabel, v) => v ? `<div class="idc-row"><span class="lbl">${ar} <span class="fr">${frLabel}</span></span><span class="val">${v}</span></div>` : "";
+  return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div class="idc-titles"><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
+      <em class="fr">${CENTRE_FR}</em><span class="idc-kind">بطاقة طالب <i class="fr">Carte d'élève</i></span></div></div>
+    <div class="idc-body"><div class="idc-info"><div class="idc-name">${esc(s.name)}</div>
+      ${row("الحلقة", "Groupe", esc(s.group || ""))}${row("المعلم", "Enseignant", esc(s.teacher || ""))}
+      ${row("الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : "")}
+      ${row("ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : "")}${row("التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : "")}</div>
+      <div class="idc-side"><div class="idc-photo">${s.photo ? `<img src="${s.photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
+        <div class="idc-no">${fr("N° " + studentNumber(s.id))}</div></div></div>
+    <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}${state.settings.phone ? ` • ${fr("☎ " + state.settings.phone)}` : ""}</div>
+      <div>العام الدراسي ${fr(year)} • ${fr("Année scolaire " + year)}</div></div></div>`;
+}
+function printCards(list) {
+  if (!list.length) { toast("لا يوجد طلاب"); return; }
+  showPrintOverlay(`<div class="cards-sheet">${list.map(cardHtml).join("")}</div>`,
+    `${list.length} بطاقة — 10 بطاقات في كل صفحة A4، قصّها على الخطوط`);
+}
+/** Full-screen preview with Print / Close; only its content is printed. */
+function showPrintOverlay(inner, note = "") {
+  const box = document.createElement("div"); box.id = "cert";
+  box.innerHTML = `<div class="no-print cert-actions"><button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button>
+    ${note ? `<div class="cert-note">${esc(note)}</div>` : ""}</div>${inner}`;
   document.body.appendChild(box); document.body.classList.add("cert-mode");
-  const close = () => { box.remove(); document.body.classList.remove("cert-mode"); };
   box.querySelector("#cprint").onclick = () => window.print();
-  box.querySelector("#cclose").onclick = close;
+  box.querySelector("#cclose").onclick = () => { box.remove(); document.body.classList.remove("cert-mode"); };
 }
 
 // ---------------------------------------------------------------- monthly report (admin)
@@ -397,22 +429,25 @@ function viewStudents() {
   const list = filterStudents(state.students);
   return `<h1>الطلاب</h1><div class="sub">${state.students.length} طالب مسجل</div>
   <div class="toolbar"><input id="fq" placeholder="🔍 بحث بالاسم أو الهاتف" value="${esc(state.filters.q)}">${groupSelect()}
-    <button class="btn" id="add">+ إضافة طالب</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
+    <button class="btn" id="add">+ إضافة طالب</button><button class="btn outline" id="cards">🪪 بطاقات الطلاب</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
     <span class="muted">${list.length} نتيجة</span></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
-  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><b>${esc(s.name)}</b></td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
+  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b></td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
     <td>${esc(s.teacher)}</td><td dir="ltr" style="text-align:right">${esc(s.phone)}</td><td class="num">${s.hizbs || 0}/60</td>
     ${isAdmin() ? `<td class="num">${num(s.monthlyFee)}</td>` : ""}
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
     <td class="actions no-print"><button class="btn small outline" data-edit="${s.id}">تعديل</button>
     <button class="btn small gold" data-cert="${s.id}" title="شهادة">🎓</button>
+    <button class="btn small outline" data-card="${s.id}" title="بطاقة الطالب">🪪</button>
     ${isAdmin() ? `<button class="btn small danger" data-del="${s.id}">حذف</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="10" class="muted">لا توجد نتائج</td></tr>`}
   </tbody></table></div>`;
 }
 bind.students = () => {
   bindFilters();
   $("#add").onclick = () => studentForm({ status: ACTIVE, enrollmentDate: today(), group: state.filters.group && state.filters.group !== "-" ? state.filters.group : "" });
+  $("#cards").onclick = () => printCards(filterStudents(state.students).filter((s) => (s.status || ACTIVE) === ACTIVE));
+  document.querySelectorAll("[data-card]").forEach((b) => b.onclick = () => printCards([state.students.find((s) => s.id === b.dataset.card)]));
   document.querySelectorAll("[data-cert]").forEach((b) => b.onclick = () => printCertificate(state.students.find((s) => s.id === b.dataset.cert)));
   document.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => studentForm(state.students.find((s) => s.id === b.dataset.edit)));
   document.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => {
@@ -421,9 +456,28 @@ bind.students = () => {
   });
 };
 
+/** Reads an image file, centre-crops it to 3:4 and returns a small JPEG data URL (~10 KB). */
+function resizePhoto(file, w = 240, h = 320) {
+  return new Promise((ok, ko) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.max(w / img.width, h / img.height), sw = w / r, sh = h / r;
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, 0, 0, w, h);
+      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ko(new Error("تعذّرت قراءة الصورة")); };
+    img.src = url;
+  });
+}
+
 function studentForm(s) {
   const opts = groups().map((g) => `<option ${s.group === g ? "selected" : ""}>${esc(g)}</option>`).join("");
   openModal(`<h3>${s.id ? "تعديل ملف الطالب" : "إضافة طالب"}</h3>
+    <div class="photo-pick"><div class="ph-box" id="phBox">${s.photo ? `<img src="${s.photo}" alt="">` : "👤"}</div><div>
+      <label class="btn small outline">📷 إضافة / تغيير الصورة<input type="file" id="phFile" accept="image/*" hidden></label>
+      <button class="btn small danger ${s.photo ? "" : "hidden"}" id="phDel" type="button">حذف الصورة</button>
+      <div class="muted" style="font-size:12px">تظهر على بطاقة الطالب. على الهاتف يمكن التقاطها بالكاميرا.</div></div></div>
     <label>الاسم الكامل</label><input id="n" value="${esc(s.name)}">
     <div class="row2"><div><label>الجنس</label><select id="g"><option></option><option ${s.gender === "ذكر" ? "selected" : ""}>ذكر</option><option ${s.gender === "أنثى" ? "selected" : ""}>أنثى</option></select></div>
     <div><label>الحلقة</label><select id="gr"><option value="">بدون حلقة</option>${opts}</select></div></div>
@@ -438,6 +492,11 @@ function studentForm(s) {
     <div class="modal-actions"><button class="btn" id="save">حفظ</button><button class="btn outline" id="cancel">إلغاء</button></div>`, (b) => {
     b.querySelector("#gr").onchange = (e) => { const h = state.halaqat.find((x) => x.name === e.target.value); if (h?.teacher && !b.querySelector("#t").value) b.querySelector("#t").value = h.teacher; };
     b.querySelector("#cancel").onclick = closeModal;
+    let photo;  // undefined = unchanged, "" = removed, data URL = new
+    const showPhoto = (p) => { b.querySelector("#phBox").innerHTML = p ? `<img src="${p}" alt="">` : "👤"; b.querySelector("#phDel").classList.toggle("hidden", !p); };
+    b.querySelector("#phFile").onchange = (e) => { const f = e.target.files[0]; if (!f) return;
+      resizePhoto(f).then((p) => { photo = p; showPhoto(p); }).catch(fail); };
+    b.querySelector("#phDel").onclick = () => { photo = ""; showPhoto(""); };
     b.querySelector("#save").onclick = () => {
       const v = (id) => b.querySelector("#" + id)?.value?.trim() ?? "";
       if (!v("n")) { toast("اسم الطالب مطلوب"); return; }
@@ -446,6 +505,7 @@ function studentForm(s) {
       if (isAdmin()) { data.monthlyFee = +v("mf") || 0; data.registrationFee = +v("rf") || 0; }
       const ref = s.id ? doc(db, "students", s.id) : doc(collection(db, "students"));
       if (!s.id) data.hizbs = 0;
+      if (photo !== undefined) data.photo = photo;
       setDoc(ref, data, { merge: true }).then(() => toast(s.id ? "تم تحديث بيانات الطالب" : "تمت إضافة الطالب")).catch(fail);
       closeModal();
     };
