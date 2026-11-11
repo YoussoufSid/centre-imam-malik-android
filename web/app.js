@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=19";
+import { firebaseConfig } from "./firebase-config.js?v=20";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -76,6 +76,7 @@ const db = initializeFirestore(fb, { localCache: persistentLocalCache() });
 const state = {
   user: null, profile: null, settings: { name: DEFAULT_NAME, currency: "فرنك", phone: DEFAULT_PHONE },
   students: [], halaqat: [], payments: [], expenses: [], staff: [], payroll: [], unsub: [], loaded: false,
+  calendars: {},
   memo: { period: "WEEK", anchor: today(), group: "", key: null, logs: null, loading: null },
   filters: { q: "", group: "", feeMonth: currentMonth(), expMonth: currentMonth(), year: currentMonth(), payMonth: currentMonth() }
 };
@@ -93,6 +94,8 @@ function audit(action, details) {
 function listen() {
   state.unsub.forEach((u) => u()); state.unsub = [];
   const sub = (ref, fn) => state.unsub.push(onSnapshot(ref, fn, fail));
+  sub(collection(db, "settings"), (q) => { q.docs.filter((d) => d.id.startsWith("calendar_")).forEach((d) => {
+    state.calendars[+d.id.slice(9)] = { terms: d.data().terms || [], events: d.data().events || [] }; }); render(); });
   sub(doc(db, "settings", "centre"), (s) => { if (s.exists()) { state.settings = { name: DEFAULT_NAME, currency: "فرنك", ...s.data() };
     if (!state.settings.phone) state.settings.phone = DEFAULT_PHONE; } render(); });
   sub(collection(db, "students"), (q) => {
@@ -184,7 +187,7 @@ function renderLogin() {
 // [route, icon, label, adminOnly, section]
 const NAV = [
   ["home", "🏠", "الرئيسية", false, ""],
-  ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"], ["quran", "📖", "الحفظ والمراجعة", false, "التعليم"],
+  ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"], ["quran", "📖", "الحفظ والمراجعة", false, "التعليم"], ["calendar", "📅", "التقويم الدراسي", false, "التعليم"],
   ["fees", "💰", "الرسوم الشهرية", true, "المالية"], ["registration", "📝", "رسوم التسجيل", true, "المالية"],
   ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"], ["report", "📄", "البيانات المالية الشهرية", true, "المالية"],
   ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"],
@@ -229,7 +232,7 @@ const route = () => (location.hash.replace("#/", "") || "home");
 function render() {
   if (!state.user || !state.profile || !isStaff()) return;
   const r = route();
-  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport, settings: viewSettings, quran: viewQuran };
+  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport, settings: viewSettings, quran: viewQuran, calendar: viewCalendar };
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
@@ -424,23 +427,34 @@ const dParse = (s) => { const [y, m, d] = s.split("-").map(Number); return new D
 const dKey = (d) => d.toISOString().slice(0, 10);
 const dAdd = (s, n) => { const d = dParse(s); d.setUTCDate(d.getUTCDate() + n); return dKey(d); };
 const dm = (s) => `${s.slice(8, 10)}/${s.slice(5, 7)}`;
-const TERM_NAMES = ["الفصل الأول", "الفصل الثاني", "الفصل الثالث"];
-const termOf = (m) => (m >= 9 ? 1 : m <= 3 ? 2 : 3);
+const TERM_NAMES = ["الفصل الأول", "الفصل الثاني", "الفصل الثالث", "الفصل الرابع"];
+const academicStart = (d) => (+d.slice(5, 7) >= 9 ? +d.slice(0, 4) : +d.slice(0, 4) - 1);
+const defaultTerms = (st) => [[`${st}-09-01`, `${st}-11-30`], [`${st}-12-01`, `${st + 1}-02-28`], [`${st + 1}-03-01`, `${st + 1}-05-31`], [`${st + 1}-06-01`, `${st + 1}-08-31`]]
+  .map(([from, to], i) => ({ name: TERM_NAMES[i], from, to }));
+/** Terms of an academic year: the administration's dates, else the four default terms (same rule as the app). */
+const termsFor = (st) => { const t = state.calendars[st]?.terms; return t && t.length === 4 ? t : defaultTerms(st); };
+const eventsFor = (st) => state.calendars[st]?.events || [];
+const termIndexAt = (terms, d) => { const i = terms.findIndex((t) => d >= t.from && d <= t.to); if (i >= 0) return i;
+  let k = -1; terms.forEach((t, j) => { if (t.from <= d) k = j; }); return k >= 0 ? k : 0; };
+const eventsOn = (ev, d) => ev.filter((e) => d >= e.from && d <= (e.to || e.from));
+const upcomingEvents = (ev, d, days = 30) => { const lim = dAdd(d, days); return ev.filter((e) => (e.to || e.from) >= d && e.from <= lim).sort((a, b) => a.from.localeCompare(b.from)); };
+const EVENT_TYPES = [["مراجعة", "🔁"], ["اختبارات", "📝"], ["عطلة", "🌴"], ["مناسبة", "📌"]];
+const evIcon = (t) => (EVENT_TYPES.find((x) => x[0] === t) || ["", "📌"])[1];
 function periodRange(p, anchor) {
   const y = +anchor.slice(0, 4), mo = +anchor.slice(5, 7), start = mo >= 9 ? y : y - 1, yl = `\u2066${start} / ${start + 1}\u2069`;
   if (p === "DAY") return { from: anchor, to: anchor, label: `\u2066${anchor}\u2069` };
   if (p === "WEEK") { const back = (dParse(anchor).getUTCDay() + 6) % 7; const from = dAdd(anchor, -back), to = dAdd(from, 6);
     return { from, to, label: `أسبوع \u2066${dm(from)} – ${dm(to)}\u2069` }; }
   if (p === "MONTH") return { from: anchor.slice(0, 7) + "-01", to: anchor.slice(0, 7) + "-31", label: monthName(anchor.slice(0, 7)) };
-  if (p === "TERM") { const t = termOf(mo); const r = t === 1 ? [`${start}-09-01`, `${start}-12-31`] : t === 2 ? [`${start + 1}-01-01`, `${start + 1}-03-31`] : [`${start + 1}-04-01`, `${start + 1}-08-31`];
-    return { from: r[0], to: r[1], label: `${TERM_NAMES[t - 1]} ${yl}` }; }
+  if (p === "TERM") { const ts = termsFor(start), t = ts[termIndexAt(ts, anchor)]; return { from: t.from, to: t.to, label: `${t.name} ${yl}` }; }
   return { from: `${start}-09-01`, to: `${start + 1}-08-31`, label: `العام الدراسي ${yl}` };
 }
 function shiftPeriod(p, anchor, delta) {
   if (p === "DAY") return dAdd(anchor, delta);
   if (p === "WEEK") return dAdd(anchor, 7 * delta);
   if (p === "MONTH") return shiftMonth(anchor.slice(0, 7), delta) + "-01";
-  if (p === "TERM") { const r = periodRange(p, anchor); return delta > 0 ? dAdd(r.to, 1) : dAdd(r.from, -1); }
+  if (p === "TERM") { const st = academicStart(anchor), ts = termsFor(st), k = termIndexAt(ts, anchor) + delta;
+    return k < 0 ? termsFor(st - 1)[3].from : k >= ts.length ? termsFor(st + 1)[0].from : ts[k].from; }
   return (+anchor.slice(0, 4) + delta) + anchor.slice(4);
 }
 const ayat = (l) => (l.fromAyah > 0 && l.toAyah >= l.fromAyah ? l.toAyah - l.fromAyah + 1 : 0);
@@ -479,8 +493,16 @@ function viewQuran() {
   const students = state.students.filter((s) => (s.status || ACTIVE) === ACTIVE && (!m.group || s.group === m.group));
   const ids = new Set(students.map((s) => s.id));
   const logs = m.key === key ? (m.logs || []).filter((l) => ids.has(l.studentId)) : [];
-  const rows = summarizeMemo(students, logs).sort((a, b) => b.newA - a.newA || (b.newS + b.revS) - (a.newS + a.revS) || a.s.name.localeCompare(b.s.name, "ar"));
+  const allG = !m.group, gname = (x) => x.s.group || "بدون حلقة";
+  const rows = summarizeMemo(students, logs).sort((a, b) => (allG ? gname(a).localeCompare(gname(b), "ar") : 0) ||
+    b.newA - a.newA || (b.newS + b.revS) - (a.newS + a.revS) || a.s.name.localeCompare(b.s.name, "ar"));
   const day = m.period === "DAY";
+  // all-halaqat register: one line per halaqa
+  const hal = {}; rows.forEach((x) => { const h = hal[gname(x)] = hal[gname(x)] || { n: 0, rec: 0, ses: 0, nA: 0, rA: 0, sc: [] };
+    h.n++; if (x.logs.length) h.rec++; h.ses += x.logs.length; h.nA += x.newA; h.rA += x.revA;
+    x.logs.forEach((l) => { const g = gradeScore(l.grade); if (g != null) h.sc.push(g); }); });
+  const halRows = Object.entries(hal);
+  const todayEv = day ? eventsOn(eventsFor(academicStart(m.anchor)), m.anchor) : [];
   return `<h1>الحفظ والمراجعة</h1><div class="sub">سجل المتابعة اليومي والأسبوعي والشهري والفصلي والسنوي</div>
   <div class="toolbar">${PERIODS.map(([k, t]) => `<button class="btn small ${m.period === k ? "" : "outline"}" data-per="${k}">${t}</button>`).join("")}
     <select id="mg"><option value="">كل الحلقات</option>${groups().map((g) => `<option ${m.group === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select>
@@ -492,9 +514,16 @@ function viewQuran() {
     <div class="card stat"><div class="l">آيات المراجعة</div><div class="v">${num(rows.reduce((a, x) => a + x.revA, 0))}</div></div>
     <div class="card stat"><div class="l">جلسات التسميع</div><div class="v">${num(logs.length)}</div></div>
     <div class="card stat red"><div class="l">طلاب بلا تسجيل</div><div class="v">${num(rows.filter((x) => !x.logs.length).length)}</div></div></div>
+  ${todayEv.map((e) => `<div class="ev-banner">${evIcon(e.type)} ${esc(e.type)}: ${esc(e.title || "")}</div>`).join("")}
+  ${allG && halRows.length > 1 ? `<div class="panel"><h3>سجل المتابعة لجميع الحلقات — ${r.label}</h3><div class="table-wrap"><table><thead><tr><th>الحلقة</th>
+    <th class="num">الطلاب</th><th class="num">سُجّل لهم</th><th class="num">الجلسات</th><th class="num">آيات الحفظ</th><th class="num">آيات المراجعة</th><th>المعدل</th><th class="no-print"></th></tr></thead><tbody>
+    ${halRows.map(([g, h]) => `<tr><td><b>${esc(g)}</b></td><td class="num">${h.n}</td><td class="num">${h.rec} <span class="muted">(${h.n ? Math.round(h.rec * 100 / h.n) : 0}٪)</span></td>
+      <td class="num">${h.ses}</td><td class="num">${num(h.nA)}</td><td class="num">${num(h.rA)}</td><td>${h.sc.length ? gradeFromScore(h.sc.reduce((a, b) => a + b, 0) / h.sc.length) : ""}</td>
+      <td class="no-print">${g === "بدون حلقة" ? "" : `<button class="btn small outline" data-hg="${esc(g)}">عرض</button>`}</td></tr>`).join("")}
+    </tbody></table></div></div>` : ""}
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الطالب</th><th class="num">جلسات الحفظ</th><th class="num">آيات الحفظ</th>
     <th>${day ? "التفاصيل" : "السور المحفوظة"}</th><th class="num">جلسات المراجعة</th><th class="num">آيات المراجعة</th><th>المعدل</th><th class="num">الأيام</th><th class="no-print">تسجيل</th></tr></thead><tbody>
-    ${rows.map((x, i) => `<tr class="${x.logs.length ? "" : "nolog"}"><td class="num">${i + 1}</td><td><b>${esc(x.s.name)}</b><div class="muted" style="font-size:12px">${esc(x.s.group || "")}</div></td>
+    ${rows.map((x, i) => `${allG && halRows.length > 1 && (i === 0 || gname(rows[i - 1]) !== gname(x)) ? `<tr class="grp-head"><td colspan="10">🕌 ${esc(gname(x))}</td></tr>` : ""}<tr class="${x.logs.length ? "" : "nolog"}"><td class="num">${i + 1}</td><td><b>${esc(x.s.name)}</b><div class="muted" style="font-size:12px">${esc(x.s.group || "")}</div></td>
       <td class="num">${x.newS || ""}</td><td class="num">${x.newA || ""}</td>
       <td style="white-space:normal">${day ? x.logs.map(logText).join("<br>") : esc(x.surahs.join("، "))}${x.logs.length ? "" : '<span class="muted">لم يُسجَّل شيء</span>'}</td>
       <td class="num">${x.revS || ""}</td><td class="num">${x.revA || ""}</td><td>${x.avg != null ? gradeFromScore(x.avg) : ""}</td><td class="num">${x.days || ""}</td>
@@ -506,6 +535,7 @@ bind.quran = () => {
   const m = state.memo;
   document.querySelectorAll("[data-per]").forEach((b) => b.onclick = () => { m.period = b.dataset.per; render(); });
   $("#mg").onchange = (e) => { m.group = e.target.value; render(); };
+  document.querySelectorAll("[data-hg]").forEach((b) => b.onclick = () => { m.group = b.dataset.hg; render(); });
   $("#mp").onclick = () => { m.anchor = shiftPeriod(m.period, m.anchor, -1); render(); };
   $("#mn").onclick = () => { m.anchor = shiftPeriod(m.period, m.anchor, 1); render(); };
   const st = (id) => state.students.find((s) => s.id === id);
@@ -541,6 +571,70 @@ async function memoForm(s, type) {
       closeModal();
     });
   });
+}
+
+// ---------------------------------------------------------------- academic calendar
+function viewCalendar() {
+  const st = state.calStart ?? academicStart(today()); state.calStart = st;
+  const saved = state.calendars[st], terms = termsFor(st), events = eventsFor(st).slice().sort((a, b) => a.from.localeCompare(b.from));
+  const now = today(), admin = isAdmin();
+  return `<h1>التقويم الدراسي</h1><div class="sub">الفصول الأربعة ومواعيد المراجعة والاختبارات والعطل — تحددها الإدارة</div>
+  <div class="toolbar"><button class="btn outline small" id="cp">◀ السابق</button><b>العام الدراسي \u2066${st} / ${st + 1}\u2069</b>
+    <button class="btn outline small" id="cn">التالي ▶</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
+  ${saved ? "" : `<div class="ev-banner">لم تُحدِّد الإدارة تواريخ الفصول لهذا العام بعد؛ تظهر تواريخ افتراضية.${admin ? " عدّلها ثم اضغط «حفظ التقويم»." : ""}</div>`}
+  <div class="panel"><h3>الفصول الدراسية الأربعة</h3><div class="table-wrap"><table><thead><tr><th>الفصل</th><th>البداية</th><th>النهاية</th></tr></thead><tbody>
+    ${terms.map((t, i) => `<tr class="${now >= t.from && now <= t.to ? "cur-term" : ""}"><td><b>${esc(t.name)}</b>${now >= t.from && now <= t.to ? ' <span class="chip ok">الحالي</span>' : ""}</td>
+      <td>${admin ? `<input type="date" id="tf${i}" value="${t.from}">` : `\u2066${t.from}\u2069`}</td>
+      <td>${admin ? `<input type="date" id="tt${i}" value="${t.to}">` : `\u2066${t.to}\u2069`}</td></tr>`).join("")}</tbody></table></div></div>
+  <div class="panel"><h3>المراجعة والاختبارات والعطل</h3><div class="table-wrap"><table><thead><tr><th>النوع</th><th>العنوان</th><th>من</th><th>إلى</th>${admin ? '<th class="no-print"></th>' : ""}</tr></thead><tbody>
+    ${events.map((e) => `<tr class="${e.type === "عطلة" ? "holiday" : ""}"><td>${evIcon(e.type)} ${esc(e.type)}</td><td><b>${esc(e.title || "")}</b>${now >= e.from && now <= (e.to || e.from) ? ' <span class="chip ok">جارٍ الآن</span>' : ""}</td>
+      <td>\u2066${e.from}\u2069</td><td>\u2066${e.to || e.from}\u2069</td>${admin ? `<td class="no-print actions"><button class="btn small outline" data-ev="${e.id}">تعديل</button><button class="btn small danger" data-evdel="${e.id}">حذف</button></td>` : ""}</tr>`).join("")
+      || `<tr><td colspan="5" class="muted">لا توجد مواعيد مسجلة</td></tr>`}</tbody></table></div>
+    ${admin ? '<button class="btn outline" id="evadd">+ إضافة موعد (مراجعة / اختبارات / عطلة)</button>' : ""}</div>
+  ${admin ? '<div class="modal-actions"><button class="btn" id="calsave">💾 حفظ التقويم</button></div>' : ""}`;
+}
+function saveCalendar(st, terms, events) {
+  const bad = terms.find((t) => !t.from || !t.to || t.to < t.from);
+  if (bad) { toast(`تحقق من تاريخي بداية ونهاية ${bad.name}`); return; }
+  setDoc(doc(db, "settings", "calendar_" + st), { terms: terms.map((t) => ({ name: t.name, from: t.from, to: t.to })),
+    events: events.slice().sort((a, b) => a.from.localeCompare(b.from)).map((e) => ({ id: e.id, type: e.type, title: (e.title || "").trim(), from: e.from, to: e.to || e.from })),
+    updatedAt: new Date() }).then(() => { audit("تعديل التقويم الدراسي", `${st} / ${st + 1}`); toast("تم حفظ التقويم الدراسي"); }).catch(fail);
+}
+bind.calendar = () => {
+  const st = state.calStart;
+  $("#cp").onclick = () => { state.calStart = st - 1; render(); };
+  $("#cn").onclick = () => { state.calStart = st + 1; render(); };
+  if (!isAdmin()) return;
+  const curTerms = () => termsFor(st).map((t, i) => ({ name: t.name, from: $("#tf" + i).value, to: $("#tt" + i).value }));
+  $("#calsave").onclick = () => saveCalendar(st, curTerms(), eventsFor(st));
+  const evForm = (e) => openModal(`<h3>${e.id ? "تعديل الموعد" : "موعد جديد"}</h3>
+    <label>النوع</label><select id="et">${EVENT_TYPES.map(([t, i]) => `<option value="${t}" ${e.type === t ? "selected" : ""}>${i} ${t}</option>`).join("")}</select>
+    <label>العنوان</label><input id="eti" value="${esc(e.title || "")}" placeholder="مثال: اختبارات الفصل الأول">
+    <div class="row2"><div><label>من تاريخ</label><input id="ef" type="date" value="${e.from}"></div><div><label>إلى تاريخ</label><input id="eto" type="date" value="${e.to || e.from}"></div></div>
+    <div class="modal-actions"><button class="btn" id="save">حفظ</button><button class="btn outline" id="cancel">إلغاء</button></div>`, (b) => {
+    b.querySelector("#cancel").onclick = closeModal;
+    b.querySelector("#save").onclick = () => {
+      const v = (id) => b.querySelector("#" + id).value.trim(); if (!v("ef")) { toast("حدّد تاريخ البداية"); return; }
+      const ne = { id: e.id || Date.now().toString(36), type: v("et"), title: v("eti"), from: v("ef"), to: v("eto") < v("ef") ? v("ef") : v("eto") };
+      const list = eventsFor(st).filter((x) => x.id !== ne.id).concat(ne);
+      closeModal(); saveCalendar(st, curTerms(), list);
+    };
+  });
+  $("#evadd").onclick = () => evForm({ type: "مراجعة", title: "", from: today(), to: today() });
+  document.querySelectorAll("[data-ev]").forEach((b) => b.onclick = () => evForm(eventsFor(st).find((x) => x.id === b.dataset.ev)));
+  document.querySelectorAll("[data-evdel]").forEach((b) => b.onclick = () => { const e = eventsFor(st).find((x) => x.id === b.dataset.evdel);
+    confirmBox(`حذف «${e.title || e.type}»؟`, () => saveCalendar(st, curTerms(), eventsFor(st).filter((x) => x.id !== e.id))); });
+};
+/** Home: current term, today's holiday/exams, upcoming dates and one-click registers for all halaqat. */
+function homeFollowUp() {
+  const now = today(), st = academicStart(now), term = termsFor(st).find((t) => now >= t.from && now <= t.to);
+  const ev = eventsFor(st).concat(eventsFor(st + 1)), todayEv = eventsOn(ev, now), up = upcomingEvents(ev, now, 30).filter((e) => !todayEv.includes(e)).slice(0, 3);
+  return `<div class="panel followup"><div class="row-between"><h3>📅 ${term ? `${esc(term.name)} — حتى \u2066${term.to}\u2069` : "خارج الفصول الدراسية"}</h3>
+      <a href="#/calendar" class="btn small outline">التقويم ←</a></div>
+    ${todayEv.map((e) => `<div class="ev-banner">${evIcon(e.type)} اليوم: ${esc(e.title || e.type)}</div>`).join("")}
+    ${up.map((e) => `<div class="muted">${evIcon(e.type)} ${esc(e.title || e.type)} — \u2066${e.from}\u2069</div>`).join("")}
+    <div style="margin-top:10px"><b>📋 سجل متابعة الحفظ لجميع الحلقات:</b>
+    ${PERIODS.map(([k, t]) => `<button class="btn small outline" data-fu="${k}">${{ DAY: "اليوم", WEEK: "الأسبوع", MONTH: "الشهر", TERM: "الفصل", YEAR: "العام الدراسي" }[k]}</button>`).join(" ")}</div></div>`;
 }
 
 // ---------------------------------------------------------------- centre settings (admin)
@@ -628,6 +722,7 @@ function viewHome() {
     <div class="progress"><div style="width:${pct}%"></div></div>
     <div class="row-between muted" style="margin-top:6px"><span>دفع <b style="color:var(--green)">${paidCount}</b> من ${billable.length} (${pct}٪) — المحصَّل ${money(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</span>
     <span>لم يدفع <b style="color:var(--red)">${unpaid}</b></span></div></div>` : ""}
+  ${homeFollowUp()}
   <div class="shortcuts">${shortcuts.map(([h, i, t]) => `<a href="${h}" class="shortcut"><span>${i}</span>${t}</a>`).join("")}</div>
   ${(() => { const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
     return top.length ? `<h3 class="sec-title">🏆 لوحة الشرف — الأكثر حفظًا</h3><div class="panel">${honorList(top)}</div>` : ""; })()}
@@ -638,7 +733,10 @@ function viewHome() {
       <div class="muted">${h?.teacher ? "👤 " + esc(h.teacher) : "لم يُحدَّد المعلم"}${h?.schedule ? " • 🕒 " + esc(h.schedule) : ""}</div>
       <div class="hnums"><span><b>${l.length}</b> طالب</span><span>👦 ${boys}</span><span>👧 ${girls}</span></div></a>`; }).join("")}</div>`;
 }
-bind.home = () => document.querySelectorAll(".glink").forEach((a) => a.onclick = () => { state.filters.group = a.dataset.g; });
+bind.home = () => {
+  document.querySelectorAll(".glink").forEach((a) => a.onclick = () => { state.filters.group = a.dataset.g; });
+  document.querySelectorAll("[data-fu]").forEach((b) => b.onclick = () => { Object.assign(state.memo, { period: b.dataset.fu, anchor: today(), group: "" }); location.hash = "#/quran"; });
+};
 
 // ---------------------------------------------------------------- students
 function viewStudents() {
