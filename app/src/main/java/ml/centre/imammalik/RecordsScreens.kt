@@ -96,28 +96,6 @@ fun LogCard(log: QuranLog, showStudent: Boolean, onDelete: (() -> Unit)? = null,
 }
 
 @Composable
-fun QuranScreen(state: AppState, openProfile: (String) -> Unit) {
-    var addOpen by remember { mutableStateOf(false) }
-    var filter by remember { mutableStateOf<String?>(null) }
-    val logs = state.recentLogs.filter { filter == null || it.type == filter }
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-        Button(onClick = { addOpen = true }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(50.dp)) {
-            Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("تسجيل تسميع جديد")
-        }
-        Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(filter == null, { filter = null }, { Text("الكل") })
-            LogTypes.all.forEach { t -> FilterChip(filter == t, { filter = if (filter == t) null else t }, { Text(t) }) }
-        }
-        if (logs.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("لا يوجد تسميع مسجل بعد", color = Color.Gray)
-        } else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(logs, key = { it.id }) { log -> LogCard(log, showStudent = true, onClick = { openProfile(log.studentId) }) }
-        }
-    }
-    if (addOpen) LogDialog(state, null) { addOpen = false }
-}
-
-@Composable
 fun LogDialog(state: AppState, initialStudent: Student?, close: () -> Unit) {
     var student by remember { mutableStateOf(initialStudent) }
     var type by remember { mutableStateOf(LogTypes.NEW) }

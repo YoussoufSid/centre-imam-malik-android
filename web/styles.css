@@ -360,3 +360,50 @@ body.dark tr.mrow:hover td { background: #2a2614; }
 .idc-titles b { display: block; white-space: nowrap; font-size: 6.6pt; letter-spacing: -.01em; }
 .idc-row { grid-template-columns: 25mm 1fr; }
 .blank-fill { display: inline-block; width: 22mm; border-bottom: .25mm dotted #999; height: 2.6mm; }
+
+/* ---------- Desktop: sidebar scrollbar at the far right of the screen (v2.11) ----------
+   The page itself no longer scrolls: the menu and the content each have their own scrollbar,
+   and the menu's bar sits on the right edge of the window. */
+@media (min-width: 861px) {
+  .layout { height: 100vh; overflow: hidden; }
+  main { height: 100vh; overflow: auto; }
+  .side { height: 100vh; overflow-y: auto; direction: ltr; scrollbar-width: thin; scrollbar-color: rgba(215,169,30,.8) transparent; }
+  .side > * { direction: rtl; }
+  .side::-webkit-scrollbar { width: 10px; }
+  .side::-webkit-scrollbar-thumb { background: rgba(215,169,30,.75); border-radius: 6px; border: 2px solid #075B3A; }
+  .side::-webkit-scrollbar-track { background: rgba(0,0,0,.12); }
+  /* compact menu so it usually fits without scrolling */
+  .side { padding: 12px 10px; }
+  .side .brand { margin-bottom: 8px; }
+  .side nav a { padding: 7px 12px; margin: 1px 0; font-size: 14.5px; }
+  .nav-sec { margin: 8px 12px 2px; }
+  .side .user { margin-top: 10px; padding-top: 8px; }
+}
+@media print { .layout, main, .side { height: auto !important; overflow: visible !important; } }
+
+a.wa-phone { display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; border-radius: 999px; background: #e7f8ee; color: #128C4A; font-weight: 700; white-space: nowrap; }
+a.wa-phone:hover { background: #c9f0d8; }
+body.dark a.wa-phone { background: #163626; color: #9fe0c0; }
+@media print { a.wa-phone { background: none; padding: 0; color: inherit; } }
+
+/* memorization follow-up */
+tr.nolog td { background: #fff5f5; }
+body.dark tr.nolog td { background: #2a1b1b; }
+.grade-btns { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.grade-btns .btn { padding: 12px; font-size: 16px; }
+.grade-btns .g0, .grade-btns .g1 { background: var(--green); } .grade-btns .g2 { background: #3B7DD8; }
+.grade-btns .g3 { background: #B7791F; } .grade-btns .g4 { background: var(--red); }
+
+.ev-banner { background: #fff4d6; color: #6d4c00; border: 1px solid #f0d58a; border-radius: 10px; padding: 8px 12px; margin: 6px 0; font-weight: 700; }
+body.dark .ev-banner { background: #2a2614; color: #f4d77a; border-color: #5a4a1a; }
+tr.grp-head td { background: #e8f0ec !important; color: var(--green); font-weight: 800; }
+body.dark tr.grp-head td { background: #163626 !important; color: #9fe0c0; }
+tr.cur-term td { background: rgba(7,91,58,.08); } tr.holiday td { background: #fff8e1; }
+body.dark tr.holiday td { background: #2a2614; }
+.followup .btn { margin: 3px 2px; }
+
+.offdays { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
+.offday { display: inline-flex; gap: 6px; align-items: center; border: 1px solid #cbd5d1; border-radius: 999px; padding: 6px 12px; margin: 0; color: var(--text); cursor: pointer; }
+.offday input { width: auto; }
+.offday.on { background: #fff4d6; border-color: #f0d58a; color: #6d4c00; font-weight: 700; }
+body.dark .offday.on { background: #2a2614; color: #f4d77a; }
