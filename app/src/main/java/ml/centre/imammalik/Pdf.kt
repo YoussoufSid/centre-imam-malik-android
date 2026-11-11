@@ -204,6 +204,18 @@ fun shareStudentCard(context: Context, student: Student) {
     field("تاريخ الميلاد", "Né(e) le", date(student.birthDate))
     field("ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
     field("التسجيل", "Inscription", date(student.enrollmentDate))
+    // QR code (bottom-left of the details area)
+    runCatching {
+        val hints = mapOf(com.google.zxing.EncodeHintType.CHARACTER_SET to "UTF-8",
+            com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L,
+            com.google.zxing.EncodeHintType.MARGIN to 1)
+        val m = com.google.zxing.qrcode.QRCodeWriter().encode(qrText(student), com.google.zxing.BarcodeFormat.QR_CODE, 0, 0, hints)
+        val size = 74f; val left = 130f; val top = H - 46f - size - 4f; val cell = size / m.width
+        c.drawRect(left, top, left + size, top + size, Paint().apply { color = 0xFFFFFFFF.toInt() })
+        val dark = Paint().apply { color = 0xFF111111.toInt() }
+        for (yy in 0 until m.height) for (xx in 0 until m.width) if (m.get(xx, yy))
+            c.drawRect(left + xx * cell, top + yy * cell, left + (xx + 1) * cell, top + (yy + 1) * cell, dark)
+    }
     // footer (two lines, Arabic and French)
     val year = academicYearLabel(currentMonth())
     c.drawRect(0f, H - 46f, W, H, Paint().apply { color = GREEN })

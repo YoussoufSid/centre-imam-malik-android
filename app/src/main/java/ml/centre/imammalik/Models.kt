@@ -16,6 +16,9 @@ fun studentNumber(id: String): String {
     return (if (Regex("^[sS]\\d+$").matches(t)) t else t.takeLast(6)).uppercase()
 }
 
+/** Text inside the ID card's QR code (same as the web dashboard). */
+fun qrText(s: Student): String = "Centre Imam Malik\nN° ${studentNumber(s.id)}\n${s.name}"
+
 // ---------- Updates ----------
 
 /** Always the newest phone app (public GitHub Release asset, no login needed). */

@@ -273,4 +273,9 @@ class LogicTest {
         assertEquals("S001", studentNumber("s001"))
         assertEquals("XY12AB", studentNumber("aBcDeFgH9xy12ab"))
     }
+
+    @Test
+    fun cardQrText() {
+        assertEquals("Centre Imam Malik\nN° S040\nآدم", qrText(Student(id = "s040", name = "آدم")))
+    }
 }

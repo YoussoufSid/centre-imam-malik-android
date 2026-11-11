@@ -334,3 +334,7 @@ body.dark .hcard b, body.dark .hnums b { color: #7fd4ac; }
 .idc-foot { line-height: 1.35; font-size: 6pt; padding: .7mm 1.5mm; }
 .idc-foot .fr { font-size: 5.8pt; }
 .idc-foot div + div { color: #f4d77a; }
+
+/* QR code on the card (bottom-left of the details area) */
+.idc-info { position: relative; }
+.idc-info .qr { position: absolute; left: 0; bottom: 0; width: 13mm; height: 13mm; }
