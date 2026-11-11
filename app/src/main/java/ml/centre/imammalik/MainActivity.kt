@@ -316,6 +316,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                             add(MenuEntry("سجل العمليات", Icons.Default.History) { open(Screens.AUDIT) })
                         }
                         if (me.isStaff) add(MenuEntry("الإحصائيات", Icons.Default.Insights) { open(Screens.STATS) })
+                        if (me.isStaff) add(MenuEntry("التقويم الدراسي", Icons.Default.CalendarMonth) { open(Screens.CALENDAR) })
                         add(MenuEntry("التحقق من التحديثات", Icons.Default.SystemUpdate) {
                             state.message = "جارٍ التحقق من التحديثات…"
                             scope.launch {
@@ -369,6 +370,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     Screens.BULK -> BulkAddScreen(state) { screen = null }
                     Screens.TEACHERS -> TeachersScreen(state)
                     Screens.AUDIT -> AuditScreen(state)
+                    Screens.CALENDAR -> CalendarScreen(state, me)
                 }
             } else when (tabs[tab].title) {
                 "الرئيسية" -> Column {
@@ -377,7 +379,8 @@ private fun Dashboard(state: AppState, me: AppUser) {
                             UpdateBanner(latestVersion!!) { updateDialog = true }
                         }
                     }
-                    HomeScreen(state, me, quickActions) { profileId = it.id }
+                    HomeScreen(state, me, quickActions, onReport = { p -> state.memoRequest = p; goTo("الحفظ") },
+                        onCalendar = { open(Screens.CALENDAR) }) { profileId = it.id }
                 }
                 "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { open(Screens.GRADES) },
                     onBulkAdd = { open(Screens.BULK) }) { profileId = it.id }
@@ -411,6 +414,7 @@ object Screens {
     const val BULK = "bulk"
     const val TEACHERS = "teachers"
     const val AUDIT = "audit"
+    const val CALENDAR = "calendar"
     fun title(s: String?): String? = when (s) {
         SETTINGS -> "إعدادات المركز"
         STATS -> "الإحصائيات"
@@ -420,6 +424,7 @@ object Screens {
         BULK -> "إضافة طلاب دفعة واحدة"
         TEACHERS -> "الموظفون والرواتب"
         AUDIT -> "سجل العمليات"
+        CALENDAR -> "التقويم الدراسي"
         else -> null
     }
 }
@@ -444,7 +449,8 @@ fun StatCard(title: String, value: String, icon: ImageVector, modifier: Modifier
 }
 
 @Composable
-private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAction>, open: (Student) -> Unit) {
+private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAction>, onReport: (LogPeriod) -> Unit = {},
+                       onCalendar: () -> Unit = {}, open: (Student) -> Unit) {
     val active = state.students.filter { it.status == "نشط" }
     val present = state.todayAttendance.count { AttendanceStatus.isPresent(it.status) }
     val absent = state.todayAttendance.count { it.status == AttendanceStatus.ABSENT }
@@ -480,6 +486,7 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
                     textAlign = TextAlign.Center)
             }
         }
+        if (me.isStaff) item { FollowUpHomeCard(state, onReport, onCalendar) }
         if (quickActions.isNotEmpty()) item { QuickActions(quickActions) }
         item { DuaCard() }
         if (me.isStaff) {

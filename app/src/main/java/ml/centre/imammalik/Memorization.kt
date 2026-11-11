@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun QuranScreen(state: AppState, openProfile: (String) -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    if (state.memoRequest != null && tab != 2) tab = 2   // opened from the home follow-up card
     val tabs = listOf("تسجيل سريع", "السجل", "التقارير")
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = tab, containerColor = CardBg) {
@@ -199,13 +200,15 @@ private fun MemoReportTab(state: AppState, openProfile: (String) -> Unit) {
     var period by rememberSaveable { mutableStateOf(LogPeriod.WEEK) }
     var anchor by rememberSaveable { mutableStateOf(today()) }
     var group by rememberSaveable { mutableStateOf("") }
-    val range = periodRange(period, anchor)
+    LaunchedEffect(state.memoRequest) { state.memoRequest?.let { p -> period = p; anchor = today(); group = ""; state.memoRequest = null } }
+    val range = periodRange(period, anchor, state::termsFor)
     var logs by remember { mutableStateOf<List<QuranLog>?>(null) }
     LaunchedEffect(range.from, range.to, state.recentLogs.size) { logs = null; state.loadLogs(range.from, range.to) { logs = it } }
     val students = state.students.filter { it.status == "نشط" && (group == "" || it.group == group) }
     val ids = students.map { it.id }.toSet()
     val inScope = logs.orEmpty().filter { it.studentId in ids }
-    val rows = summarizeMemorization(students, inScope).sortedWith(compareByDescending<MemoRow> { it.newAyat }.thenByDescending { it.sessions })
+    val rows = summarizeMemorization(students, inScope).sortedWith(compareBy<MemoRow> { if (group == "") it.student.group.ifBlank { "\uFFFF" } else "" }
+        .thenByDescending { it.newAyat }.thenByDescending { it.sessions })
     val byStudent = inScope.groupBy { it.studentId }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -216,8 +219,29 @@ private fun MemoReportTab(state: AppState, openProfile: (String) -> Unit) {
             }
         }
         item { GroupChips(groups, group) { group = it } }
-        item { MonthSwitcher(range.label, range.to < today(), { anchor = shiftPeriod(period, anchor, -1) }, { anchor = shiftPeriod(period, anchor, 1) }) }
+        item { MonthSwitcher(range.label, range.to < today(), { anchor = shiftPeriod(period, anchor, -1, state::termsFor) }, { anchor = shiftPeriod(period, anchor, 1, state::termsFor) }) }
         if (logs == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        if (period == LogPeriod.DAY) eventsOn(state.eventsFor(academicStart(anchor)), anchor).forEach { e ->
+            item { Text("${EventTypes.icon(e.type)} ${e.type}: ${e.title}", color = Color(0xFFB7791F), fontWeight = FontWeight.Bold) }
+        }
+        val halaqat = summarizeByHalaqa(rows, inScope)
+        if (group == "" && halaqat.size > 1) {
+            item { SectionHeading("ملخص جميع الحلقات") }
+            items(halaqat, key = { "h_" + it.group }) { h ->
+                Card(Modifier.fillMaxWidth().clickable { group = if (h.group == "بدون حلقة") "" else h.group },
+                    colors = CardDefaults.cardColors(containerColor = CardBg)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row { Text(h.group, Modifier.weight(1f), fontWeight = FontWeight.Bold, color = Green)
+                            h.avgGrade?.let { Text(gradeFromScore(it), fontWeight = FontWeight.Bold, color = Green, fontSize = 13.sp) } }
+                        Text("سُجّل لـ ${h.recorded} من ${h.students} طالب • حفظ ${h.newAyat} آية • مراجعة ${h.reviewAyat} آية • ${h.sessions} جلسة",
+                            fontSize = 13.sp, color = SubText)
+                        LinearProgressIndicator(progress = { if (h.students == 0) 0f else h.recorded.toFloat() / h.students },
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp), color = Green)
+                    }
+                }
+            }
+            item { SectionHeading("تفاصيل الطلاب") }
+        }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatCard("آيات الحفظ", rows.sumOf { it.newAyat }.toString(), Icons.Default.MenuBook, Modifier.weight(1f), Green)
@@ -231,7 +255,7 @@ private fun MemoReportTab(state: AppState, openProfile: (String) -> Unit) {
             }
         }
         item {
-            Button(onClick = { shareMemoReport(context, period, range, group, rows, if (period == LogPeriod.DAY) inScope else emptyList()) },
+            Button(onClick = { shareMemoReport(context, period, range, group, rows, if (period == LogPeriod.DAY) inScope else emptyList(), summarizeByHalaqa(rows, inScope)) },
                 Modifier.fillMaxWidth()) { Icon(Icons.Default.PictureAsPdf, null); Spacer(Modifier.width(6.dp)); Text("تقرير PDF للطباعة أو الإرسال") }
         }
         items(rows, key = { it.student.id }) { r ->

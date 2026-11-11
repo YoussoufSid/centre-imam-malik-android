@@ -580,7 +580,8 @@ fun shareMonthStatement(context: Context, month: String, payments: List<Payment>
 }
 
 /** Memorization & review report for a period (day … academic year), one row per student; daily report lists each record. */
-fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, group: String, rows: List<MemoRow>, dayLogs: List<QuranLog>) {
+fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, group: String, rows: List<MemoRow>, dayLogs: List<QuranLog>,
+                    halaqat: List<HalaqaMemo> = emptyList()) {
     val W = 842f; val H = 595f; val M = 20f
     val doc = PdfDocument()
     var pageNo = 1
@@ -591,6 +592,18 @@ fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, gro
     val titleAr = "سجل متابعة الحفظ والمراجعة (${period.label}) — ${range.label}" + (if (group.isNotBlank()) " — $group" else "")
     val titleFr = "Suivi $frPeriod de la mémorisation et de la révision — du ${frDate(range.from)} au ${frDate(range.to)}"
     var y = c.adminHeader(context, W, titleAr, titleFr)
+    // all-halaqat register: one line per halaqa first
+    if (group.isBlank() && halaqat.size > 1) {
+        val hc = listOf(220f to "الحلقة\nHalaqa", 90f to "الطلاب\nÉlèves", 90f to "سُجّل لهم\nSuivis", 90f to "الجلسات\nSéances",
+            90f to "آيات الحفظ\nVersets mémorisés", 90f to "آيات المراجعة\nVersets révisés", 132f to "المعدل\nAppréciation")
+        fun hrow(v: List<String>, h: Float, bold: Boolean = false, fill: Int? = null) {
+            var r = W - M; hc.forEachIndexed { i, (w, _) -> c.cell(r - w, y, w, h, v.getOrElse(i) { "" }, 9f, bold, fill); r -= w }; y += h
+        }
+        hrow(hc.map { it.second }, 30f, true, 0xFFE8F0EC.toInt())
+        halaqat.forEach { h -> hrow(listOf(h.group, num(h.students), num(h.recorded), num(h.sessions), num(h.newAyat), num(h.reviewAyat),
+            h.avgGrade?.let(::gradeFromScore) ?: "-"), 20f) }
+        y += 14f
+    }
     val byStudent = dayLogs.groupBy { it.studentId }
     val cols = listOf(26f to "م\nN°", 150f to "الطالب\nÉlève", 52f to "جلسات الحفظ\nSéances", 52f to "آيات الحفظ\nVersets",
         200f to (if (period == LogPeriod.DAY) "التفاصيل\nDétails" else "السور المحفوظة\nSourates mémorisées"),
@@ -605,12 +618,13 @@ fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, gro
             "${l.type}: ${l.surah}" + (if (l.fromAyah > 0) " ${l.fromAyah}-${l.toAyah}" else "") + (if (l.grade.isNotBlank()) " (${l.grade})" else "")
         } else r.surahs.joinToString("، ")
         val h = (18f + 11f * (detail.count { it == '\n' } + if (detail.length > 40) 1 else 0)).coerceAtMost(60f)
+            .coerceAtLeast(if (group.isBlank() && r.student.group.isNotBlank()) 28f else 18f)
         if (y + h > H - 50f) {
             doc.finishPage(page); pageNo++
             page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create()); c = page.canvas; y = M
             row(cols.map { it.second }, 30f, true, 0xFFE8F0EC.toInt())
         }
-        row(listOf("${i + 1}", r.student.name, num(r.newSessions, true), num(r.newAyat, true), detail,
+        row(listOf("${i + 1}", r.student.name + (if (group.isBlank() && r.student.group.isNotBlank()) "\n" + r.student.group else ""), num(r.newSessions, true), num(r.newAyat, true), detail,
             num(r.reviewSessions, true), num(r.reviewAyat, true), r.avgGrade?.let(::gradeFromScore) ?: "-", num(r.days, true)), h,
             fill = if (r.sessions == 0) 0xFFFBE3E3.toInt() else null)
     }

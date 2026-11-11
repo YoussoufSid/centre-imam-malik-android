@@ -21,12 +21,49 @@ private fun cal(date: String): Calendar = Calendar.getInstance().apply {
 private fun Calendar.key() = fmt().format(time)
 private fun dm(d: String) = if (d.length == 10) "${d.substring(8, 10)}/${d.substring(5, 7)}" else d
 
-/** Academic terms: 1st Sep–Dec, 2nd Jan–Mar, 3rd Apr–Aug. Returns 1..3. */
-fun termOf(month: Int): Int = when (month) { in 9..12 -> 1; in 1..3 -> 2; else -> 3 }
-private val TermNames = listOf("الفصل الأول", "الفصل الثاني", "الفصل الثالث")
+/** Academic year start (September) of a date. */
+fun academicStart(date: String): Int { val y = date.take(4).toInt(); val m = date.substring(5, 7).toInt(); return if (m >= 9) y else y - 1 }
+
+/** A term of the academic calendar (dates yyyy-MM-dd, inclusive). */
+data class Term(val name: String, val from: String, val to: String)
+
+/** Calendar event: review period, exams, holiday or other, set by the administration. */
+data class CalEvent(val id: String, val type: String, val title: String, val from: String, val to: String)
+
+object EventTypes {
+    const val REVIEW = "مراجعة"; const val EXAM = "اختبارات"; const val HOLIDAY = "عطلة"; const val OTHER = "مناسبة"
+    val all = listOf(REVIEW, EXAM, HOLIDAY, OTHER)
+    fun icon(t: String) = when (t) { REVIEW -> "🔁"; EXAM -> "📝"; HOLIDAY -> "🌴"; else -> "📌" }
+}
+
+/** Academic calendar of one year (start = September's year). */
+data class AcademicCalendar(val start: Int, val terms: List<Term>, val events: List<CalEvent>)
+
+val TermNames = listOf("الفصل الأول", "الفصل الثاني", "الفصل الثالث", "الفصل الرابع")
+
+/** Four default terms (used until the administration sets the real dates). */
+fun defaultTerms(start: Int): List<Term> = listOf(
+    Term(TermNames[0], "$start-09-01", "$start-11-30"), Term(TermNames[1], "$start-12-01", "${start + 1}-02-28"),
+    Term(TermNames[2], "${start + 1}-03-01", "${start + 1}-05-31"), Term(TermNames[3], "${start + 1}-06-01", "${start + 1}-08-31"))
+
+/** The term containing [date]; between two terms (holidays) the previous one; before the first, the first. */
+fun termIndexAt(terms: List<Term>, date: String): Int {
+    val i = terms.indexOfFirst { date >= it.from && date <= it.to }
+    if (i >= 0) return i
+    return terms.indexOfLast { it.from <= date }.takeIf { it >= 0 } ?: 0
+}
+
+/** Events touching [date]. */
+fun eventsOn(events: List<CalEvent>, date: String) = events.filter { date >= it.from && date <= it.to.ifBlank { it.from } }
+
+/** Events that are ongoing or start within [days] days after [today], soonest first. */
+fun upcomingEvents(events: List<CalEvent>, today: String, days: Int = 30): List<CalEvent> {
+    val limit = cal(today).apply { add(Calendar.DAY_OF_MONTH, days) }.key()
+    return events.filter { it.to.ifBlank { it.from } >= today && it.from <= limit }.sortedBy { it.from }
+}
 
 /** Date range and Arabic label of the period containing [anchor] (yyyy-MM-dd). Weeks run Monday–Sunday. */
-fun periodRange(p: LogPeriod, anchor: String): PeriodRange {
+fun periodRange(p: LogPeriod, anchor: String, termsFor: (Int) -> List<Term> = ::defaultTerms): PeriodRange {
     val c = cal(anchor)
     return when (p) {
         LogPeriod.DAY -> PeriodRange(c.key(), c.key(), ltr(c.key()))
@@ -41,14 +78,9 @@ fun periodRange(p: LogPeriod, anchor: String): PeriodRange {
             PeriodRange("$m-01", "$m-31", monthName(m))
         }
         LogPeriod.TERM -> {
-            val y = c.get(Calendar.YEAR); val mo = c.get(Calendar.MONTH) + 1
-            val start = if (mo >= 9) y else y - 1     // academic year start
-            val (from, to) = when (termOf(mo)) {
-                1 -> "$start-09-01" to "$start-12-31"
-                2 -> "${start + 1}-01-01" to "${start + 1}-03-31"
-                else -> "${start + 1}-04-01" to "${start + 1}-08-31"
-            }
-            PeriodRange(from, to, "${TermNames[termOf(mo) - 1]} ${ltr("$start / ${start + 1}")}")
+            val start = academicStart(anchor); val terms = termsFor(start).ifEmpty { defaultTerms(start) }
+            val t = terms[termIndexAt(terms, anchor)]
+            PeriodRange(t.from, t.to, "${t.name} ${ltr("$start / ${start + 1}")}")
         }
         LogPeriod.YEAR -> {
             val y = c.get(Calendar.YEAR); val mo = c.get(Calendar.MONTH) + 1
@@ -59,17 +91,20 @@ fun periodRange(p: LogPeriod, anchor: String): PeriodRange {
 }
 
 /** Moves the anchor date one period forward (+1) or back (−1). */
-fun shiftPeriod(p: LogPeriod, anchor: String, delta: Int): String {
+fun shiftPeriod(p: LogPeriod, anchor: String, delta: Int, termsFor: (Int) -> List<Term> = ::defaultTerms): String {
     val c = cal(anchor)
     when (p) {
         LogPeriod.DAY -> c.add(Calendar.DAY_OF_MONTH, delta)
         LogPeriod.WEEK -> c.add(Calendar.DAY_OF_MONTH, 7 * delta)
         LogPeriod.MONTH -> { c.set(Calendar.DAY_OF_MONTH, 1); c.add(Calendar.MONTH, delta) }
-        LogPeriod.TERM -> {   // jump to the first day of the next/previous term
-            val r = periodRange(p, c.key())
-            val edge = cal(if (delta > 0) r.to else r.from)
-            edge.add(Calendar.DAY_OF_MONTH, if (delta > 0) 1 else -1)
-            return edge.key()
+        LogPeriod.TERM -> {   // first day of the next / previous term (crossing into the next or previous year)
+            val start = academicStart(anchor); val terms = termsFor(start).ifEmpty { defaultTerms(start) }
+            val k = termIndexAt(terms, anchor) + delta
+            return when {
+                k < 0 -> termsFor(start - 1).ifEmpty { defaultTerms(start - 1) }.last().from
+                k >= terms.size -> termsFor(start + 1).ifEmpty { defaultTerms(start + 1) }.first().from
+                else -> terms[k].from
+            }
         }
         LogPeriod.YEAR -> c.add(Calendar.YEAR, delta)
     }
@@ -133,3 +168,16 @@ fun nextPosition(last: QuranLog?): Position? {
     val prev = if (idx > 0) Surahs[idx - 1] else Surahs[idx]
     return Position(prev.first, 1, minOf(prev.second, size))
 }
+
+/** Summary of one halaqa for the all-halaqat follow-up register. */
+data class HalaqaMemo(val group: String, val students: Int, val recorded: Int, val newAyat: Int, val reviewAyat: Int,
+                      val sessions: Int, val avgGrade: Double?)
+
+/** Groups student rows by halaqa (students without a halaqa under «بدون حلقة»), halaqas in name order. */
+fun summarizeByHalaqa(rows: List<MemoRow>, logs: List<QuranLog>): List<HalaqaMemo> =
+    rows.groupBy { it.student.group.ifBlank { "بدون حلقة" } }.toSortedMap().map { (g, rs) ->
+        val ids = rs.map { it.student.id }.toSet()
+        val scores = logs.filter { it.studentId in ids }.mapNotNull { gradeScore(it.grade) }
+        HalaqaMemo(g, rs.size, rs.count { it.sessions > 0 }, rs.sumOf { it.newAyat }, rs.sumOf { it.reviewAyat },
+            rs.sumOf { it.sessions }, scores.takeIf { it.isNotEmpty() }?.average())
+    }

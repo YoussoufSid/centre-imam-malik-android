@@ -75,6 +75,14 @@ class AppState {
     /** Bumped whenever centre settings change, so screens showing them recompose. */
     var settingsVersion by mutableStateOf(0)
 
+    /** Academic calendars by start year (documents settings/calendar_YYYY). */
+    val calendars = mutableStateMapOf<Int, AcademicCalendar>()
+    /** Terms of an academic year: the administration's dates, or the four default terms. */
+    fun termsFor(start: Int): List<Term> = calendars[start]?.terms?.takeIf { it.size == 4 } ?: defaultTerms(start)
+    fun eventsFor(start: Int): List<CalEvent> = calendars[start]?.events.orEmpty()
+    /** Set from the home screen to open the follow-up report on a given period (all halaqat). */
+    var memoRequest by mutableStateOf<LogPeriod?>(null)
+
     // ---------- Sync status ----------
     private val pending = mutableStateMapOf<String, Boolean>()
     private val fromCache = mutableStateMapOf<String, Boolean>()
@@ -190,6 +198,17 @@ class AppState {
                 Centre.academicYear = snap.getString("academicYear") ?: ""
                 Centre.currency = snap.getString("currency")?.ifBlank { null } ?: "فرنك"
                 settingsVersion++
+            }
+        }
+        listeners += db.collection("settings").addSnapshotListener { snap, _ ->
+            snap?.documents?.filter { it.id.startsWith("calendar_") }?.forEach { d ->
+                val start = d.id.removePrefix("calendar_").toIntOrNull() ?: return@forEach
+                @Suppress("UNCHECKED_CAST")
+                fun maps(f: String) = (d.get(f) as? List<Map<String, Any?>>).orEmpty()
+                calendars[start] = AcademicCalendar(start,
+                    maps("terms").map { Term(it["name"] as? String ?: "", it["from"] as? String ?: "", it["to"] as? String ?: "") },
+                    maps("events").map { CalEvent(it["id"] as? String ?: "", it["type"] as? String ?: EventTypes.OTHER,
+                        it["title"] as? String ?: "", it["from"] as? String ?: "", it["to"] as? String ?: "") })
             }
         }
         listeners += db.collection("announcements").orderBy("createdAt", Query.Direction.DESCENDING).limit(30)
@@ -798,6 +817,18 @@ class AppState {
     // ---------- Audit log ----------
 
     /** Records a sensitive operation (append-only; only the admin can read it). */
+    /** Saves the calendar of one academic year (admin). */
+    fun saveCalendar(start: Int, terms: List<Term>, events: List<CalEvent>, done: () -> Unit = {}) {
+        val bad = terms.firstOrNull { it.from.isBlank() || it.to.isBlank() || it.to < it.from }
+        if (bad != null) { message = "تحقق من تاريخي بداية ونهاية ${bad.name}"; return }
+        db.collection("settings").document("calendar_$start").set(mapOf(
+            "terms" to terms.map { mapOf("name" to it.name, "from" to it.from, "to" to it.to) },
+            "events" to events.sortedBy { it.from }.map { mapOf("id" to it.id, "type" to it.type, "title" to it.title.trim(), "from" to it.from, "to" to it.to.ifBlank { it.from }) },
+            "updatedAt" to Date())).addOnFailureListener { message = arabicError(it.message) }
+        done(); message = "تم حفظ التقويم الدراسي"
+        audit("تعديل التقويم الدراسي", "$start / ${start + 1}")
+    }
+
     fun audit(action: String, details: String) {
         if (profile?.isStaff != true) return
         db.collection("auditLog").add(mapOf(

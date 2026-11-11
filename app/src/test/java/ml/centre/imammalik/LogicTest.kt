@@ -298,14 +298,15 @@ class LogicTest {
         assertEquals(PeriodRange("2026-11-09", "2026-11-15", "أسبوع 09/11 – 15/11"),
             periodRange(LogPeriod.WEEK, "2026-11-11").let { it.copy(label = plainText(it.label)) })
         assertEquals("2026-11-01", periodRange(LogPeriod.MONTH, "2026-11-11").from)
+        // four default terms: Sep–Nov, Dec–Feb, Mar–May, Jun–Aug
         val t1 = periodRange(LogPeriod.TERM, "2026-11-11")
-        assertEquals("2026-09-01" to "2026-12-31", t1.from to t1.to)
+        assertEquals("2026-09-01" to "2026-11-30", t1.from to t1.to)
         val t2 = periodRange(LogPeriod.TERM, "2027-02-10")
-        assertEquals("2027-01-01" to "2027-03-31", t2.from to t2.to)
+        assertEquals("2026-12-01" to "2027-02-28", t2.from to t2.to)
         val y = periodRange(LogPeriod.YEAR, "2027-05-01")
         assertEquals("2026-09-01" to "2027-08-31", y.from to y.to)
-        assertEquals("2027-01-01", shiftPeriod(LogPeriod.TERM, "2026-11-11", 1))
-        assertEquals("2026-08-31", shiftPeriod(LogPeriod.TERM, "2026-11-11", -1))
+        assertEquals("2026-12-01", shiftPeriod(LogPeriod.TERM, "2026-11-11", 1))
+        assertEquals("2026-06-01", shiftPeriod(LogPeriod.TERM, "2026-11-11", -1))
         assertEquals("2026-11-18", shiftPeriod(LogPeriod.WEEK, "2026-11-11", 1))
         assertEquals("2026-12-01", shiftPeriod(LogPeriod.MONTH, "2026-11-30", 1))
     }
@@ -329,5 +330,34 @@ class LogicTest {
         // finished surah → previous surah in the mushaf
         assertEquals(Position("الفلق", 1, 5), nextPosition(QuranLog(surah = "الناس", fromAyah = 1, toAyah = 6)).let { it!!.copy(to = minOf(it.to, 5)) })
         assertNull(nextPosition(null))
+    }
+
+    @Test
+    fun academicCalendarTerms() {
+        // terms set by the administration, with a holiday gap between term 1 and term 2
+        val terms = listOf(Term("الفصل الأول", "2026-10-01", "2026-12-15"), Term("الفصل الثاني", "2027-01-05", "2027-03-20"),
+            Term("الفصل الثالث", "2027-04-01", "2027-05-31"), Term("الفصل الرابع", "2027-06-01", "2027-07-15"))
+        val f = { start: Int -> if (start == 2026) terms else emptyList() }
+        assertEquals("2026-10-01" to "2026-12-15", periodRange(LogPeriod.TERM, "2026-11-11", f).let { it.from to it.to })
+        // during the holidays between terms → previous term
+        assertEquals("2026-10-01", periodRange(LogPeriod.TERM, "2026-12-25", f).from)
+        assertEquals("2027-01-05", shiftPeriod(LogPeriod.TERM, "2026-11-11", 1, f))
+        assertEquals("2027-09-01", shiftPeriod(LogPeriod.TERM, "2027-07-01", 1, f))   // next year falls back to default terms
+        val ev = listOf(CalEvent("1", EventTypes.HOLIDAY, "عطلة الشتاء", "2026-12-16", "2027-01-04"),
+            CalEvent("2", EventTypes.EXAM, "اختبارات الفصل الأول", "2026-12-08", "2026-12-12"))
+        assertEquals(listOf("1"), eventsOn(ev, "2026-12-20").map { it.id })
+        assertEquals(listOf("2", "1"), upcomingEvents(ev, "2026-12-01", 30).map { it.id })
+        assertEquals(emptyList<CalEvent>(), upcomingEvents(ev, "2026-10-01", 30))
+    }
+
+    @Test
+    fun halaqaSummary() {
+        val a = Student(id = "a", name = "أ", group = "ح1"); val b = Student(id = "b", name = "ب", group = "ح1")
+        val c = Student(id = "c", name = "ج", group = "")
+        val logs = listOf(QuranLog(studentId = "a", date = "2026-11-11", type = LogTypes.NEW, surah = "النبأ", fromAyah = 1, toAyah = 5, grade = "ممتاز"))
+        val h = summarizeByHalaqa(summarizeMemorization(listOf(a, b, c), logs), logs)
+        assertEquals(listOf("بدون حلقة", "ح1"), h.map { it.group })
+        val h1 = h.first { it.group == "ح1" }
+        assertEquals(2, h1.students); assertEquals(1, h1.recorded); assertEquals(5, h1.newAyat); assertEquals(5.0, h1.avgGrade!!, 0.001)
     }
 }
