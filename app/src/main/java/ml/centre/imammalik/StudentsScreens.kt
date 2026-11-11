@@ -144,6 +144,13 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
                         IconButton(onClick = {
                             context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${student.phone}")))
                         }) { Icon(Icons.Default.Phone, "اتصال", tint = Green) }
+                        // WhatsApp directly with the guardian (Mali numbers: 8 digits → +223)
+                        whatsappNumber(student.phone)?.let { wa ->
+                            IconButton(onClick = {
+                                val msg = "السلام عليكم ورحمة الله وبركاته،\nولي أمر الطالب/ة ${student.name}\n\n${Centre.name}"
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$wa?text=" + Uri.encode(msg)))) }
+                            }) { Icon(Icons.Default.Chat, "واتساب ولي الأمر", tint = Color(0xFF25D366)) }
+                        }
                     }
                 }
             }

@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=17";
+import { firebaseConfig } from "./firebase-config.js?v=18";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -269,6 +269,13 @@ function waNumber(phone) {
   if (d.length === 8) d = "223" + d;
   return d.length >= 10 ? d : null;
 }
+/** Guardian phone with a one-tap WhatsApp link (opens the chat with a greeting). */
+const guardianPhone = (s) => {
+  if (!s.phone) return "";
+  const l = waLink(s.phone, `السلام عليكم ورحمة الله وبركاته،\nولي أمر الطالب/ة ${s.name}\n\n${state.settings.name || DEFAULT_NAME}`);
+  return l ? `<a class="wa-phone" href="${l}" target="_blank" rel="noopener" title="مراسلة ولي الأمر عبر واتساب">💬 <span dir="ltr">${esc(s.phone)}</span></a>`
+    : `<span dir="ltr">${esc(s.phone)}</span>`;
+};
 const waLink = (phone, text) => { const n = waNumber(phone); return n ? `https://wa.me/${n}?text=${encodeURIComponent(text)}` : null; };
 
 // ---------------------------------------------------------------- certificate (printable, Islamic frame)
@@ -513,7 +520,7 @@ function viewStudents() {
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
   ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b></td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
-    <td>${esc(s.teacher)}</td><td dir="ltr" style="text-align:right">${esc(s.phone)}</td><td class="num">${s.hizbs || 0}/60</td>
+    <td>${esc(s.teacher)}</td><td>${guardianPhone(s)}</td><td class="num">${s.hizbs || 0}/60</td>
     ${isAdmin() ? `<td class="num">${num(s.monthlyFee)}</td>` : ""}
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
     <td class="actions no-print"><button class="btn small outline" data-edit="${s.id}">تعديل</button>

@@ -1,7 +1,7 @@
 // Service worker: lets the dashboard be installed as a desktop app and open without network.
 // Network-first for our own files (always the latest version when online), cache as fallback.
-const CACHE = "imam-malik-v17";
-const SHELL = ["./", "./index.html", "./styles.css?v=17", "./app.js?v=17", "./firebase-config.js?v=17", "./logo.png", "./building.jpg",
+const CACHE = "imam-malik-v18";
+const SHELL = ["./", "./index.html", "./styles.css?v=18", "./app.js?v=18", "./firebase-config.js?v=18", "./logo.png", "./building.jpg",
   "./icon-192.png", "./icon-512.png", "./manifest.webmanifest", "./vendor/qrcode.js"];
 
 self.addEventListener("install", (e) => {

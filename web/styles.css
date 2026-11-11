@@ -380,3 +380,8 @@ body.dark tr.mrow:hover td { background: #2a2614; }
   .side .user { margin-top: 10px; padding-top: 8px; }
 }
 @media print { .layout, main, .side { height: auto !important; overflow: visible !important; } }
+
+a.wa-phone { display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; border-radius: 999px; background: #e7f8ee; color: #128C4A; font-weight: 700; white-space: nowrap; }
+a.wa-phone:hover { background: #c9f0d8; }
+body.dark a.wa-phone { background: #163626; color: #9fe0c0; }
+@media print { a.wa-phone { background: none; padding: 0; color: inherit; } }

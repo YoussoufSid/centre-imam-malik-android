@@ -22,8 +22,8 @@ android {
         applicationId = "ml.centre.imammalik"
         minSdk = 24
         targetSdk = 35
-        versionCode = 24
-        versionName = "2.10.0"
+        versionCode = 25
+        versionName = "2.11.0"
     }
     // Fixed debug key so every CI build can be installed over the previous one.
     signingConfigs {
