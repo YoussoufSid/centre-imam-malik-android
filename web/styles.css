@@ -401,3 +401,9 @@ body.dark tr.grp-head td { background: #163626 !important; color: #9fe0c0; }
 tr.cur-term td { background: rgba(7,91,58,.08); } tr.holiday td { background: #fff8e1; }
 body.dark tr.holiday td { background: #2a2614; }
 .followup .btn { margin: 3px 2px; }
+
+.offdays { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
+.offday { display: inline-flex; gap: 6px; align-items: center; border: 1px solid #cbd5d1; border-radius: 999px; padding: 6px 12px; margin: 0; color: var(--text); cursor: pointer; }
+.offday input { width: auto; }
+.offday.on { background: #fff4d6; border-color: #f0d58a; color: #6d4c00; font-weight: 700; }
+body.dark .offday.on { background: #2a2614; color: #f4d77a; }

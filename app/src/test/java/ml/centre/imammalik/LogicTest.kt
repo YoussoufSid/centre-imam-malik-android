@@ -295,7 +295,8 @@ class LogicTest {
     @Test
     fun memorizationPeriods() {
         // 2026-11-11 is a Wednesday
-        assertEquals(PeriodRange("2026-11-09", "2026-11-15", "أسبوع 09/11 – 15/11"),
+        // weeks run Saturday–Friday
+        assertEquals(PeriodRange("2026-11-07", "2026-11-13", "أسبوع 07/11 – 13/11"),
             periodRange(LogPeriod.WEEK, "2026-11-11").let { it.copy(label = plainText(it.label)) })
         assertEquals("2026-11-01", periodRange(LogPeriod.MONTH, "2026-11-11").from)
         // four default terms: Sep–Nov, Dec–Feb, Mar–May, Jun–Aug
@@ -359,5 +360,19 @@ class LogicTest {
         assertEquals(listOf("بدون حلقة", "ح1"), h.map { it.group })
         val h1 = h.first { it.group == "ح1" }
         assertEquals(2, h1.students); assertEquals(1, h1.recorded); assertEquals(5, h1.newAyat); assertEquals(5.0, h1.avgGrade!!, 0.001)
+    }
+
+    @Test
+    fun schoolDaysExceptFridayAndSunday() {
+        assertEquals(3, isoDayOfWeek("2026-11-11"))     // Wednesday
+        assertEquals(5, isoDayOfWeek("2026-11-13"))     // Friday
+        assertEquals(7, isoDayOfWeek("2026-11-08"))     // Sunday
+        assertFalse(isSchoolDay("2026-11-13", DEFAULT_OFF_DAYS, emptyList()))
+        assertTrue(isSchoolDay("2026-11-07", DEFAULT_OFF_DAYS, emptyList()))   // Saturday
+        // week 07/11 (Sat) – 13/11 (Fri): Sat, Mon, Tue, Wed, Thu
+        assertEquals(5, schoolDays("2026-11-07", "2026-11-13", DEFAULT_OFF_DAYS, emptyList()))
+        val holiday = listOf(CalEvent("h", EventTypes.HOLIDAY, "عطلة", "2026-11-11", "2026-11-11"))
+        assertEquals(4, schoolDays("2026-11-07", "2026-11-13", DEFAULT_OFF_DAYS, holiday))
+        assertFalse(isSchoolDay("2026-11-11", DEFAULT_OFF_DAYS, holiday))
     }
 }

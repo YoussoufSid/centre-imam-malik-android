@@ -80,6 +80,7 @@ class AppState {
     /** Terms of an academic year: the administration's dates, or the four default terms. */
     fun termsFor(start: Int): List<Term> = calendars[start]?.terms?.takeIf { it.size == 4 } ?: defaultTerms(start)
     fun eventsFor(start: Int): List<CalEvent> = calendars[start]?.events.orEmpty()
+    fun offDaysFor(start: Int): List<Int> = calendars[start]?.offDays ?: DEFAULT_OFF_DAYS
     /** Set from the home screen to open the follow-up report on a given period (all halaqat). */
     var memoRequest by mutableStateOf<LogPeriod?>(null)
 
@@ -208,7 +209,8 @@ class AppState {
                 calendars[start] = AcademicCalendar(start,
                     maps("terms").map { Term(it["name"] as? String ?: "", it["from"] as? String ?: "", it["to"] as? String ?: "") },
                     maps("events").map { CalEvent(it["id"] as? String ?: "", it["type"] as? String ?: EventTypes.OTHER,
-                        it["title"] as? String ?: "", it["from"] as? String ?: "", it["to"] as? String ?: "") })
+                        it["title"] as? String ?: "", it["from"] as? String ?: "", it["to"] as? String ?: "") },
+                    (d.get("offDays") as? List<*>)?.mapNotNull { (it as? Number)?.toInt() } ?: DEFAULT_OFF_DAYS)
             }
         }
         listeners += db.collection("announcements").orderBy("createdAt", Query.Direction.DESCENDING).limit(30)
@@ -818,11 +820,12 @@ class AppState {
 
     /** Records a sensitive operation (append-only; only the admin can read it). */
     /** Saves the calendar of one academic year (admin). */
-    fun saveCalendar(start: Int, terms: List<Term>, events: List<CalEvent>, done: () -> Unit = {}) {
+    fun saveCalendar(start: Int, terms: List<Term>, events: List<CalEvent>, offDays: List<Int> = offDaysFor(start), done: () -> Unit = {}) {
         val bad = terms.firstOrNull { it.from.isBlank() || it.to.isBlank() || it.to < it.from }
         if (bad != null) { message = "تحقق من تاريخي بداية ونهاية ${bad.name}"; return }
         db.collection("settings").document("calendar_$start").set(mapOf(
             "terms" to terms.map { mapOf("name" to it.name, "from" to it.from, "to" to it.to) },
+            "offDays" to offDays.sorted(),
             "events" to events.sortedBy { it.from }.map { mapOf("id" to it.id, "type" to it.type, "title" to it.title.trim(), "from" to it.from, "to" to it.to.ifBlank { it.from }) },
             "updatedAt" to Date())).addOnFailureListener { message = arabicError(it.message) }
         done(); message = "تم حفظ التقويم الدراسي"

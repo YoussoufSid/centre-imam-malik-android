@@ -36,8 +36,27 @@ object EventTypes {
     fun icon(t: String) = when (t) { REVIEW -> "🔁"; EXAM -> "📝"; HOLIDAY -> "🌴"; else -> "📌" }
 }
 
-/** Academic calendar of one year (start = September's year). */
-data class AcademicCalendar(val start: Int, val terms: List<Term>, val events: List<CalEvent>)
+/** Academic calendar of one year (start = September's year). [offDays]: weekly days off, ISO numbers (1 = Monday … 7 = Sunday). */
+data class AcademicCalendar(val start: Int, val terms: List<Term>, val events: List<CalEvent>, val offDays: List<Int> = DEFAULT_OFF_DAYS)
+
+/** Weekly days off by default: Friday and Sunday. */
+val DEFAULT_OFF_DAYS = listOf(5, 7)
+val WeekDayNames = listOf("الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد")   // ISO 1..7
+
+/** ISO day of week of a date: 1 = Monday … 7 = Sunday. */
+fun isoDayOfWeek(date: String): Int = (cal(date).get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
+
+/** A school day: not a weekly day off and not inside a holiday. */
+fun isSchoolDay(date: String, offDays: List<Int>, events: List<CalEvent>): Boolean =
+    isoDayOfWeek(date) !in offDays && eventsOn(events, date).none { it.type == EventTypes.HOLIDAY }
+
+/** Number of school days between two dates (inclusive). */
+fun schoolDays(from: String, to: String, offDays: List<Int>, events: List<CalEvent>): Int {
+    if (to < from) return 0
+    var n = 0; val c = cal(from)
+    while (true) { val d = c.key(); if (d > to) break; if (isSchoolDay(d, offDays, events)) n++; c.add(Calendar.DAY_OF_MONTH, 1) }
+    return n
+}
 
 val TermNames = listOf("الفصل الأول", "الفصل الثاني", "الفصل الثالث", "الفصل الرابع")
 
@@ -62,13 +81,13 @@ fun upcomingEvents(events: List<CalEvent>, today: String, days: Int = 30): List<
     return events.filter { it.to.ifBlank { it.from } >= today && it.from <= limit }.sortedBy { it.from }
 }
 
-/** Date range and Arabic label of the period containing [anchor] (yyyy-MM-dd). Weeks run Monday–Sunday. */
+/** Date range and Arabic label of the period containing [anchor] (yyyy-MM-dd). Weeks run Saturday–Friday. */
 fun periodRange(p: LogPeriod, anchor: String, termsFor: (Int) -> List<Term> = ::defaultTerms): PeriodRange {
     val c = cal(anchor)
     return when (p) {
         LogPeriod.DAY -> PeriodRange(c.key(), c.key(), ltr(c.key()))
         LogPeriod.WEEK -> {
-            val back = (c.get(Calendar.DAY_OF_WEEK) + 5) % 7   // Monday = 0
+            val back = c.get(Calendar.DAY_OF_WEEK) % 7          // Saturday = 0 … Friday = 6
             c.add(Calendar.DAY_OF_MONTH, -back); val from = c.key()
             c.add(Calendar.DAY_OF_MONTH, 6); val to = c.key()
             PeriodRange(from, to, "أسبوع ${ltr(dm(from))} – ${ltr(dm(to))}")

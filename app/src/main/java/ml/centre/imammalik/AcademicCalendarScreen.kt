@@ -1,5 +1,6 @@
 package ml.centre.imammalik
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,6 +23,7 @@ fun CalendarScreen(state: AppState, me: AppUser) {
     val saved = state.calendars[start]
     val terms = remember(start, saved) { mutableStateListOf(*state.termsFor(start).toTypedArray()) }
     val events = remember(start, saved) { mutableStateListOf(*state.eventsFor(start).toTypedArray()) }
+    val offDays = remember(start, saved) { mutableStateListOf(*state.offDaysFor(start).toTypedArray()) }
     var editing by remember { mutableStateOf<CalEvent?>(null) }
     val admin = me.isAdmin
     val now = today()
@@ -30,6 +32,12 @@ fun CalendarScreen(state: AppState, me: AppUser) {
         MonthSwitcher("العام الدراسي ${ltr("$start / ${start + 1}")}", true, { start-- }, { start++ })
         if (saved == null) Text("لم تُحدِّد الإدارة تواريخ الفصول لهذا العام بعد؛ تظهر تواريخ افتراضية." +
             (if (admin) " عدّلها ثم اضغط «حفظ التقويم»." else ""), fontSize = 13.sp, color = Color(0xFFB7791F))
+        SectionHeading("أيام العطلة الأسبوعية")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            WeekDayNames.forEachIndexed { i, d -> val iso = i + 1
+                FilterChip(iso in offDays, { if (admin) { if (iso in offDays) offDays.remove(iso) else offDays.add(iso) } }, { Text(d) }) }
+        }
+        Text("أيام الدراسة: " + WeekDayNames.filterIndexed { i, _ -> (i + 1) !in offDays }.joinToString("، "), fontSize = 13.sp, color = SubText)
         SectionHeading("الفصول الدراسية الأربعة")
         terms.forEachIndexed { i, t ->
             val current = now >= t.from && now <= t.to
@@ -64,7 +72,7 @@ fun CalendarScreen(state: AppState, me: AppUser) {
             OutlinedButton(onClick = { editing = CalEvent("", EventTypes.REVIEW, "", now, now) }, Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Add, null); Text(" إضافة موعد (مراجعة / اختبارات / عطلة)")
             }
-            Button(onClick = { state.saveCalendar(start, terms.toList(), events.toList()) }, Modifier.fillMaxWidth().height(50.dp)) {
+            Button(onClick = { state.saveCalendar(start, terms.toList(), events.toList(), offDays.toList()) }, Modifier.fillMaxWidth().height(50.dp)) {
                 Icon(Icons.Default.Save, null); Spacer(Modifier.width(6.dp)); Text("حفظ التقويم")
             }
         }
@@ -122,6 +130,8 @@ fun FollowUpHomeCard(state: AppState, openReport: (LogPeriod) -> Unit, openCalen
                     Modifier.weight(1f), fontWeight = FontWeight.Bold, color = Green)
                 TextButton(onClick = openCalendar) { Text("التقويم") }
             }
+            if (isoDayOfWeek(now) in state.offDaysFor(start))
+                Text("🕌 اليوم ${WeekDayNames[isoDayOfWeek(now) - 1]}: عطلة أسبوعية", fontWeight = FontWeight.Bold, color = Color(0xFFB7791F))
             todayEvents.forEach { e ->
                 Text("${EventTypes.icon(e.type)} اليوم: ${e.title.ifBlank { e.type }}", fontWeight = FontWeight.Bold,
                     color = if (e.type == EventTypes.HOLIDAY) Color(0xFFB7791F) else Green)

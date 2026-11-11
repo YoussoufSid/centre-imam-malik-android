@@ -78,6 +78,9 @@ private fun QuickSheet(state: AppState, openProfile: (String) -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         GroupChips(groups, group) { group = it }
         DateField(date, { date = it }, "تاريخ التسميع")
+        val ys = academicStart(date)
+        if (!isSchoolDay(date, state.offDaysFor(ys), state.eventsFor(ys)))
+            Text("⚠️ ${WeekDayNames[isoDayOfWeek(date) - 1]} ${ltr(date)} ليس يوم دراسة (عطلة)", color = Color(0xFFB7791F), fontWeight = FontWeight.Bold, fontSize = 13.sp)
         val done = students.count { onDate[it.id] != null }
         Text("سُجّل لـ $done من ${students.size} طالب • اضغط «حفظ» أو «مراجعة» ثم التقدير",
             fontSize = 13.sp, color = SubText, modifier = Modifier.padding(vertical = 4.dp))
@@ -221,6 +224,11 @@ private fun MemoReportTab(state: AppState, openProfile: (String) -> Unit) {
         item { GroupChips(groups, group) { group = it } }
         item { MonthSwitcher(range.label, range.to < today(), { anchor = shiftPeriod(period, anchor, -1, state::termsFor) }, { anchor = shiftPeriod(period, anchor, 1, state::termsFor) }) }
         if (logs == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        val yStart = academicStart(range.from)
+        val evs = state.eventsFor(yStart) + state.eventsFor(yStart + 1)
+        val sDays = schoolDays(range.from, minOf(range.to, today()), state.offDaysFor(yStart), evs)
+        item { Text(if (period == LogPeriod.DAY && isoDayOfWeek(anchor) in state.offDaysFor(yStart)) "🕌 ${WeekDayNames[isoDayOfWeek(anchor) - 1]}: عطلة أسبوعية"
+            else "أيام الدراسة في هذه الفترة (حتى اليوم): $sDays", fontSize = 13.sp, color = SubText) }
         if (period == LogPeriod.DAY) eventsOn(state.eventsFor(academicStart(anchor)), anchor).forEach { e ->
             item { Text("${EventTypes.icon(e.type)} ${e.type}: ${e.title}", color = Color(0xFFB7791F), fontWeight = FontWeight.Bold) }
         }

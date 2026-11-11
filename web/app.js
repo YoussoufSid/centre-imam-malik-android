@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=20";
+import { firebaseConfig } from "./firebase-config.js?v=21";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -95,7 +95,7 @@ function listen() {
   state.unsub.forEach((u) => u()); state.unsub = [];
   const sub = (ref, fn) => state.unsub.push(onSnapshot(ref, fn, fail));
   sub(collection(db, "settings"), (q) => { q.docs.filter((d) => d.id.startsWith("calendar_")).forEach((d) => {
-    state.calendars[+d.id.slice(9)] = { terms: d.data().terms || [], events: d.data().events || [] }; }); render(); });
+    state.calendars[+d.id.slice(9)] = { terms: d.data().terms || [], events: d.data().events || [], offDays: d.data().offDays }; }); render(); });
   sub(doc(db, "settings", "centre"), (s) => { if (s.exists()) { state.settings = { name: DEFAULT_NAME, currency: "فرنك", ...s.data() };
     if (!state.settings.phone) state.settings.phone = DEFAULT_PHONE; } render(); });
   sub(collection(db, "students"), (q) => {
@@ -434,6 +434,13 @@ const defaultTerms = (st) => [[`${st}-09-01`, `${st}-11-30`], [`${st}-12-01`, `$
 /** Terms of an academic year: the administration's dates, else the four default terms (same rule as the app). */
 const termsFor = (st) => { const t = state.calendars[st]?.terms; return t && t.length === 4 ? t : defaultTerms(st); };
 const eventsFor = (st) => state.calendars[st]?.events || [];
+/** Weekly days off (ISO 1 = Monday … 7 = Sunday); default Friday and Sunday. */
+const DEFAULT_OFF = [5, 7];
+const WEEKDAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
+const offDaysFor = (st) => state.calendars[st]?.offDays || DEFAULT_OFF;
+const isoDow = (d) => (dParse(d).getUTCDay() + 6) % 7 + 1;
+const isSchoolDay = (d, off, ev) => !off.includes(isoDow(d)) && !eventsOn(ev, d).some((e) => e.type === "عطلة");
+const schoolDays = (from, to, off, ev) => { let n = 0; for (let d = from; d <= to; d = dAdd(d, 1)) if (isSchoolDay(d, off, ev)) n++; return n; };
 const termIndexAt = (terms, d) => { const i = terms.findIndex((t) => d >= t.from && d <= t.to); if (i >= 0) return i;
   let k = -1; terms.forEach((t, j) => { if (t.from <= d) k = j; }); return k >= 0 ? k : 0; };
 const eventsOn = (ev, d) => ev.filter((e) => d >= e.from && d <= (e.to || e.from));
@@ -443,7 +450,7 @@ const evIcon = (t) => (EVENT_TYPES.find((x) => x[0] === t) || ["", "📌"])[1];
 function periodRange(p, anchor) {
   const y = +anchor.slice(0, 4), mo = +anchor.slice(5, 7), start = mo >= 9 ? y : y - 1, yl = `\u2066${start} / ${start + 1}\u2069`;
   if (p === "DAY") return { from: anchor, to: anchor, label: `\u2066${anchor}\u2069` };
-  if (p === "WEEK") { const back = (dParse(anchor).getUTCDay() + 6) % 7; const from = dAdd(anchor, -back), to = dAdd(from, 6);
+  if (p === "WEEK") { /* week: Saturday–Friday */ const back = (dParse(anchor).getUTCDay() + 1) % 7; const from = dAdd(anchor, -back), to = dAdd(from, 6);
     return { from, to, label: `أسبوع \u2066${dm(from)} – ${dm(to)}\u2069` }; }
   if (p === "MONTH") return { from: anchor.slice(0, 7) + "-01", to: anchor.slice(0, 7) + "-31", label: monthName(anchor.slice(0, 7)) };
   if (p === "TERM") { const ts = termsFor(start), t = ts[termIndexAt(ts, anchor)]; return { from: t.from, to: t.to, label: `${t.name} ${yl}` }; }
@@ -503,6 +510,8 @@ function viewQuran() {
     x.logs.forEach((l) => { const g = gradeScore(l.grade); if (g != null) h.sc.push(g); }); });
   const halRows = Object.entries(hal);
   const todayEv = day ? eventsOn(eventsFor(academicStart(m.anchor)), m.anchor) : [];
+  const ys = academicStart(r.from), sDays = schoolDays(r.from, r.to < today() ? r.to : today(), offDaysFor(ys), eventsFor(ys).concat(eventsFor(ys + 1)));
+  const offToday = day && offDaysFor(ys).includes(isoDow(m.anchor));
   return `<h1>الحفظ والمراجعة</h1><div class="sub">سجل المتابعة اليومي والأسبوعي والشهري والفصلي والسنوي</div>
   <div class="toolbar">${PERIODS.map(([k, t]) => `<button class="btn small ${m.period === k ? "" : "outline"}" data-per="${k}">${t}</button>`).join("")}
     <select id="mg"><option value="">كل الحلقات</option>${groups().map((g) => `<option ${m.group === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select>
@@ -514,6 +523,7 @@ function viewQuran() {
     <div class="card stat"><div class="l">آيات المراجعة</div><div class="v">${num(rows.reduce((a, x) => a + x.revA, 0))}</div></div>
     <div class="card stat"><div class="l">جلسات التسميع</div><div class="v">${num(logs.length)}</div></div>
     <div class="card stat red"><div class="l">طلاب بلا تسجيل</div><div class="v">${num(rows.filter((x) => !x.logs.length).length)}</div></div></div>
+  ${offToday ? `<div class="ev-banner">🕌 ${WEEKDAYS[isoDow(m.anchor) - 1]}: عطلة أسبوعية</div>` : `<div class="muted">أيام الدراسة في هذه الفترة (حتى اليوم): <b>${sDays}</b></div>`}
   ${todayEv.map((e) => `<div class="ev-banner">${evIcon(e.type)} ${esc(e.type)}: ${esc(e.title || "")}</div>`).join("")}
   ${allG && halRows.length > 1 ? `<div class="panel"><h3>سجل المتابعة لجميع الحلقات — ${r.label}</h3><div class="table-wrap"><table><thead><tr><th>الحلقة</th>
     <th class="num">الطلاب</th><th class="num">سُجّل لهم</th><th class="num">الجلسات</th><th class="num">آيات الحفظ</th><th class="num">آيات المراجعة</th><th>المعدل</th><th class="no-print"></th></tr></thead><tbody>
@@ -582,6 +592,9 @@ function viewCalendar() {
   <div class="toolbar"><button class="btn outline small" id="cp">◀ السابق</button><b>العام الدراسي \u2066${st} / ${st + 1}\u2069</b>
     <button class="btn outline small" id="cn">التالي ▶</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
   ${saved ? "" : `<div class="ev-banner">لم تُحدِّد الإدارة تواريخ الفصول لهذا العام بعد؛ تظهر تواريخ افتراضية.${admin ? " عدّلها ثم اضغط «حفظ التقويم»." : ""}</div>`}
+  <div class="panel"><h3>أيام العطلة الأسبوعية</h3><div class="offdays">${WEEKDAYS.map((d, i) => `<label class="offday ${offDaysFor(st).includes(i + 1) ? "on" : ""}">
+    <input type="checkbox" data-off="${i + 1}" ${offDaysFor(st).includes(i + 1) ? "checked" : ""} ${admin ? "" : "disabled"}> ${d}</label>`).join("")}</div>
+    <div class="muted">أيام الدراسة: ${WEEKDAYS.filter((_, i) => !offDaysFor(st).includes(i + 1)).join("، ")}</div></div>
   <div class="panel"><h3>الفصول الدراسية الأربعة</h3><div class="table-wrap"><table><thead><tr><th>الفصل</th><th>البداية</th><th>النهاية</th></tr></thead><tbody>
     ${terms.map((t, i) => `<tr class="${now >= t.from && now <= t.to ? "cur-term" : ""}"><td><b>${esc(t.name)}</b>${now >= t.from && now <= t.to ? ' <span class="chip ok">الحالي</span>' : ""}</td>
       <td>${admin ? `<input type="date" id="tf${i}" value="${t.from}">` : `\u2066${t.from}\u2069`}</td>
@@ -593,10 +606,10 @@ function viewCalendar() {
     ${admin ? '<button class="btn outline" id="evadd">+ إضافة موعد (مراجعة / اختبارات / عطلة)</button>' : ""}</div>
   ${admin ? '<div class="modal-actions"><button class="btn" id="calsave">💾 حفظ التقويم</button></div>' : ""}`;
 }
-function saveCalendar(st, terms, events) {
+function saveCalendar(st, terms, events, offDays = offDaysFor(st)) {
   const bad = terms.find((t) => !t.from || !t.to || t.to < t.from);
   if (bad) { toast(`تحقق من تاريخي بداية ونهاية ${bad.name}`); return; }
-  setDoc(doc(db, "settings", "calendar_" + st), { terms: terms.map((t) => ({ name: t.name, from: t.from, to: t.to })),
+  setDoc(doc(db, "settings", "calendar_" + st), { terms: terms.map((t) => ({ name: t.name, from: t.from, to: t.to })), offDays: offDays.slice().sort(),
     events: events.slice().sort((a, b) => a.from.localeCompare(b.from)).map((e) => ({ id: e.id, type: e.type, title: (e.title || "").trim(), from: e.from, to: e.to || e.from })),
     updatedAt: new Date() }).then(() => { audit("تعديل التقويم الدراسي", `${st} / ${st + 1}`); toast("تم حفظ التقويم الدراسي"); }).catch(fail);
 }
@@ -606,7 +619,9 @@ bind.calendar = () => {
   $("#cn").onclick = () => { state.calStart = st + 1; render(); };
   if (!isAdmin()) return;
   const curTerms = () => termsFor(st).map((t, i) => ({ name: t.name, from: $("#tf" + i).value, to: $("#tt" + i).value }));
-  $("#calsave").onclick = () => saveCalendar(st, curTerms(), eventsFor(st));
+  const curOff = () => [...document.querySelectorAll("[data-off]")].filter((c) => c.checked).map((c) => +c.dataset.off);
+  document.querySelectorAll("[data-off]").forEach((c) => c.onchange = () => c.parentElement.classList.toggle("on", c.checked));
+  $("#calsave").onclick = () => saveCalendar(st, curTerms(), eventsFor(st), curOff());
   const evForm = (e) => openModal(`<h3>${e.id ? "تعديل الموعد" : "موعد جديد"}</h3>
     <label>النوع</label><select id="et">${EVENT_TYPES.map(([t, i]) => `<option value="${t}" ${e.type === t ? "selected" : ""}>${i} ${t}</option>`).join("")}</select>
     <label>العنوان</label><input id="eti" value="${esc(e.title || "")}" placeholder="مثال: اختبارات الفصل الأول">
@@ -617,13 +632,13 @@ bind.calendar = () => {
       const v = (id) => b.querySelector("#" + id).value.trim(); if (!v("ef")) { toast("حدّد تاريخ البداية"); return; }
       const ne = { id: e.id || Date.now().toString(36), type: v("et"), title: v("eti"), from: v("ef"), to: v("eto") < v("ef") ? v("ef") : v("eto") };
       const list = eventsFor(st).filter((x) => x.id !== ne.id).concat(ne);
-      closeModal(); saveCalendar(st, curTerms(), list);
+      closeModal(); saveCalendar(st, curTerms(), list, curOff());
     };
   });
   $("#evadd").onclick = () => evForm({ type: "مراجعة", title: "", from: today(), to: today() });
   document.querySelectorAll("[data-ev]").forEach((b) => b.onclick = () => evForm(eventsFor(st).find((x) => x.id === b.dataset.ev)));
   document.querySelectorAll("[data-evdel]").forEach((b) => b.onclick = () => { const e = eventsFor(st).find((x) => x.id === b.dataset.evdel);
-    confirmBox(`حذف «${e.title || e.type}»؟`, () => saveCalendar(st, curTerms(), eventsFor(st).filter((x) => x.id !== e.id))); });
+    confirmBox(`حذف «${e.title || e.type}»؟`, () => saveCalendar(st, curTerms(), eventsFor(st).filter((x) => x.id !== e.id), curOff())); });
 };
 /** Home: current term, today's holiday/exams, upcoming dates and one-click registers for all halaqat. */
 function homeFollowUp() {
@@ -631,6 +646,7 @@ function homeFollowUp() {
   const ev = eventsFor(st).concat(eventsFor(st + 1)), todayEv = eventsOn(ev, now), up = upcomingEvents(ev, now, 30).filter((e) => !todayEv.includes(e)).slice(0, 3);
   return `<div class="panel followup"><div class="row-between"><h3>📅 ${term ? `${esc(term.name)} — حتى \u2066${term.to}\u2069` : "خارج الفصول الدراسية"}</h3>
       <a href="#/calendar" class="btn small outline">التقويم ←</a></div>
+    ${offDaysFor(st).includes(isoDow(now)) ? `<div class="ev-banner">🕌 اليوم ${WEEKDAYS[isoDow(now) - 1]}: عطلة أسبوعية</div>` : ""}
     ${todayEv.map((e) => `<div class="ev-banner">${evIcon(e.type)} اليوم: ${esc(e.title || e.type)}</div>`).join("")}
     ${up.map((e) => `<div class="muted">${evIcon(e.type)} ${esc(e.title || e.type)} — \u2066${e.from}\u2069</div>`).join("")}
     <div style="margin-top:10px"><b>📋 سجل متابعة الحفظ لجميع الحلقات:</b>
