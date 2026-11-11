@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=9";
+import { firebaseConfig } from "./firebase-config.js?v=10";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -255,8 +255,7 @@ function printCertificate(s) {
     : h === 0 ? "تقديرًا لجهده ومواظبته في حلقات تحفيظ القرآن الكريم."
     : `قد أتمّ حفظ ${h} حزبًا من كتاب الله تعالى${h >= 2 ? ` (≈ ${Math.floor(h / 2)} جزءًا)` : ""}، تقديرًا لجهده ومواظبته.`;
   let hijri = ""; try { hijri = new Date().toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
-  const box = document.createElement("div"); box.id = "cert";
-  box.innerHTML = `<div class="cert"><div class="cert-in">
+  showPrintOverlay(`<div class="cert"><div class="cert-in">
     <span class="corner tl">۞</span><span class="corner tr">۞</span><span class="corner bl">۞</span><span class="corner br">۞</span>
     <img src="logo.png" alt=""><div class="cert-centre">${esc(state.settings.name || DEFAULT_NAME)}</div>
     <div class="cert-title">${khatm ? "شهادة ختم القرآن الكريم" : "شهادة تقدير"}</div>
@@ -266,11 +265,37 @@ function printCertificate(s) {
     <p class="muted">نسأل الله أن يجعله من أهل القرآن الذين هم أهل الله وخاصته.</p>
     <div class="cert-sign"><div>حُرّر بتاريخ \u2066${today()}\u2069${hijri ? `<br>الموافق ${esc(hijri)}` : ""}</div>
       ${s.teacher ? `<div>المعلم<br><b>${esc(s.teacher)}</b><hr></div>` : ""}<div>مدير المركز<br><b>${esc(state.settings.director || "")}</b><hr></div></div>
-  </div></div><div class="no-print cert-actions"><button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button></div>`;
+  </div></div>`);
+}
+
+// ---------------------------------------------------------------- student ID cards
+/** "s001" → "S001"; generated ids → last 6 characters. Same rule as the phone app. */
+const studentNumber = (id) => (/^[sS]\d+$/.test(id) ? id : String(id).slice(-6)).toUpperCase();
+const ltrText = (t) => `\u2066${esc(t)}\u2069`;
+function cardHtml(s) {
+  const year = yearLabel(currentMonth());
+  const row = (l, v) => v ? `<div><span>${l}:</span> ${v}</div>` : "";
+  return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
+      <span>بطاقة طالب • Carte d'élève</span></div></div>
+    <div class="idc-body"><div class="idc-info"><div class="idc-name">${esc(s.name)}</div>
+      ${row("الحلقة", esc(s.group || ""))}${row("المعلم", esc(s.teacher || ""))}${row("تاريخ الميلاد", s.birthDate ? ltrText(s.birthDate) : "")}
+      ${row("هاتف ولي الأمر", s.phone ? ltrText(s.phone) : "")}${row("تاريخ التسجيل", s.enrollmentDate ? ltrText(s.enrollmentDate) : "")}</div>
+      <div class="idc-side"><div class="idc-photo">الصورة</div><div class="idc-no">رقم: ${ltrText(studentNumber(s.id))}</div></div></div>
+    <div class="idc-foot">العام الدراسي ${year}${state.settings.phone ? ` • هاتف المركز: ${ltrText(state.settings.phone)}` : ""}</div></div>`;
+}
+function printCards(list) {
+  if (!list.length) { toast("لا يوجد طلاب"); return; }
+  showPrintOverlay(`<div class="cards-sheet">${list.map(cardHtml).join("")}</div>`,
+    `${list.length} بطاقة — 10 بطاقات في كل صفحة A4، قصّها على الخطوط`);
+}
+/** Full-screen preview with Print / Close; only its content is printed. */
+function showPrintOverlay(inner, note = "") {
+  const box = document.createElement("div"); box.id = "cert";
+  box.innerHTML = `<div class="no-print cert-actions"><button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button>
+    ${note ? `<div class="cert-note">${esc(note)}</div>` : ""}</div>${inner}`;
   document.body.appendChild(box); document.body.classList.add("cert-mode");
-  const close = () => { box.remove(); document.body.classList.remove("cert-mode"); };
   box.querySelector("#cprint").onclick = () => window.print();
-  box.querySelector("#cclose").onclick = close;
+  box.querySelector("#cclose").onclick = () => { box.remove(); document.body.classList.remove("cert-mode"); };
 }
 
 // ---------------------------------------------------------------- monthly report (admin)
@@ -397,7 +422,7 @@ function viewStudents() {
   const list = filterStudents(state.students);
   return `<h1>الطلاب</h1><div class="sub">${state.students.length} طالب مسجل</div>
   <div class="toolbar"><input id="fq" placeholder="🔍 بحث بالاسم أو الهاتف" value="${esc(state.filters.q)}">${groupSelect()}
-    <button class="btn" id="add">+ إضافة طالب</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
+    <button class="btn" id="add">+ إضافة طالب</button><button class="btn outline" id="cards">🪪 بطاقات الطلاب</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
     <span class="muted">${list.length} نتيجة</span></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
@@ -407,12 +432,15 @@ function viewStudents() {
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
     <td class="actions no-print"><button class="btn small outline" data-edit="${s.id}">تعديل</button>
     <button class="btn small gold" data-cert="${s.id}" title="شهادة">🎓</button>
+    <button class="btn small outline" data-card="${s.id}" title="بطاقة الطالب">🪪</button>
     ${isAdmin() ? `<button class="btn small danger" data-del="${s.id}">حذف</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="10" class="muted">لا توجد نتائج</td></tr>`}
   </tbody></table></div>`;
 }
 bind.students = () => {
   bindFilters();
   $("#add").onclick = () => studentForm({ status: ACTIVE, enrollmentDate: today(), group: state.filters.group && state.filters.group !== "-" ? state.filters.group : "" });
+  $("#cards").onclick = () => printCards(filterStudents(state.students).filter((s) => (s.status || ACTIVE) === ACTIVE));
+  document.querySelectorAll("[data-card]").forEach((b) => b.onclick = () => printCards([state.students.find((s) => s.id === b.dataset.card)]));
   document.querySelectorAll("[data-cert]").forEach((b) => b.onclick = () => printCertificate(state.students.find((s) => s.id === b.dataset.cert)));
   document.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => studentForm(state.students.find((s) => s.id === b.dataset.edit)));
   document.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => {

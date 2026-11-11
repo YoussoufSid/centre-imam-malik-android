@@ -164,6 +164,11 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
                 Text(if (student.hizbs >= TOTAL_HIZBS) "شهادة ختم القرآن (PDF)" else "شهادة تقدير بالحفظ (PDF)")
             }
         }
+        if (me.isStaff) item {
+            OutlinedButton(onClick = { shareStudentCard(context, student) }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Badge, null, tint = Green); Spacer(Modifier.width(6.dp)); Text("بطاقة الطالب (PDF)")
+            }
+        }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatCard("نسبة الحضور", rate, Icons.Default.FactCheck, Modifier.weight(1f), Green)

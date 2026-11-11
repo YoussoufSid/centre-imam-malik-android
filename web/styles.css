@@ -260,7 +260,10 @@ a.wa:hover { background: #c9f0d8; }
 .cert-sign { display: flex; justify-content: space-around; width: 100%; margin-top: 18px; font-size: 14px; color: #555; }
 .cert-sign hr { width: 150px; border: 0; border-top: 1px solid #999; margin-top: 34px; }
 @media print {
-  @page { size: A4 landscape; margin: 0; }
+  @page cert { size: A4 landscape; margin: 0; }
+  @page cards { size: A4 portrait; margin: 5mm; }
+  body.cert-mode .cert { page: cert; }
+  body.cert-mode .cards-sheet { page: cards; }
   body.cert-mode #app, body.cert-mode .toast, body.cert-mode .modal { display: none !important; }
   body.cert-mode #cert { position: static; background: none; padding: 0; }
   body.cert-mode .cert { box-shadow: none; width: 100%; height: 100vh; aspect-ratio: auto; }
@@ -291,3 +294,22 @@ body.dark .chip.ok { background: #163626; color: #9fe0c0; } body.dark .chip.gray
 body.dark .banner h1, body.dark .banner p, body.dark .login-hero h1 { color: #fff; }
 body.dark .progress { background: #2a3832; }
 body.dark .hcard b, body.dark .hnums b { color: #7fd4ac; }
+
+/* ---------- Student ID cards (85.6 × 54 mm) ---------- */
+.cert-note { color: #fff; margin-top: 6px; font-size: 13px; }
+.cards-sheet { display: grid; grid-template-columns: repeat(2, 85.6mm); gap: 4mm; justify-content: center; background: #fff; padding: 6mm; width: max-content; margin: auto; }
+.idcard { width: 85.6mm; height: 54mm; border: 1px dashed #bbb; border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column;
+  background: #fffdf5; color: #222; font-size: 7.5pt; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.idc-head { display: flex; align-items: center; gap: 2mm; background: #075B3A; color: #fff; padding: 1.5mm 2.5mm; border-bottom: 0.8mm solid var(--gold); }
+.idc-head img { width: 10mm; height: 10mm; border-radius: 50%; background: #fff; }
+.idc-head b { display: block; font-size: 7pt; line-height: 1.25; }
+.idc-head span { color: #f4d77a; font-weight: 700; font-size: 7pt; }
+.idc-body { flex: 1; display: flex; gap: 2mm; padding: 1.5mm 2.5mm; min-height: 0; }
+.idc-info { flex: 1; line-height: 1.45; overflow: hidden; }
+.idc-info span { color: #6b7280; }
+.idc-name { color: #075B3A; font-weight: 800; font-size: 10pt; margin-bottom: .5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idc-side { width: 18mm; display: flex; flex-direction: column; align-items: center; gap: 1mm; }
+.idc-photo { width: 18mm; height: 21mm; border: 1px solid #ccc; border-radius: 1.5mm; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 6.5pt; background: #fff; }
+.idc-no { color: #075B3A; font-weight: 800; font-size: 7pt; white-space: nowrap; }
+.idc-foot { background: #075B3A; color: #fff; text-align: center; font-size: 6.5pt; padding: 1mm; }
+@media print { body.cert-mode .cards-sheet { padding: 0; gap: 3mm 4mm; } .idcard { border-style: solid; border-color: #ddd; } }

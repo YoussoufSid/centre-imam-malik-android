@@ -166,6 +166,46 @@ fun shareReportCard(
 }
 
 /** A4 landscape certificate of memorization (or completion when all 60 hizbs are memorized). */
+/** Student ID card at real card size (85.6 × 54 mm), drawn at 2× and scaled for crisp printing. */
+fun shareStudentCard(context: Context, student: Student) {
+    val doc = PdfDocument()
+    val page = doc.startPage(PdfDocument.PageInfo.Builder(243, 153, 1).create())
+    val c = page.canvas
+    c.scale(.5f, .5f)
+    val W = 486f; val H = 306f
+    c.drawRect(0f, 0f, W, H, Paint().apply { color = 0xFFFFFDF5.toInt() })
+    c.drawRect(0f, 0f, W, 72f, Paint().apply { color = GREEN })
+    c.drawRect(0f, 72f, W, 76f, Paint().apply { color = GOLD })
+    c.logo(context, W - 64f, 9f, 54f)
+    c.rtlText(Centre.name, W - 74f, 10f, 340f, 13f, 0xFFFFFFFF.toInt(), bold = true)
+    c.rtlText("بطاقة طالب  •  Carte d'élève", W - 74f, 46f, 340f, 12f, GOLD, bold = true)
+    // photo box + number
+    val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFBBBBBB.toInt(); strokeWidth = 1.5f }
+    c.drawRect(20f, 92f, 112f, 204f, box)
+    c.rtlText("الصورة", 112f, 140f, 92f, 11f, 0xFFAAAAAA.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText("رقم: ${ltr(studentNumber(student.id))}", 116f, 212f, 100f, 12f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    // details
+    val right = W - 20f; val w = 330f
+    c.rtlText(student.name, right, 88f, w, 20f, GREEN, bold = true)
+    var y = 124f
+    fun field(label: String, value: String) {
+        if (value.isBlank()) return
+        c.rtlText("$label: $value", right, y, w, 12.5f, 0xFF333333.toInt()); y += 22f
+    }
+    field("الحلقة", student.group)
+    field("المعلم", student.teacher)
+    field("تاريخ الميلاد", student.birthDate.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
+    field("هاتف ولي الأمر", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
+    field("تاريخ التسجيل", student.enrollmentDate.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
+    // footer
+    c.drawRect(0f, H - 40f, W, H, Paint().apply { color = GREEN })
+    c.rtlText("العام الدراسي ${ltr(academicYearLabel(currentMonth()))}" +
+        (Centre.phone.takeIf { it.isNotBlank() }?.let { "  •  هاتف المركز: ${ltr(it)}" } ?: ""),
+        W - 16f, H - 30f, W - 32f, 12f, 0xFFFFFFFF.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    doc.finishPage(page)
+    sharePdf(context, doc, "card-${safeName(student.name)}.pdf")
+}
+
 fun shareCertificate(context: Context, student: Student) {
     val W = 842f; val H = 595f
     val doc = PdfDocument()
