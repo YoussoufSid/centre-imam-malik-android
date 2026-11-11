@@ -677,7 +677,8 @@ class AppState {
         salary = d.getLong("salary")?.toInt() ?: 0, hireDate = d.getString("hireDate") ?: "",
         status = d.getString("status") ?: "نشط", notes = d.getString("notes") ?: "",
         category = d.getString("category") ?: StaffCategory.TEACHER, function = d.getString("function") ?: "",
-        cessationDate = d.getString("cessationDate") ?: "", paymentMode = d.getString("paymentMode") ?: ""
+        cessationDate = d.getString("cessationDate") ?: "", paymentMode = d.getString("paymentMode") ?: "",
+        photo = d.getString("photo") ?: ""
     )
 
     fun saveTeacher(t: Teacher, done: () -> Unit) {
@@ -685,7 +686,7 @@ class AppState {
         val data = mapOf("name" to t.name.trim(), "phone" to t.phone.trim(), "salary" to t.salary,
             "hireDate" to t.hireDate, "status" to t.status, "notes" to t.notes.trim(), "category" to t.category,
             "function" to t.function.trim(), "cessationDate" to t.cessationDate, "paymentMode" to t.paymentMode,
-            "updatedAt" to Date())
+            "photo" to t.photo, "updatedAt" to Date())
         val ref = if (t.id.isBlank()) db.collection("teachers").document() else db.collection("teachers").document(t.id)
         ref.set(data).addOnFailureListener { message = arabicError(it.message) }
         done(); message = if (t.id.isBlank()) "تمت إضافة المعلم ${t.name.trim()}" else "تم تحديث بيانات المعلم"

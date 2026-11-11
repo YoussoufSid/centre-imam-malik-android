@@ -98,7 +98,7 @@ private fun TeacherListTab(state: AppState) {
                     val count = state.students.count { s -> groups.any { it.name == s.group } && s.status == "نشط" }
                     Card(Modifier.fillMaxWidth().clickable { editing = t }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(t.name, 44.dp); Spacer(Modifier.width(10.dp))
+                            PhotoAvatar(t.name, t.photo, 44.dp); Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(t.name, fontWeight = FontWeight.Bold)
@@ -134,12 +134,15 @@ private fun TeacherDialog(state: AppState, initial: Teacher, close: () -> Unit) 
     var category by remember { mutableStateOf(initial.category) }
     var function by remember { mutableStateOf(initial.function) }
     var mode by remember { mutableStateOf(initial.paymentMode) }
+    var photo by remember { mutableStateOf(initial.photo) }
     var confirmDelete by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     AlertDialog(
         onDismissRequest = close,
         title = { Text(if (initial.id.isBlank()) "موظف جديد" else "ملف الموظف") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                PhotoPicker(photo) { photo = it }
                 AppField(name, { name = it }, "الاسم الكامل")
                 Text("الفئة", fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -160,6 +163,12 @@ private fun TeacherDialog(state: AppState, initial: Teacher, close: () -> Unit) 
                     listOf("نشط", "متوقف").forEach { st -> RadioButton(status == st, { status = st }); Text(st) }
                 }
                 if (category == StaffCategory.TEACHER) Text("تُحدَّد حلقات المدرس من شاشة «الحلقات».", fontSize = 12.sp, color = Color.Gray)
+                if (initial.id.isNotBlank()) OutlinedButton(onClick = {
+                    shareStaffCard(context, initial.copy(name = name, phone = phone, hireDate = hireDate, category = category,
+                        function = function, photo = photo))
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Badge, null, tint = Green); Spacer(Modifier.width(6.dp)); Text("بطاقة الموظف (PDF)")
+                }
                 if (initial.id.isNotBlank()) TextButton(onClick = { confirmDelete = true },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("حذف الموظف") }
             }
@@ -167,7 +176,7 @@ private fun TeacherDialog(state: AppState, initial: Teacher, close: () -> Unit) 
         confirmButton = { Button(onClick = {
             state.saveTeacher(initial.copy(name = name, phone = phone, salary = salary.toIntOrNull() ?: 0, hireDate = hireDate,
                 cessationDate = cessation, status = status, notes = notes, category = category, function = function,
-                paymentMode = mode), close)
+                paymentMode = mode, photo = photo), close)
         }) { Text("حفظ") } },
         dismissButton = { TextButton(onClick = close) { Text("إلغاء") } }
     )
@@ -265,7 +274,7 @@ private fun SalariesTab(state: AppState) {
                     val e = entries[t.id]
                     Card(Modifier.fillMaxWidth().clickable { editing = t }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(t.name, 40.dp); Spacer(Modifier.width(10.dp))
+                            PhotoAvatar(t.name, t.photo, 40.dp); Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(t.name, fontWeight = FontWeight.Bold)
                                 if (e == null) Text("الراتب: ${money(t.salary)} • لم يُسجَّل", fontSize = 13.sp, color = Red)

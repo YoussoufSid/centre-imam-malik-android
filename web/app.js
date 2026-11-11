@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=13";
+import { firebaseConfig } from "./firebase-config.js?v=14";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -197,6 +197,27 @@ function navHtml(active) {
   }).join("");
 }
 window.addEventListener("hashchange", () => render());
+
+// ---------------------------------------------------------------- automatic update
+// Every published version bumps "app.js?v=N" in index.html. The page checks it on open, every 10 minutes and
+// when the window comes back to the front; if it changed, it reloads by itself (unless a form is open).
+const MY_VERSION = new URL(import.meta.url).searchParams.get("v");
+async function checkForUpdate() {
+  try {
+    const html = await (await fetch("index.html?u=" + Date.now(), { cache: "no-store" })).text();
+    const v = (/app\.js\?v=(\d+)/.exec(html) || [])[1];
+    if (!v || !MY_VERSION || v === MY_VERSION) return;
+    const busy = () => !$("#modal").classList.contains("hidden") || document.body.classList.contains("cert-mode");
+    let bar = $("#updbar");
+    if (!bar) { bar = document.createElement("div"); bar.id = "updbar"; document.body.appendChild(bar); }
+    bar.innerHTML = `🔄 يتوفر تحديث جديد للموقع <button class="btn small gold" id="updnow">تحديث الآن</button>`;
+    $("#updnow").onclick = () => location.reload();
+    if (!busy()) setTimeout(() => { if (!busy()) location.reload(); }, 4000);
+  } catch { /* offline: try again later */ }
+}
+checkForUpdate();
+setInterval(checkForUpdate, 10 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
 const dark = () => localStorage.getItem("theme") === "dark";
 const applyTheme = () => document.body.classList.toggle("dark", dark());
 applyTheme();
@@ -287,21 +308,34 @@ function qrSvg(text) {
     return `<svg class="qr" viewBox="0 0 ${n + 2} ${n + 2}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
   } catch { return ""; }
 }
-/** Bilingual (Arabic / French) student ID card. French text uses a Latin font (class "fr"). */
+/** Bilingual (Arabic / French) ID card. French text uses a Latin font (class "fr"). */
 const fr = (t) => `<span class="fr">${esc(t)}</span>`;
-function cardHtml(s) {
+function idCardHtml({ kindAr, kindFr, name, number, photo, qr, rows }) {
   const year = yearLabel(currentMonth());
-  const row = (ar, frLabel, v) => v ? `<div class="idc-row"><span class="lbl">${ar} <span class="fr">${frLabel}</span></span><span class="val">${v}</span></div>` : "";
+  const row = ([ar, frLabel, v]) => v ? `<div class="idc-row"><span class="lbl">${ar} <span class="fr">${frLabel}</span></span><span class="val">${v}</span></div>` : "";
   return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div class="idc-titles"><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
-      <em class="fr">${CENTRE_FR}</em><span class="idc-kind">بطاقة طالب <i class="fr">Carte d'élève</i></span></div></div>
-    <div class="idc-body"><div class="idc-info">${qrSvg(qrText(s))}<div class="idc-name">${esc(s.name)}</div>
-      ${row("الحلقة", "Groupe", esc(s.group || ""))}${row("المعلم", "Enseignant", esc(s.teacher || ""))}
-      ${row("الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : "")}
-      ${row("ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : "")}${row("التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : "")}</div>
-      <div class="idc-side"><div class="idc-photo">${s.photo ? `<img src="${s.photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
-        <div class="idc-no">${fr("N° " + studentNumber(s.id))}</div></div></div>
+      <em class="fr">${CENTRE_FR}</em><span class="idc-kind">${kindAr} <i class="fr">${kindFr}</i></span></div></div>
+    <div class="idc-body"><div class="idc-info">${qrSvg(qr)}<div class="idc-name">${esc(name)}</div>${rows.map(row).join("")}</div>
+      <div class="idc-side"><div class="idc-photo">${photo ? `<img src="${photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
+        <div class="idc-no">${fr("N° " + number)}</div></div></div>
     <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}${state.settings.phone ? ` • ${fr("☎ " + state.settings.phone)}` : ""}</div>
       <div>العام الدراسي ${fr(year)} • ${fr("Année scolaire " + year)}</div></div></div>`;
+}
+const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Carte d'élève", name: s.name, number: studentNumber(s.id), photo: s.photo,
+  qr: qrText(s), rows: [["الحلقة", "Groupe", esc(s.group || "")], ["المعلم", "Enseignant", esc(s.teacher || "")],
+    ["الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : ""], ["ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : ""],
+    ["التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : ""]] });
+/** Staff card number: "staff_1" → "E001"; generated ids → last 6 characters (same rule as the app). */
+const staffNumber = (id) => { const m = /^staff_(\d+)$/.exec(id); return m ? "E" + String(+m[1]).padStart(3, "0") : String(id).slice(-6).toUpperCase(); };
+const STAFF_FR = { "مدرس": "Enseignant", "إداري": "Administration", "مراقب": "Surveillant", "عامل": "Agent" };
+const staffCardHtml = (t) => idCardHtml({ kindAr: "بطاقة موظف", kindFr: "Carte professionnelle", name: t.name, number: staffNumber(t.id), photo: t.photo,
+  qr: `Centre Imam Malik\nN° ${staffNumber(t.id)}\n${t.name}`,
+  rows: [["الفئة", "Catégorie", `${esc(t.category || "")} ${fr(STAFF_FR[t.category] || "")}`], ["الوظيفة", "Fonction", esc(t.function || "")],
+    ["الهاتف", "Téléphone", t.phone ? fr(t.phone) : ""], ["التعيين", "Embauche", t.hireDate ? fr(frDate(t.hireDate)) : ""]] });
+function printStaffCards(list) {
+  if (!list.length) { toast("لا يوجد موظفون"); return; }
+  showPrintOverlay(`<div class="cards-sheet">${list.map(staffCardHtml).join("")}</div>`,
+    `${list.length} بطاقة — 10 بطاقات في كل صفحة A4، قصّها على الخطوط`);
 }
 function printCards(list) {
   if (!list.length) { toast("لا يوجد طلاب"); return; }
@@ -484,13 +518,25 @@ function resizePhoto(file, w = 240, h = 320) {
   });
 }
 
+/** Photo box + buttons for the student and staff forms (camera offered on phones). */
+const photoPickerHtml = (photo) => `<div class="photo-pick"><div class="ph-box" id="phBox">${photo ? `<img src="${photo}" alt="">` : "👤"}</div><div>
+  <label class="btn small outline">📷 إضافة / تغيير الصورة<input type="file" id="phFile" accept="image/*" hidden></label>
+  <button class="btn small danger ${photo ? "" : "hidden"}" id="phDel" type="button">حذف الصورة</button>
+  <div class="muted" style="font-size:12px">تظهر على البطاقة. على الهاتف يمكن التقاطها بالكاميرا.</div></div></div>`;
+/** Wires the picker; returns a getter: undefined = unchanged, "" = removed, data URL = new photo. */
+function bindPhotoPicker(b) {
+  let photo;
+  const show = (p) => { b.querySelector("#phBox").innerHTML = p ? `<img src="${p}" alt="">` : "👤"; b.querySelector("#phDel").classList.toggle("hidden", !p); };
+  b.querySelector("#phFile").onchange = (e) => { const f = e.target.files[0]; if (!f) return;
+    resizePhoto(f).then((p) => { photo = p; show(p); }).catch(fail); };
+  b.querySelector("#phDel").onclick = () => { photo = ""; show(""); };
+  return () => photo;
+}
+
 function studentForm(s) {
   const opts = groups().map((g) => `<option ${s.group === g ? "selected" : ""}>${esc(g)}</option>`).join("");
   openModal(`<h3>${s.id ? "تعديل ملف الطالب" : "إضافة طالب"}</h3>
-    <div class="photo-pick"><div class="ph-box" id="phBox">${s.photo ? `<img src="${s.photo}" alt="">` : "👤"}</div><div>
-      <label class="btn small outline">📷 إضافة / تغيير الصورة<input type="file" id="phFile" accept="image/*" hidden></label>
-      <button class="btn small danger ${s.photo ? "" : "hidden"}" id="phDel" type="button">حذف الصورة</button>
-      <div class="muted" style="font-size:12px">تظهر على بطاقة الطالب. على الهاتف يمكن التقاطها بالكاميرا.</div></div></div>
+    ${photoPickerHtml(s.photo)}
     <label>الاسم الكامل</label><input id="n" value="${esc(s.name)}">
     <div class="row2"><div><label>الجنس</label><select id="g"><option></option><option ${s.gender === "ذكر" ? "selected" : ""}>ذكر</option><option ${s.gender === "أنثى" ? "selected" : ""}>أنثى</option></select></div>
     <div><label>الحلقة</label><select id="gr"><option value="">بدون حلقة</option>${opts}</select></div></div>
@@ -505,11 +551,7 @@ function studentForm(s) {
     <div class="modal-actions"><button class="btn" id="save">حفظ</button><button class="btn outline" id="cancel">إلغاء</button></div>`, (b) => {
     b.querySelector("#gr").onchange = (e) => { const h = state.halaqat.find((x) => x.name === e.target.value); if (h?.teacher && !b.querySelector("#t").value) b.querySelector("#t").value = h.teacher; };
     b.querySelector("#cancel").onclick = closeModal;
-    let photo;  // undefined = unchanged, "" = removed, data URL = new
-    const showPhoto = (p) => { b.querySelector("#phBox").innerHTML = p ? `<img src="${p}" alt="">` : "👤"; b.querySelector("#phDel").classList.toggle("hidden", !p); };
-    b.querySelector("#phFile").onchange = (e) => { const f = e.target.files[0]; if (!f) return;
-      resizePhoto(f).then((p) => { photo = p; showPhoto(p); }).catch(fail); };
-    b.querySelector("#phDel").onclick = () => { photo = ""; showPhoto(""); };
+    const getPhoto = bindPhotoPicker(b);
     b.querySelector("#save").onclick = () => {
       const v = (id) => b.querySelector("#" + id)?.value?.trim() ?? "";
       if (!v("n")) { toast("اسم الطالب مطلوب"); return; }
@@ -518,7 +560,7 @@ function studentForm(s) {
       if (isAdmin()) { data.monthlyFee = +v("mf") || 0; data.registrationFee = +v("rf") || 0; }
       const ref = s.id ? doc(db, "students", s.id) : doc(collection(db, "students"));
       if (!s.id) data.hizbs = 0;
-      if (photo !== undefined) data.photo = photo;
+      const photo = getPhoto(); if (photo !== undefined) data.photo = photo;
       setDoc(ref, data, { merge: true }).then(() => toast(s.id ? "تم تحديث بيانات الطالب" : "تمت إضافة الطالب")).catch(fail);
       closeModal();
     };
@@ -791,7 +833,7 @@ function viewStaff() {
       <th class="num">الراتب الأساسي</th><th>طريقة الدفع</th><th>تاريخ التعيين</th><th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
       ${list.map((t, i) => { const hs = state.halaqat.filter((h) => (h.teacher || "").trim() === (t.name || "").trim());
         const cnt = state.students.filter((s) => hs.some((h) => h.name === s.group) && (s.status || ACTIVE) === ACTIVE).length;
-        return `<tr data-st="${t.id}" style="cursor:pointer" title="اضغط لفتح ملف الموظف"><td class="num">${i + 1}</td><td><b>${esc(t.name)}</b>${t.notes ? `<div class="muted" style="font-size:12px">${esc(t.notes)}</div>` : ""}</td>
+        return `<tr data-st="${t.id}" style="cursor:pointer" title="اضغط لفتح ملف الموظف"><td class="num">${i + 1}</td><td><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : ""}</span><b>${esc(t.name)}</b>${t.notes ? `<div class="muted" style="font-size:12px">${esc(t.notes)}</div>` : ""}</td>
         <td>${esc(t.function)}</td><td dir="ltr" style="text-align:right">${esc(t.phone)}</td>
         ${cat === "مدرس" ? `<td>${hs.map((h) => esc(h.name)).join("، ") || '<span class="muted">—</span>'}</td><td class="num">${hs.length ? cnt : ""}</td>` : ""}
         <td class="num">${num(t.salary)}</td><td>${esc(t.paymentMode)}</td><td>${esc(t.hireDate)}</td>
@@ -803,15 +845,17 @@ function viewStaff() {
   <div class="cards"><div class="card stat green"><div class="l">الموظفون النشطون</div><div class="v">${state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length}</div></div>
   ${STAFF_CATS.map(([c, p]) => `<div class="card stat"><div class="l">${p}</div><div class="v">${state.staff.filter((t) => (t.category || "مدرس") === c).length}</div></div>`).join("")}
   <div class="card stat gold"><div class="l">مجموع الرواتب الشهرية</div><div class="v">${amt(total)}</div></div></div>
-  <div class="toolbar"><button class="btn" id="adds">+ إضافة موظف</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
+  <div class="toolbar"><button class="btn" id="adds">+ إضافة موظف</button><button class="btn outline" id="scards">🪪 بطاقات الموظفين</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
   ${STAFF_CATS.map(section).join("") || '<div class="panel muted">لا يوجد موظفون بعد</div>'}`;
 }
 bind.staff = () => {
   $("#adds").onclick = () => staffForm({ category: "مدرس", status: ACTIVE, hireDate: today() });
+  $("#scards").onclick = () => printStaffCards(state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE));
   document.querySelectorAll("[data-st]").forEach((b) => b.onclick = () => staffForm(state.staff.find((t) => t.id === b.dataset.st)));
 };
 function staffForm(t) {
   openModal(`<h3>${t.id ? "ملف الموظف" : "موظف جديد"}</h3>
+    ${photoPickerHtml(t.photo)}
     <label>الاسم الكامل</label><input id="n" value="${esc(t.name)}">
     <div class="row2"><div><label>الفئة</label><select id="c">${STAFF_CATS.map(([c]) => `<option ${t.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
     <div><label>الوظيفة</label><input id="f" value="${esc(t.function)}" placeholder="مدرس الحلقة، سكرتير، طبّاخة…"></div></div>
@@ -823,8 +867,11 @@ function staffForm(t) {
     <div><label>تاريخ التوقف عن العمل</label><input id="cd" type="date" value="${esc(t.cessationDate)}"></div></div>
     <label>ملاحظات (الاسم بالفرنسية، المؤهل…)</label><input id="no" value="${esc(t.notes)}">
     <div class="modal-actions"><button class="btn" id="save">حفظ</button><button class="btn outline" id="cancel">إلغاء</button>
-    ${t.id ? '<button class="btn danger" id="del">حذف</button>' : ""}</div>`, (b) => {
+    ${t.id ? '<button class="btn outline" id="card">🪪 البطاقة</button><button class="btn danger" id="del">حذف</button>' : ""}</div>`, (b) => {
     const v = (id) => b.querySelector("#" + id).value.trim();
+    const getPhoto = bindPhotoPicker(b);
+    b.querySelector("#card") && (b.querySelector("#card").onclick = () => { const p = getPhoto();
+      closeModal(); printStaffCards([{ ...t, photo: p === undefined ? t.photo : p }]); });
     b.querySelector("#cancel").onclick = closeModal;
     b.querySelector("#del") && (b.querySelector("#del").onclick = () => confirmBox(`حذف ملف «${t.name}»؟ تبقى رواتبه المسجلة. يُفضَّل تحديد تاريخ التوقف بدل الحذف.`, () =>
       deleteDoc(doc(db, "teachers", t.id)).then(() => { audit("حذف معلم", t.name); toast("تم حذف الموظف"); }).catch(fail)));
@@ -832,8 +879,10 @@ function staffForm(t) {
       if (!v("n")) { toast("الاسم مطلوب"); return; }
       const ref = t.id ? doc(db, "teachers", t.id) : doc(collection(db, "teachers"));
       const status = v("cd") ? "متوقف" : v("st");
-      setDoc(ref, { name: v("n"), category: v("c"), function: v("f"), phone: v("ph"), salary: +v("sa") || 0, paymentMode: v("pm"),
-        status, hireDate: v("hd"), cessationDate: v("cd"), notes: v("no"), updatedAt: new Date() }, { merge: true })
+      const data = { name: v("n"), category: v("c"), function: v("f"), phone: v("ph"), salary: +v("sa") || 0, paymentMode: v("pm"),
+        status, hireDate: v("hd"), cessationDate: v("cd"), notes: v("no"), updatedAt: new Date() };
+      const photo = getPhoto(); if (photo !== undefined) data.photo = photo;
+      setDoc(ref, data, { merge: true })
         .then(() => { if (!t.id) audit("إضافة معلم", v("n")); toast("تم حفظ بيانات الموظف"); }).catch(fail);
       closeModal();
     };

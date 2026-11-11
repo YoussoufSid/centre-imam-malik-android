@@ -338,3 +338,18 @@ body.dark .hcard b, body.dark .hnums b { color: #7fd4ac; }
 /* QR code on the card (bottom-left of the details area) */
 .idc-info { position: relative; }
 .idc-info .qr { position: absolute; left: 0; bottom: 0; width: 13mm; height: 13mm; }
+
+#updbar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 90; background: #075B3A; color: #fff; padding: 10px 16px;
+  border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); border: 2px solid var(--gold); display: flex; gap: 10px; align-items: center; }
+@media print { #updbar { display: none; } }
+
+/* ---------- Student / staff photos ---------- */
+.photo-pick { display: flex; gap: 14px; align-items: center; margin-bottom: 6px; }
+.photo-pick label.btn { display: inline-block; margin: 0 0 6px; color: var(--green); font-size: 13px; }
+.ph-box { width: 84px; height: 112px; border-radius: 10px; border: 2px dashed #cbd5d1; display: flex; align-items: center; justify-content: center; font-size: 40px; overflow: hidden; background: #fafaf7; flex: none; }
+.ph-box img, .idc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.idc-photo { overflow: hidden; }
+.avatar { display: inline-block; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; vertical-align: middle; margin-inline-end: 8px; background: #e9efe9; }
+.avatar:empty { display: none; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+body.dark .ph-box { background: #101a16; border-color: #34463e; }
