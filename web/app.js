@@ -272,16 +272,21 @@ function printCertificate(s) {
 /** "s001" → "S001"; generated ids → last 6 characters. Same rule as the phone app. */
 const studentNumber = (id) => (/^[sS]\d+$/.test(id) ? id : String(id).slice(-6)).toUpperCase();
 const ltrText = (t) => `\u2066${esc(t)}\u2069`;
+const CENTRE_FR = "Centre Imam Malik pour la mémorisation du Saint Coran et les études islamiques";
+const frDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : (d || "");
+/** Bilingual (Arabic / French) student ID card. */
 function cardHtml(s) {
   const year = yearLabel(currentMonth());
-  const row = (l, v) => v ? `<div><span>${l}:</span> ${v}</div>` : "";
+  const row = (ar, fr, v) => v ? `<div><span>${ar} <i>${fr}</i> :</span> ${v}</div>` : "";
   return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
-      <span>بطاقة طالب • Carte d'élève</span></div></div>
+      <em>${CENTRE_FR}</em><span>بطاقة طالب • Carte d'élève</span></div></div>
     <div class="idc-body"><div class="idc-info"><div class="idc-name">${esc(s.name)}</div>
-      ${row("الحلقة", esc(s.group || ""))}${row("المعلم", esc(s.teacher || ""))}${row("تاريخ الميلاد", s.birthDate ? ltrText(s.birthDate) : "")}
-      ${row("هاتف ولي الأمر", s.phone ? ltrText(s.phone) : "")}${row("تاريخ التسجيل", s.enrollmentDate ? ltrText(s.enrollmentDate) : "")}</div>
-      <div class="idc-side"><div class="idc-photo">الصورة</div><div class="idc-no">رقم: ${ltrText(studentNumber(s.id))}</div></div></div>
-    <div class="idc-foot">📍 ${esc(state.settings.address || "داودابوغو، باماكو")} • العام الدراسي ${year}${state.settings.phone ? ` • هاتف المركز: ${ltrText(state.settings.phone)}` : ""}</div></div>`;
+      ${row("الحلقة", "Groupe", esc(s.group || ""))}${row("المعلم", "Enseignant", esc(s.teacher || ""))}
+      ${row("تاريخ الميلاد", "Né(e) le", s.birthDate ? ltrText(frDate(s.birthDate)) : "")}
+      ${row("ولي الأمر", "Tuteur", s.phone ? ltrText(s.phone) : "")}${row("التسجيل", "Inscription", s.enrollmentDate ? ltrText(frDate(s.enrollmentDate)) : "")}</div>
+      <div class="idc-side"><div class="idc-photo">الصورة<br>Photo</div><div class="idc-no">رقم / ${ltrText("N° " + studentNumber(s.id))}</div></div></div>
+    <div class="idc-foot">📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${ltrText("Daoudabougou, Bamako")}${state.settings.phone ? ` • ☎ ${ltrText(state.settings.phone)}` : ""}<br>
+      العام الدراسي ${ltrText(year)} • ${ltrText("Année scolaire " + year)}</div></div>`;
 }
 function printCards(list) {
   if (!list.length) { toast("لا يوجد طلاب"); return; }

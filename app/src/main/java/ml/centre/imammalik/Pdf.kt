@@ -177,31 +177,36 @@ fun shareStudentCard(context: Context, student: Student) {
     c.drawRect(0f, 0f, W, 72f, Paint().apply { color = GREEN })
     c.drawRect(0f, 72f, W, 76f, Paint().apply { color = GOLD })
     c.logo(context, W - 64f, 9f, 54f)
-    c.rtlText(Centre.name, W - 74f, 10f, 340f, 13f, 0xFFFFFFFF.toInt(), bold = true)
-    c.rtlText("بطاقة طالب  •  Carte d'élève", W - 74f, 46f, 340f, 12f, GOLD, bold = true)
+    c.rtlText(Centre.name, W - 74f, 6f, 400f, 12.5f, 0xFFFFFFFF.toInt(), bold = true)
+    c.rtlText(CENTRE_FR, W - 74f, 27f, 400f, 8.5f, 0xFFE8F1EC.toInt())
+    c.rtlText("بطاقة طالب  •  Carte d'élève", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
     // photo box + number
     val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFBBBBBB.toInt(); strokeWidth = 1.5f }
     c.drawRect(20f, 92f, 112f, 204f, box)
-    c.rtlText("الصورة", 112f, 140f, 92f, 11f, 0xFFAAAAAA.toInt(), align = Layout.Alignment.ALIGN_CENTER)
-    c.rtlText("رقم: ${ltr(studentNumber(student.id))}", 116f, 212f, 100f, 12f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText("الصورة\nPhoto", 112f, 132f, 92f, 11f, 0xFFAAAAAA.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText("رقم / ${ltr("N° " + studentNumber(student.id))}", 126f, 210f, 120f, 11f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     // details
     val right = W - 20f; val w = 330f
     c.rtlText(student.name, right, 88f, w, 20f, GREEN, bold = true)
-    var y = 124f
-    fun field(label: String, value: String) {
+    var y = 120f
+    fun field(ar: String, fr: String, value: String) {
         if (value.isBlank()) return
-        c.rtlText("$label: $value", right, y, w, 12.5f, 0xFF333333.toInt()); y += 22f
+        c.rtlText("$ar ${ltr("($fr)")}: $value", right, y, w, 12f, 0xFF333333.toInt()); y += 20f
     }
-    field("الحلقة", student.group)
-    field("المعلم", student.teacher)
-    field("تاريخ الميلاد", student.birthDate.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
-    field("هاتف ولي الأمر", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
-    field("تاريخ التسجيل", student.enrollmentDate.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
-    // footer
-    c.drawRect(0f, H - 40f, W, H, Paint().apply { color = GREEN })
-    c.rtlText(Centre.address.ifBlank { "داودابوغو، باماكو" } + "  •  العام الدراسي ${ltr(academicYearLabel(currentMonth()))}" +
-        (Centre.phone.takeIf { it.isNotBlank() }?.let { "  •  هاتف المركز: ${ltr(it)}" } ?: ""),
-        W - 16f, H - 30f, W - 32f, 12f, 0xFFFFFFFF.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    fun date(d: String) = if (d.isBlank()) "" else ltr(frDate(d))
+    field("الحلقة", "Groupe", student.group)
+    field("المعلم", "Enseignant", student.teacher)
+    field("تاريخ الميلاد", "Né(e) le", date(student.birthDate))
+    field("ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
+    field("التسجيل", "Inscription", date(student.enrollmentDate))
+    // footer (two lines, Arabic and French)
+    val year = academicYearLabel(currentMonth())
+    c.drawRect(0f, H - 46f, W, H, Paint().apply { color = GREEN })
+    c.rtlText(Centre.address.ifBlank { "داودابوغو، باماكو" } + " — ${ltr("Daoudabougou, Bamako")}" +
+        (Centre.phone.takeIf { it.isNotBlank() }?.let { "  •  ☎ ${ltr(it)}" } ?: ""),
+        W - 16f, H - 42f, W - 32f, 10.5f, 0xFFFFFFFF.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText("العام الدراسي ${ltr(year)}  •  ${ltr("Année scolaire $year")}",
+        W - 16f, H - 22f, W - 32f, 10.5f, GOLD, align = Layout.Alignment.ALIGN_CENTER)
     doc.finishPage(page)
     sharePdf(context, doc, "card-${safeName(student.name)}.pdf")
 }
