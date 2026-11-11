@@ -257,4 +257,14 @@ class LogicTest {
         assertEquals(setOf("b", "c"), s.atRisk.map { it.student.id }.toSet())
         assertEquals(a, s.topReciters.single().first)
     }
+
+    @Test
+    fun newerVersionDetection() {
+        assertTrue(isNewerVersion("v2.6.0", "2.5.0"))
+        assertTrue(isNewerVersion("2.10.0", "2.9.3"))
+        assertTrue(isNewerVersion("3.0", "2.9.9"))
+        assertFalse(isNewerVersion("v2.5.0", "2.5.0"))
+        assertFalse(isNewerVersion("2.4.9", "2.5.0"))
+        assertFalse(isNewerVersion("", "2.5.0"))
+    }
 }

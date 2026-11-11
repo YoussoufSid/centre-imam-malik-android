@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=6";
+import { firebaseConfig } from "./firebase-config.js?v=8";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -184,8 +184,11 @@ const NAV = [
   ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"],
   ["fees", "💰", "الرسوم الشهرية", true, "المالية"], ["registration", "📝", "رسوم التسجيل", true, "المالية"],
   ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"],
-  ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"]
+  ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"],
+  ["phone", "📱", "تطبيق الهاتف", false, "التطبيق"]
 ];
+const APK_URL = "https://github.com/YoussoufSid/centre-imam-malik-android/releases/latest/download/centre-imam-malik.apk";
+const SITE_URL = "https://youssoufsid.github.io/centre-imam-malik-android/";
 function navHtml(active) {
   let last = null;
   return NAV.filter((n) => !n[3] || isAdmin()).map((n) => {
@@ -199,17 +202,24 @@ const route = () => (location.hash.replace("#/", "") || "home");
 function render() {
   if (!state.user || !state.profile || !isStaff()) return;
   const r = route();
-  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll };
+  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone };
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
-  $("#app").innerHTML = `<div class="layout"><aside class="side">
+  const title = NAV.find((n) => n[0] === allowed);
+  $("#app").innerHTML = `<div class="layout${state.menuOpen ? " menu-open" : ""}">
+    <header class="mbar"><button id="menuBtn" aria-label="القائمة">☰</button><b>${title[1]} ${title[2]}</b>
+      <img src="logo.png" alt=""></header>
+    <aside class="side">
       <div class="brand"><img src="logo.png" alt=""><b>${esc(state.settings.name || DEFAULT_NAME)}</b></div>
       <nav>${navHtml(allowed)}</nav>
       <div class="user">${esc(state.profile?.name || state.user.email)}<br>${isAdmin() ? "الإدارة" : "معلم"}<br>
       <button id="logout">تسجيل الخروج</button></div></aside>
     <main><div class="print-head"><img src="logo.png" alt=""><h3>${esc(state.settings.name || DEFAULT_NAME)}</h3>
       <div>${esc(state.settings.address || "")}</div></div>${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main></div>`;
+  $("#menuBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
+  document.querySelectorAll(".side nav a").forEach((a) => a.addEventListener("click", () => { state.menuOpen = false; }));
   $("#logout").onclick = () => confirmBox("هل تريد تسجيل الخروج؟", () => signOut(auth), "خروج");
+  const h = document.querySelector("main > h1"); if (h) h.dataset.ico = title[1];
   bind[allowed]?.();
   if (focus && document.getElementById(focus)) { const el = document.getElementById(focus); el.focus(); try { el.setSelectionRange(caret, caret); } catch {} }
 }
@@ -223,6 +233,30 @@ function bindFilters() {
   const q = $("#fq"); if (q) q.oninput = () => { state.filters.q = q.value; render(); };
   const g = $("#fgroup"); if (g) g.onchange = () => { state.filters.group = g.value; render(); };
 }
+
+// ---------------------------------------------------------------- phone app
+function viewPhone() {
+  return `<h1>تطبيق الهاتف</h1><div class="sub">التثبيت والتحديث على الهاتف والحاسوب</div>
+  <div class="panel phone-panel">
+    <h3>تثبيت التطبيق أو تحديثه على هاتف أندرويد</h3>
+    <a class="btn big" href="${APK_URL}">⬇️ تنزيل أحدث إصدار</a>
+    <ol class="steps">
+      <li>افتح هذه الصفحة على الهاتف واضغط «تنزيل أحدث إصدار».</li>
+      <li>بعد التنزيل افتح الملف <b>centre-imam-malik.apk</b>.</li>
+      <li>إذا طلب الهاتف الإذن اختر «السماح من هذا المصدر»، ثم اضغط <b>تثبيت</b> (أو <b>تحديث</b>).</li>
+    </ol>
+    <p class="muted">التحديث لا يمسح البيانات؛ كل البيانات محفوظة في السحابة ومشتركة بين الهاتف والحاسوب.
+      وبعد هذا التثبيت يُظهر التطبيق نفسه زر «تحديث» كلما صدر إصدار جديد.</p>
+  </div>
+  <div class="panel">
+    <h3>💻 الحاسوب</h3>
+    <p>لوحة الحاسوب تتحدث تلقائيًا؛ يكفي فتح الرابط (أو أيقونة التطبيق المثبتة):</p>
+    <p class="ltr-link"><a href="${SITE_URL}">${SITE_URL}</a></p>
+    <p class="muted">يمكن أيضًا فتح هذا الرابط على الهاتف واختيار «إضافة إلى الشاشة الرئيسية».</p>
+    <button class="btn small outline" id="copySite">نسخ الرابط</button>
+  </div>`;
+}
+bind.phone = () => { const b = $("#copySite"); if (b) b.onclick = () => navigator.clipboard?.writeText(SITE_URL).then(() => toast("تم نسخ الرابط")); };
 
 // ---------------------------------------------------------------- home
 function viewHome() {
