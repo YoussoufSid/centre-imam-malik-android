@@ -199,7 +199,7 @@ fun shareStudentCard(context: Context, student: Student) {
     field("تاريخ التسجيل", student.enrollmentDate.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
     // footer
     c.drawRect(0f, H - 40f, W, H, Paint().apply { color = GREEN })
-    c.rtlText("العام الدراسي ${ltr(academicYearLabel(currentMonth()))}" +
+    c.rtlText(Centre.address.ifBlank { "داودابوغو، باماكو" } + "  •  العام الدراسي ${ltr(academicYearLabel(currentMonth()))}" +
         (Centre.phone.takeIf { it.isNotBlank() }?.let { "  •  هاتف المركز: ${ltr(it)}" } ?: ""),
         W - 16f, H - 30f, W - 32f, 12f, 0xFFFFFFFF.toInt(), align = Layout.Alignment.ALIGN_CENTER)
     doc.finishPage(page)

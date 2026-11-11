@@ -281,7 +281,7 @@ function cardHtml(s) {
       ${row("الحلقة", esc(s.group || ""))}${row("المعلم", esc(s.teacher || ""))}${row("تاريخ الميلاد", s.birthDate ? ltrText(s.birthDate) : "")}
       ${row("هاتف ولي الأمر", s.phone ? ltrText(s.phone) : "")}${row("تاريخ التسجيل", s.enrollmentDate ? ltrText(s.enrollmentDate) : "")}</div>
       <div class="idc-side"><div class="idc-photo">الصورة</div><div class="idc-no">رقم: ${ltrText(studentNumber(s.id))}</div></div></div>
-    <div class="idc-foot">العام الدراسي ${year}${state.settings.phone ? ` • هاتف المركز: ${ltrText(state.settings.phone)}` : ""}</div></div>`;
+    <div class="idc-foot">📍 ${esc(state.settings.address || "داودابوغو، باماكو")} • العام الدراسي ${year}${state.settings.phone ? ` • هاتف المركز: ${ltrText(state.settings.phone)}` : ""}</div></div>`;
 }
 function printCards(list) {
   if (!list.length) { toast("لا يوجد طلاب"); return; }
