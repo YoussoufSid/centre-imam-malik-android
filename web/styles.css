@@ -314,19 +314,23 @@ body.dark .hcard b, body.dark .hnums b { color: #7fd4ac; }
 .idc-foot { background: #075B3A; color: #fff; text-align: center; font-size: 6.5pt; padding: 1mm; }
 @media print { body.cert-mode .cards-sheet { padding: 0; gap: 3mm 4mm; } .idcard { border-style: solid; border-color: #ddd; } }
 
-/* bilingual card */
-.idc-head em { display: block; font-style: normal; font-size: 4.9pt; opacity: .9; direction: ltr; text-align: right; line-height: 1.2; }
-.idc-info i { font-style: normal; font-size: 6pt; color: #9aa1a9; direction: ltr; unicode-bidi: isolate; }
-.idc-info { line-height: 1.38; }
-.idc-photo { text-align: center; }
-.idc-foot { line-height: 1.3; font-size: 6pt; padding: .8mm 1mm; }
-
-/* ---------- Student photos ---------- */
-.photo-pick { display: flex; gap: 14px; align-items: center; margin-bottom: 6px; }
-.photo-pick label.btn { display: inline-block; margin: 0 0 6px; color: var(--green); font-size: 13px; }
-.ph-box { width: 84px; height: 112px; border-radius: 10px; border: 2px dashed #cbd5d1; display: flex; align-items: center; justify-content: center; font-size: 40px; overflow: hidden; background: #fafaf7; flex: none; }
-.ph-box img, .idc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.idc-photo { overflow: hidden; }
-.avatar { display: inline-block; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; vertical-align: middle; margin-inline-end: 8px; background: #e9efe9; }
-.avatar:empty { display: none; }
-.avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* bilingual card: Arabic in Tajawal, French in Lato */
+.fr { font-family: "Lato", "Segoe UI", Arial, sans-serif; direction: ltr; unicode-bidi: isolate; letter-spacing: .01em; }
+.idc-titles { min-width: 0; line-height: 1.2; }
+.idc-titles b { font-size: 7.4pt; font-weight: 800; }
+.idc-titles em { display: block; font-style: italic; font-size: 5.2pt; opacity: .92; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: .3mm 0; }
+.idc-kind { color: #f4d77a; font-weight: 800; font-size: 7.2pt; }
+.idc-kind i { font-style: normal; font-weight: 900; font-size: 6pt; text-transform: uppercase; letter-spacing: .08em; margin-inline-start: 1mm; }
+.idc-info { line-height: 1.3; }
+.idc-row { display: grid; grid-template-columns: 22mm 1fr; align-items: baseline; gap: 1mm; white-space: nowrap; }
+.idc-row .lbl { color: #6b7280; font-size: 6.6pt; overflow: hidden; }
+.idc-row .lbl .fr { font-size: 5.4pt; color: #9aa1a9; text-transform: uppercase; letter-spacing: .03em; }
+.idc-row .val { font-weight: 700; font-size: 7.2pt; overflow: hidden; text-overflow: ellipsis; }
+.idc-row .val .fr { font-weight: 700; letter-spacing: .03em; }
+.idc-name { font-size: 10.5pt; margin-bottom: .8mm; border-bottom: .3mm solid #eadfb8; padding-bottom: .5mm; }
+.idc-photo { text-align: center; line-height: 1.4; flex-direction: column; }
+.idc-photo .fr { font-size: 6pt; }
+.idc-no .fr { font-weight: 900; font-size: 7.4pt; letter-spacing: .04em; }
+.idc-foot { line-height: 1.35; font-size: 6pt; padding: .7mm 1.5mm; }
+.idc-foot .fr { font-size: 5.8pt; }
+.idc-foot div + div { color: #f4d77a; }

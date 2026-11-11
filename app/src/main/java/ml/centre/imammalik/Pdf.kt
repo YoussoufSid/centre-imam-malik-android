@@ -179,21 +179,24 @@ fun shareStudentCard(context: Context, student: Student) {
     c.logo(context, W - 64f, 9f, 54f)
     c.rtlText(Centre.name, W - 74f, 6f, 400f, 12.5f, 0xFFFFFFFF.toInt(), bold = true)
     c.rtlText(CENTRE_FR, W - 74f, 27f, 400f, 8.5f, 0xFFE8F1EC.toInt())
-    c.rtlText("بطاقة طالب  •  Carte d'élève", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
+    c.rtlText("بطاقة طالب   ${ltr("CARTE D'ÉLÈVE")}", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
     // photo box + number
     val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFBBBBBB.toInt(); strokeWidth = 1.5f }
     val photo = decodePhoto(student.photo)
     if (photo != null) c.drawBitmap(photo, null, RectF(20f, 86f, 112f, 208f), Paint(Paint.FILTER_BITMAP_FLAG))
     else c.rtlText("الصورة\nPhoto", 112f, 132f, 92f, 11f, 0xFFAAAAAA.toInt(), align = Layout.Alignment.ALIGN_CENTER)
     c.drawRect(20f, 86f, 112f, 208f, box)
-    c.rtlText("رقم / ${ltr("N° " + studentNumber(student.id))}", 126f, 210f, 120f, 11f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText(ltr("N° " + studentNumber(student.id)), 126f, 212f, 120f, 12.5f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     // details
     val right = W - 20f; val w = 330f
     c.rtlText(student.name, right, 88f, w, 20f, GREEN, bold = true)
+    c.line(W - 20f - w, 114f, W - 20f, 0xFFEADFB8.toInt(), 1.2f)
     var y = 120f
     fun field(ar: String, fr: String, value: String) {
         if (value.isBlank()) return
-        c.rtlText("$ar ${ltr("($fr)")}: $value", right, y, w, 12f, 0xFF333333.toInt()); y += 20f
+        // label column (Arabic + French in capitals), then the value in bold
+        c.rtlText("$ar  ${ltr(fr.uppercase())}", right, y + 1.5f, 118f, 9.5f, 0xFF8A9199.toInt())
+        c.rtlText(value, right - 122f, y, w - 122f, 12f, 0xFF222222.toInt(), bold = true); y += 20f
     }
     fun date(d: String) = if (d.isBlank()) "" else ltr(frDate(d))
     field("الحلقة", "Groupe", student.group)

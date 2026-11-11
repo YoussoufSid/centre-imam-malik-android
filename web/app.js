@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=11";
+import { firebaseConfig } from "./firebase-config.js?v=12";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -274,19 +274,21 @@ const studentNumber = (id) => (/^[sS]\d+$/.test(id) ? id : String(id).slice(-6))
 const ltrText = (t) => `\u2066${esc(t)}\u2069`;
 const CENTRE_FR = "Centre Imam Malik pour la mémorisation du Saint Coran et les études islamiques";
 const frDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : (d || "");
-/** Bilingual (Arabic / French) student ID card. */
+/** Bilingual (Arabic / French) student ID card. French text uses a Latin font (class "fr"). */
+const fr = (t) => `<span class="fr">${esc(t)}</span>`;
 function cardHtml(s) {
   const year = yearLabel(currentMonth());
-  const row = (ar, fr, v) => v ? `<div><span>${ar} <i>${fr}</i> :</span> ${v}</div>` : "";
-  return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
-      <em>${CENTRE_FR}</em><span>بطاقة طالب • Carte d'élève</span></div></div>
+  const row = (ar, frLabel, v) => v ? `<div class="idc-row"><span class="lbl">${ar} <span class="fr">${frLabel}</span></span><span class="val">${v}</span></div>` : "";
+  return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div class="idc-titles"><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
+      <em class="fr">${CENTRE_FR}</em><span class="idc-kind">بطاقة طالب <i class="fr">Carte d'élève</i></span></div></div>
     <div class="idc-body"><div class="idc-info"><div class="idc-name">${esc(s.name)}</div>
       ${row("الحلقة", "Groupe", esc(s.group || ""))}${row("المعلم", "Enseignant", esc(s.teacher || ""))}
-      ${row("تاريخ الميلاد", "Né(e) le", s.birthDate ? ltrText(frDate(s.birthDate)) : "")}
-      ${row("ولي الأمر", "Tuteur", s.phone ? ltrText(s.phone) : "")}${row("التسجيل", "Inscription", s.enrollmentDate ? ltrText(frDate(s.enrollmentDate)) : "")}</div>
-      <div class="idc-side"><div class="idc-photo">${s.photo ? `<img src="${s.photo}" alt="">` : "الصورة<br>Photo"}</div><div class="idc-no">رقم / ${ltrText("N° " + studentNumber(s.id))}</div></div></div>
-    <div class="idc-foot">📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${ltrText("Daoudabougou, Bamako")}${state.settings.phone ? ` • ☎ ${ltrText(state.settings.phone)}` : ""}<br>
-      العام الدراسي ${ltrText(year)} • ${ltrText("Année scolaire " + year)}</div></div>`;
+      ${row("الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : "")}
+      ${row("ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : "")}${row("التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : "")}</div>
+      <div class="idc-side"><div class="idc-photo">${s.photo ? `<img src="${s.photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
+        <div class="idc-no">${fr("N° " + studentNumber(s.id))}</div></div></div>
+    <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}${state.settings.phone ? ` • ${fr("☎ " + state.settings.phone)}` : ""}</div>
+      <div>العام الدراسي ${fr(year)} • ${fr("Année scolaire " + year)}</div></div></div>`;
 }
 function printCards(list) {
   if (!list.length) { toast("لا يوجد طلاب"); return; }
