@@ -289,4 +289,45 @@ class LogicTest {
         assertEquals("XY12AB", staffNumber("aBcDeFgH9xy12ab"))
         assertEquals("Agent", StaffCategory.frenchSingular(StaffCategory.WORKER))
     }
+
+    private fun plainText(s: String) = s.replace("\u2066", "").replace("\u2069", "")
+
+    @Test
+    fun memorizationPeriods() {
+        // 2026-11-11 is a Wednesday
+        assertEquals(PeriodRange("2026-11-09", "2026-11-15", "أسبوع 09/11 – 15/11"),
+            periodRange(LogPeriod.WEEK, "2026-11-11").let { it.copy(label = plainText(it.label)) })
+        assertEquals("2026-11-01", periodRange(LogPeriod.MONTH, "2026-11-11").from)
+        val t1 = periodRange(LogPeriod.TERM, "2026-11-11")
+        assertEquals("2026-09-01" to "2026-12-31", t1.from to t1.to)
+        val t2 = periodRange(LogPeriod.TERM, "2027-02-10")
+        assertEquals("2027-01-01" to "2027-03-31", t2.from to t2.to)
+        val y = periodRange(LogPeriod.YEAR, "2027-05-01")
+        assertEquals("2026-09-01" to "2027-08-31", y.from to y.to)
+        assertEquals("2027-01-01", shiftPeriod(LogPeriod.TERM, "2026-11-11", 1))
+        assertEquals("2026-08-31", shiftPeriod(LogPeriod.TERM, "2026-11-11", -1))
+        assertEquals("2026-11-18", shiftPeriod(LogPeriod.WEEK, "2026-11-11", 1))
+        assertEquals("2026-12-01", shiftPeriod(LogPeriod.MONTH, "2026-11-30", 1))
+    }
+
+    @Test
+    fun memorizationSummaryAndNext() {
+        val a = Student(id = "a", name = "أ"); val b = Student(id = "b", name = "ب")
+        val logs = listOf(
+            QuranLog(studentId = "a", date = "2026-11-10", type = LogTypes.NEW, surah = "النبأ", fromAyah = 1, toAyah = 10, grade = "ممتاز"),
+            QuranLog(studentId = "a", date = "2026-11-11", type = LogTypes.NEW, surah = "النبأ", fromAyah = 11, toAyah = 20, grade = "جيد"),
+            QuranLog(studentId = "a", date = "2026-11-11", type = LogTypes.REVIEW, surah = "الناس", fromAyah = 1, toAyah = 6, grade = "جيد جدًا"))
+        val rows = summarizeMemorization(listOf(a, b), logs)
+        val r = rows.first { it.student.id == "a" }
+        assertEquals(2, r.newSessions); assertEquals(1, r.reviewSessions)
+        assertEquals(20, r.newAyat); assertEquals(6, r.reviewAyat); assertEquals(2, r.days)
+        assertEquals(listOf("النبأ"), r.surahs)
+        assertEquals(4.0, r.avgGrade!!, 0.001); assertEquals("جيد جدًا", gradeFromScore(r.avgGrade!!))
+        assertEquals(0, rows.first { it.student.id == "b" }.sessions)
+        // next position: continue النبأ (40 verses) after verse 20, same size
+        assertEquals(Position("النبأ", 21, 30), nextPosition(r.lastNew))
+        // finished surah → previous surah in the mushaf
+        assertEquals(Position("الفلق", 1, 5), nextPosition(QuranLog(surah = "الناس", fromAyah = 1, toAyah = 6)).let { it!!.copy(to = minOf(it.to, 5)) })
+        assertNull(nextPosition(null))
+    }
 }

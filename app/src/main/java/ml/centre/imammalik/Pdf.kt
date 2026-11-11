@@ -578,3 +578,48 @@ fun shareMonthStatement(context: Context, month: String, payments: List<Payment>
     doc.finishPage(page)
     sharePdf(context, doc, "finance-$month.pdf")
 }
+
+/** Memorization & review report for a period (day … academic year), one row per student; daily report lists each record. */
+fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, group: String, rows: List<MemoRow>, dayLogs: List<QuranLog>) {
+    val W = 842f; val H = 595f; val M = 20f
+    val doc = PdfDocument()
+    var pageNo = 1
+    var page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create())
+    var c = page.canvas
+    val frPeriod = mapOf(LogPeriod.DAY to "journalier", LogPeriod.WEEK to "hebdomadaire", LogPeriod.MONTH to "mensuel",
+        LogPeriod.TERM to "trimestriel", LogPeriod.YEAR to "annuel")[period]
+    val titleAr = "سجل متابعة الحفظ والمراجعة (${period.label}) — ${range.label}" + (if (group.isNotBlank()) " — $group" else "")
+    val titleFr = "Suivi $frPeriod de la mémorisation et de la révision — du ${frDate(range.from)} au ${frDate(range.to)}"
+    var y = c.adminHeader(context, W, titleAr, titleFr)
+    val byStudent = dayLogs.groupBy { it.studentId }
+    val cols = listOf(26f to "م\nN°", 150f to "الطالب\nÉlève", 52f to "جلسات الحفظ\nSéances", 52f to "آيات الحفظ\nVersets",
+        200f to (if (period == LogPeriod.DAY) "التفاصيل\nDétails" else "السور المحفوظة\nSourates mémorisées"),
+        52f to "جلسات المراجعة\nRévisions", 52f to "آيات المراجعة\nVersets", 70f to "المعدل\nAppréciation", 0f to "الأيام\nJours")
+        .let { l -> l.map { (w, t) -> (if (w == 0f) W - 2 * M - l.sumOf { it.first.toDouble() }.toFloat() else w) to t } }
+    fun row(v: List<String>, h: Float, bold: Boolean = false, fill: Int? = null) {
+        var r = W - M; cols.forEachIndexed { i, (w, _) -> c.cell(r - w, y, w, h, v.getOrElse(i) { "" }, 8.5f, bold, fill); r -= w }; y += h
+    }
+    row(cols.map { it.second }, 30f, true, 0xFFE8F0EC.toInt())
+    rows.forEachIndexed { i, r ->
+        val detail = if (period == LogPeriod.DAY) byStudent[r.student.id].orEmpty().joinToString("\n") { l ->
+            "${l.type}: ${l.surah}" + (if (l.fromAyah > 0) " ${l.fromAyah}-${l.toAyah}" else "") + (if (l.grade.isNotBlank()) " (${l.grade})" else "")
+        } else r.surahs.joinToString("، ")
+        val h = (18f + 11f * (detail.count { it == '\n' } + if (detail.length > 40) 1 else 0)).coerceAtMost(60f)
+        if (y + h > H - 50f) {
+            doc.finishPage(page); pageNo++
+            page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create()); c = page.canvas; y = M
+            row(cols.map { it.second }, 30f, true, 0xFFE8F0EC.toInt())
+        }
+        row(listOf("${i + 1}", r.student.name, num(r.newSessions, true), num(r.newAyat, true), detail,
+            num(r.reviewSessions, true), num(r.reviewAyat, true), r.avgGrade?.let(::gradeFromScore) ?: "-", num(r.days, true)), h,
+            fill = if (r.sessions == 0) 0xFFFBE3E3.toInt() else null)
+    }
+    row(listOf("", "المجموع / Total", num(rows.sumOf { it.newSessions }), num(rows.sumOf { it.newAyat }), "",
+        num(rows.sumOf { it.reviewSessions }), num(rows.sumOf { it.reviewAyat }), "", ""), 22f, true, 0xFFFFF4D6.toInt())
+    y += 24f
+    if (y < H - 60f) listOf("توقيع المعلم\nL'enseignant", "توقيع مدير المركز\nLe directeur").forEachIndexed { i, t ->
+        c.rtlText(t, W - M - i * (W / 2), y, W / 2 - 40f, 10f, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    }
+    doc.finishPage(page)
+    sharePdf(context, doc, "hifz-${period.name.lowercase()}-${range.from}.pdf")
+}

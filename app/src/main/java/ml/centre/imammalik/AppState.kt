@@ -876,6 +876,15 @@ class AppState {
 
     // ---------- Analytics ----------
 
+    /** Recitation logs between two dates (inclusive), limited to the students this user can see. */
+    fun loadLogs(from: String, to: String, onReady: (List<QuranLog>) -> Unit) {
+        db.collection("quranLogs").whereGreaterThanOrEqualTo("date", from).whereLessThanOrEqualTo("date", to)
+            .get().addOnSuccessListener { l ->
+                val ids = students.map { it.id }.toSet()
+                onReady(l.documents.map(::toLog).filter { it.studentId in ids })
+            }.addOnFailureListener { message = arabicError(it.message) }
+    }
+
     /** Loads one month of attendance and recitation logs (scoped to the students this user can see). */
     fun loadMonthStats(month: String, onReady: (List<AttendanceRecord>, List<QuranLog>) -> Unit) {
         db.collection("attendance").whereGreaterThanOrEqualTo("date", "$month-01").whereLessThanOrEqualTo("date", "$month-31")
