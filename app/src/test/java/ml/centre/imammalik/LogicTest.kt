@@ -45,7 +45,10 @@ class LogicTest {
         val saved = Triple(Centre.address, Centre.phone, Centre.currency)
         try {
             Centre.address = "باماكو"; Centre.phone = "76123456"; Centre.currency = "FCFA"
-            assertEquals("باماكو • هاتف: 76123456", Centre.contactLine())
+            assertEquals("باماكو • هاتف: 76123456", plain(Centre.contactLine()))
+            Centre.email = "centre@example.com"
+            assertEquals("باماكو • هاتف: 76123456 • البريد: centre@example.com", plain(Centre.contactLine()))
+            Centre.email = ""
             assertEquals("2 500 FCFA", plain(money(2500)))
             Centre.address = ""; Centre.phone = ""
             assertEquals("", Centre.contactLine())
