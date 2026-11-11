@@ -10,6 +10,24 @@ const val HADITH_TEXT = "«خيرُكم مَن تعلَّم القرآنَ وع�
 const val DUA_TEXT = "اللهم اجزِ مؤسِّس هذا المركز الحاج بانيما يارا خيرَ الجزاء، واجعل هذا العمل في ميزان حسناته، " +
     "واغفر له ولوالديه، ولجميع المسلمين والمسلمات، الأحياء منهم والأموات. آمين"
 
+// ---------- Updates ----------
+
+/** Always the newest phone app (public GitHub Release asset, no login needed). */
+const val APK_DOWNLOAD_URL = "https://github.com/YoussoufSid/centre-imam-malik-android/releases/latest/download/centre-imam-malik.apk"
+const val LATEST_RELEASE_API = "https://api.github.com/repos/YoussoufSid/centre-imam-malik-android/releases/latest"
+const val WEB_DASHBOARD_URL = "https://youssoufsid.github.io/centre-imam-malik-android/"
+
+/** True when [latest] (e.g. "v2.6.0" or "2.6.0") is a higher version than [current]. */
+fun isNewerVersion(latest: String, current: String): Boolean {
+    fun parts(v: String) = v.trim().removePrefix("v").split('.', '-', ' ').mapNotNull { it.toIntOrNull() }
+    val a = parts(latest); val b = parts(current)
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val x = a.getOrElse(i) { 0 }; val y = b.getOrElse(i) { 0 }
+        if (x != y) return x > y
+    }
+    return false
+}
+
 const val DEFAULT_CENTRE_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية"
 
 /** Centre identity, editable by the admin (settings/centre) and used in documents and messages. */

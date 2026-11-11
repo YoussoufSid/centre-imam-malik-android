@@ -41,6 +41,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 val Green = Color(0xFF075B3A)
 val Gold = Color(0xFFD7A91E)
@@ -223,6 +224,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var announceOpen by remember { mutableStateOf(false) }
     var exportOpen by remember { mutableStateOf(false) }
     var quickLogOpen by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     fun goTo(title: String) { tabs.indexOfFirst { it.title == title }.takeIf { it >= 0 }?.let { tab = it } }
     fun open(s: String) { profileId = null; screen = s }
     val quickActions = buildList {
@@ -243,6 +245,11 @@ private fun Dashboard(state: AppState, me: AppUser) {
     }
 
     LaunchedEffect(state.message) { if (state.message != null) { delay(3500); state.message = null } }
+    // Check once for a newer phone app version (silently ignored when offline).
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var latestVersion by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { latestVersion = fetchLatestVersion() }
+    val updateAvailable = latestVersion?.let { isNewerVersion(it, BuildConfig.VERSION_NAME) } == true
 
     val profileStudent = profileId?.let { id -> state.students.firstOrNull { it.id == id } }
     if (profileId != null && profileStudent == null && state.students.isNotEmpty()) profileId = null
@@ -283,6 +290,22 @@ private fun Dashboard(state: AppState, me: AppUser) {
                             add(MenuEntry("سجل العمليات", Icons.Default.History) { open(Screens.AUDIT) })
                         }
                         if (me.isStaff) add(MenuEntry("الإحصائيات", Icons.Default.Insights) { open(Screens.STATS) })
+                        add(MenuEntry("التحقق من التحديثات", Icons.Default.SystemUpdate) {
+                            state.message = "جارٍ التحقق من التحديثات…"
+                            scope.launch {
+                                val v = fetchLatestVersion(); latestVersion = v
+                                state.message = when {
+                                    v == null -> "تعذّر التحقق؛ تأكد من الاتصال بالإنترنت"
+                                    isNewerVersion(v, BuildConfig.VERSION_NAME) -> "يتوفر الإصدار $v — جارٍ فتح التنزيل"
+                                        .also { openApkDownload(context) }
+                                    else -> "أنت تستخدم أحدث إصدار (${BuildConfig.VERSION_NAME}) ✅"
+                                }
+                            }
+                        })
+                        add(MenuEntry("لوحة الحاسوب", Icons.Default.Computer) {
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(WEB_DASHBOARD_URL))) }
+                        })
                         add(MenuEntry("حول التطبيق", Icons.Default.Info) { aboutOpen = true })
                         add(MenuEntry("تسجيل الخروج", Icons.Default.Logout) { logoutOpen = true })
                     })
@@ -319,7 +342,14 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     Screens.AUDIT -> AuditScreen(state)
                 }
             } else when (tabs[tab].title) {
-                "الرئيسية" -> HomeScreen(state, me, quickActions) { profileId = it.id }
+                "الرئيسية" -> Column {
+                    if (updateAvailable) {
+                        Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                            UpdateBanner(latestVersion!!) { openApkDownload(context) }
+                        }
+                    }
+                    HomeScreen(state, me, quickActions) { profileId = it.id }
+                }
                 "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { open(Screens.GRADES) },
                     onBulkAdd = { open(Screens.BULK) }) { profileId = it.id }
                 "الحضور" -> AttendanceScreen(state)
