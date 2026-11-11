@@ -128,7 +128,7 @@ fun UpdateBanner(latest: String, onUpdate: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text("يتوفر إصدار جديد ($latest)", fontWeight = FontWeight.Bold, color = Green)
-                Text("اضغط «تحديث»، ثم افتح الملف بعد التنزيل واضغط «تثبيت». بياناتك محفوظة.", fontSize = 12.sp, color = Color.DarkGray)
+                Text("اضغط «تحديث»، ثم افتح الملف بعد التنزيل واضغط «تثبيت». بياناتك محفوظة.", fontSize = 12.sp, color = SubText)
             }
             Button(onClick = onUpdate) { Text("تحديث") }
         }

@@ -35,7 +35,7 @@ fun FinanceScreen(state: AppState, openProfile: (String) -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf("الشهرية", "التسجيل", "المصروفات", "العُهَد", "الملخص")
     Column(Modifier.fillMaxSize()) {
-        ScrollableTabRow(selectedTabIndex = tab, containerColor = Color.White, contentColor = Green, edgePadding = 8.dp) {
+        ScrollableTabRow(selectedTabIndex = tab, containerColor = CardBg, contentColor = Green, edgePadding = 8.dp) {
             tabs.forEachIndexed { i, t ->
                 Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t, maxLines = 1, fontSize = 14.sp) })
             }
@@ -92,7 +92,7 @@ private fun RegistrationTab(state: AppState, openProfile: (String) -> Unit) {
         else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(shown, key = { it.id }) { s ->
                 val p = paid[s.id]
-                Card(Modifier.fillMaxWidth().clickable { openProfile(s.id) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth().clickable { openProfile(s.id) }, colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(s.name)
                         Spacer(Modifier.width(10.dp))
@@ -131,7 +131,7 @@ private fun ExpensesTab(state: AppState) {
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         MonthSwitcher("مصروفات ${monthName(state.expenseMonth)}", state.expenseMonth < currentMonth(),
             { state.changeExpenseMonth(-1) }, { state.changeExpenseMonth(1) })
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("مجموع المصروفات", Modifier.weight(1f), fontWeight = FontWeight.Bold)
@@ -153,7 +153,7 @@ private fun ExpensesTab(state: AppState) {
         if (list.isEmpty()) EmptyState(Icons.Default.ReceiptLong, "لا توجد مصروفات مسجلة لهذا الشهر")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
             items(list, key = { it.id }) { e ->
-                Card(Modifier.fillMaxWidth().clickable { editing = e }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth().clickable { editing = e }, colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.ReceiptLong, null, tint = Gold); Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
@@ -230,6 +230,10 @@ private fun SummaryTab(state: AppState) {
     val regIncome = ps.filter { it.type == PaymentType.REGISTRATION }.sumOf { it.amount }
     val totalExp = expenses.sumOf { it.amount }
     val net = monthlyIncome + regIncome - totalExp
+    var openMonth by remember { mutableStateOf<String?>(null) }
+    openMonth?.let { m ->
+        MonthStatementDialog(m, ps.filter { it.month == m }, expenses.filter { it.month == m }) { openMonth = null }
+    }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -255,15 +259,17 @@ private fun SummaryTab(state: AppState) {
                 StatCard("رسوم التسجيل", money(regIncome), Icons.Default.HowToReg, Modifier.weight(1f), Green)
             }
         }
-        item { Text("حسب الشهر", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+        item { Text("حسب الشهر — اضغط على الشهر لعرض تفاصيله", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
         item {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Column(Modifier.horizontalScroll(rememberScrollState()).padding(8.dp)) {
                     SummaryRow("الشهر", "الإيرادات", "المصروفات", "الصافي", header = true)
                     months.reversed().forEach { m ->
                         val inc = ps.filter { it.month == m }.sumOf { it.amount }
                         val exp = expenses.filter { it.month == m }.sumOf { it.amount }
-                        SummaryRow(monthName(m), money(inc), money(exp), money(inc - exp), netColor = if (inc - exp >= 0) Green else Red)
+                        Box(Modifier.clickable { openMonth = m }) {
+                            SummaryRow("📄 " + monthName(m), money(inc), money(exp), money(inc - exp), netColor = if (inc - exp >= 0) Green else Red)
+                        }
                     }
                 }
             }
@@ -272,7 +278,7 @@ private fun SummaryTab(state: AppState) {
         if (cats.isNotEmpty()) {
             item { Text("المصروفات حسب النوع", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             item {
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         cats.forEach { (c, s) ->
                             Row { Text(c, Modifier.weight(1f)); Text(money(s), color = Red) }
@@ -292,5 +298,48 @@ private fun SummaryRow(a: String, b: String, c: String, d: String, header: Boole
         Text(b, Modifier.width(110.dp), fontWeight = w, fontSize = 13.sp, color = if (header) Color.Unspecified else Green)
         Text(c, Modifier.width(110.dp), fontWeight = w, fontSize = 13.sp, color = if (header) Color.Unspecified else Red)
         Text(d, Modifier.width(110.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = netColor)
+    }
+}
+
+
+/** Financial statement of one month: income (monthly fees, registration), expenses by category, net; PDF to share/print. */
+@Composable
+private fun MonthStatementDialog(month: String, payments: List<Payment>, expenses: List<Expense>, close: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val monthly = payments.filter { it.type == PaymentType.MONTHLY }
+    val reg = payments.filter { it.type == PaymentType.REGISTRATION }
+    val income = payments.sumOf { it.amount }
+    val out = expenses.sumOf { it.amount }
+    val cats = expenses.groupBy { it.category }.mapValues { (_, l) -> l.sumOf { it.amount } }.toList().sortedByDescending { it.second }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("البيانات المالية — ${monthName(month)}") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SectionHeading("الإيرادات")
+                StatementLine("الرسوم الشهرية (${monthly.size} طالب)", money(monthly.sumOf { it.amount }), Green)
+                StatementLine("رسوم التسجيل (${reg.size})", money(reg.sumOf { it.amount }), Green)
+                StatementLine("مجموع الإيرادات", money(income), Green, bold = true)
+                HorizontalDivider()
+                SectionHeading("المصروفات")
+                if (cats.isEmpty()) Text("لا مصروفات مسجلة", color = Color.Gray, fontSize = 13.sp)
+                cats.forEach { (c, v) -> StatementLine(c, money(v), Red) }
+                StatementLine("مجموع المصروفات", money(out), Red, bold = true)
+                HorizontalDivider()
+                StatementLine("الرصيد الصافي", money(income - out), if (income - out >= 0) Green else Red, bold = true)
+            }
+        },
+        confirmButton = { Button(onClick = { shareMonthStatement(context, month, payments, expenses) }) {
+            Icon(Icons.Default.PictureAsPdf, null); Spacer(Modifier.width(4.dp)); Text("PDF")
+        } },
+        dismissButton = { TextButton(onClick = close) { Text("إغلاق") } }
+    )
+}
+
+@Composable
+private fun StatementLine(label: String, value: String, color: Color, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth()) {
+        Text(label, Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
+        Text(value, color = color, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, fontSize = 14.sp)
     }
 }

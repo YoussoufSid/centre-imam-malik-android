@@ -52,12 +52,14 @@ object Centre {
     var name = DEFAULT_CENTRE_NAME
     var director = ""
     var phone = ""
+    var email = ""
     var address = ""
     var academicYear = ""
     var currency = "فرنك"
 
     /** "Centre name • address • phone" footer for documents. */
-    fun contactLine(): String = listOf(address, phone.takeIf { it.isNotBlank() }?.let { "هاتف: $it" } ?: "")
+    fun contactLine(): String = listOf(address, phone.takeIf { it.isNotBlank() }?.let { "هاتف: ${ltr(it)}" } ?: "",
+        email.takeIf { it.isNotBlank() }?.let { "البريد: ${ltr(it)}" } ?: "")
         .filter { it.isNotBlank() }.joinToString(" • ")
 }
 

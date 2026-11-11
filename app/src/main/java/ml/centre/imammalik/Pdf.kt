@@ -201,7 +201,8 @@ private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: 
     c.logo(context, W - 64f, 9f, 54f)
     c.rtlText(Centre.name, W - 74f, 6f, 400f, 12.5f, 0xFFFFFFFF.toInt(), bold = true)
     c.rtlText(CENTRE_FR, W - 74f, 27f, 400f, 8.5f, 0xFFE8F1EC.toInt())
-    c.rtlText("$kindAr   ${ltr(kindFr)}", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
+    val year = academicYearLabel(currentMonth())
+    c.rtlText("$kindAr   ${ltr(kindFr)}   •   ${ltr(year)}", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
     // photo box + number
     val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFBBBBBB.toInt(); strokeWidth = 1.5f }
     val photo = decodePhoto(photoUrl)
@@ -233,13 +234,13 @@ private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: 
             c.drawRect(left + xx * cell, top + yy * cell, left + (xx + 1) * cell, top + (yy + 1) * cell, dark)
     }
     // footer (two lines, Arabic and French)
-    val year = academicYearLabel(currentMonth())
     c.drawRect(0f, H - 46f, W, H, Paint().apply { color = GREEN })
-    c.rtlText(Centre.address.ifBlank { "داودابوغو، باماكو" } + " — ${ltr("Daoudabougou, Bamako")}" +
-        (Centre.phone.takeIf { it.isNotBlank() }?.let { "  •  ☎ ${ltr(it)}" } ?: ""),
+    c.rtlText(Centre.address.ifBlank { "داودابوغو، باماكو" } + " — ${ltr("Daoudabougou, Bamako")}",
         W - 16f, H - 42f, W - 32f, 10.5f, 0xFFFFFFFF.toInt(), align = Layout.Alignment.ALIGN_CENTER)
-    c.rtlText("العام الدراسي ${ltr(year)}  •  ${ltr("Année scolaire $year")}",
-        W - 16f, H - 22f, W - 32f, 10.5f, GOLD, align = Layout.Alignment.ALIGN_CENTER)
+    val contact = listOfNotNull(Centre.phone.takeIf { it.isNotBlank() }?.let { "☎ ${ltr(it)}" },
+        Centre.email.takeIf { it.isNotBlank() }?.let { "✉ ${ltr(it)}" }).joinToString("   •   ")
+        .ifBlank { "العام الدراسي ${ltr(year)}  •  ${ltr("Année scolaire $year")}" }
+    c.rtlText(contact, W - 16f, H - 22f, W - 32f, 10.5f, GOLD, align = Layout.Alignment.ALIGN_CENTER)
     doc.finishPage(page)
     sharePdf(context, doc, fileName)
 }
@@ -524,4 +525,47 @@ fun shareExpenseRegister(context: Context, a: CashAdvance, lines: List<Expense>)
         }
     doc.finishPage(page)
     sharePdf(context, doc, "registre-depenses-${a.receivedDate.ifBlank { today() }}.pdf")
+}
+
+
+/** Monthly financial statement (bilingual titles): income, expenses by category, net. */
+fun shareMonthStatement(context: Context, month: String, payments: List<Payment>, expenses: List<Expense>) {
+    val W = 595f; val H = 842f; val M = 40f
+    val doc = PdfDocument()
+    val page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), 1).create())
+    val c = page.canvas
+    var y = c.adminHeader(context, W, "البيانات المالية لشهر ${monthName(month)}",
+        "Situation financière — ${frenchMonth(month)} (montants en ${Centre.currency})") + 10f
+    val tw = W - 2 * M
+    fun line(label: String, value: String, bold: Boolean = false, fill: Int? = null) {
+        c.cell(W - M - tw * .65f, y, tw * .65f, 24f, label, 10f, bold, fill, align = Layout.Alignment.ALIGN_NORMAL)
+        c.cell(M, y, tw * .35f, 24f, value, 10.5f, bold, fill); y += 24f
+    }
+    val monthly = payments.filter { it.type == PaymentType.MONTHLY }
+    val reg = payments.filter { it.type == PaymentType.REGISTRATION }
+    val income = payments.sumOf { it.amount }; val out = expenses.sumOf { it.amount }
+    val head = 0xFFE8F0EC.toInt(); val total = 0xFFFFF4D6.toInt()
+    line("الإيرادات  /  Recettes", "", true, head)
+    line("الرسوم الشهرية (${monthly.size} طالب)  /  Mensualités", num(monthly.sumOf { it.amount }))
+    line("رسوم التسجيل (${reg.size})  /  Inscriptions", num(reg.sumOf { it.amount }))
+    line("مجموع الإيرادات  /  Total des recettes", num(income), true, total)
+    y += 14f
+    line("المصروفات  /  Dépenses", "", true, head)
+    expenses.groupBy { it.category }.mapValues { (_, l) -> l.sumOf { it.amount } }.toList().sortedByDescending { it.second }
+        .forEach { (cat, v) -> line(cat, num(v)) }
+    line("مجموع المصروفات  /  Total des dépenses", num(out), true, total)
+    y += 14f
+    line("الرصيد الصافي  /  Solde net", num(income - out), true, if (income - out >= 0) 0xFFDDF3E6.toInt() else 0xFFFBE3E3.toInt())
+    y += 40f
+    val third = tw / 2
+    listOf("المحاسب\nLe comptable", "مدير المركز\nLe directeur" + (if (Centre.director.isNotBlank()) "\n${Centre.director}" else ""))
+        .forEachIndexed { i, t ->
+            val r = W - M - i * third
+            c.rtlText(t, r, y, third - 20f, 11f, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+        }
+    c.line(M, H - 50f, W - M, GOLD, 1.5f)
+    c.rtlText("حُرّر بتاريخ ${ltr(today())}" + (if (Centre.contactLine().isNotBlank()) "  •  ${Centre.contactLine()}" else ""),
+        W - M, H - 42f, tw, 9.5f, GREY, align = Layout.Alignment.ALIGN_CENTER)
+    doc.finishPage(page)
+    sharePdf(context, doc, "finance-$month.pdf")
 }

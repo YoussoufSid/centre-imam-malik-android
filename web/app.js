@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=14";
+import { firebaseConfig } from "./firebase-config.js?v=15";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -183,9 +183,9 @@ const NAV = [
   ["home", "🏠", "الرئيسية", false, ""],
   ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"],
   ["fees", "💰", "الرسوم الشهرية", true, "المالية"], ["registration", "📝", "رسوم التسجيل", true, "المالية"],
-  ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"], ["report", "📄", "التقرير الشهري", true, "المالية"],
+  ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"], ["report", "📄", "البيانات المالية الشهرية", true, "المالية"],
   ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"],
-  ["phone", "📱", "تطبيق الهاتف", false, "التطبيق"]
+  ["settings", "⚙️", "إعدادات المركز", true, "التطبيق"], ["phone", "📱", "تطبيق الهاتف", false, "التطبيق"]
 ];
 const APK_URL = "https://github.com/YoussoufSid/centre-imam-malik-android/releases/latest/download/centre-imam-malik.apk";
 const SITE_URL = "https://youssoufsid.github.io/centre-imam-malik-android/";
@@ -226,7 +226,7 @@ const route = () => (location.hash.replace("#/", "") || "home");
 function render() {
   if (!state.user || !state.profile || !isStaff()) return;
   const r = route();
-  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport };
+  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport, settings: viewSettings };
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
@@ -239,7 +239,7 @@ function render() {
       <div class="user">${esc(state.profile?.name || state.user.email)}<br>${isAdmin() ? "الإدارة" : "معلم"}<br>
       <button id="logout">تسجيل الخروج</button> <button id="theme">${dark() ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button></div></aside>
     <main><div class="print-head"><img src="logo.png" alt=""><h3>${esc(state.settings.name || DEFAULT_NAME)}</h3>
-      <div>${esc(state.settings.address || "")}</div></div>${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main></div>`;
+      <div>${esc(contactLine())}</div></div>${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main></div>`;
   ["#theme", "#theme2"].forEach((id) => { $(id).onclick = () => { localStorage.setItem("theme", dark() ? "light" : "dark"); applyTheme(); render(); }; });
   $("#menuBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
   document.querySelectorAll(".side nav a").forEach((a) => a.addEventListener("click", () => { state.menuOpen = false; }));
@@ -314,12 +314,13 @@ function idCardHtml({ kindAr, kindFr, name, number, photo, qr, rows }) {
   const year = yearLabel(currentMonth());
   const row = ([ar, frLabel, v]) => v ? `<div class="idc-row"><span class="lbl">${ar} <span class="fr">${frLabel}</span></span><span class="val">${v}</span></div>` : "";
   return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div class="idc-titles"><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
-      <em class="fr">${CENTRE_FR}</em><span class="idc-kind">${kindAr} <i class="fr">${kindFr}</i></span></div></div>
+      <em class="fr">${CENTRE_FR}</em><span class="idc-kind">${kindAr} <i class="fr">${kindFr}</i> • ${fr(year)}</span></div></div>
     <div class="idc-body"><div class="idc-info">${qrSvg(qr)}<div class="idc-name">${esc(name)}</div>${rows.map(row).join("")}</div>
       <div class="idc-side"><div class="idc-photo">${photo ? `<img src="${photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
         <div class="idc-no">${fr("N° " + number)}</div></div></div>
-    <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}${state.settings.phone ? ` • ${fr("☎ " + state.settings.phone)}` : ""}</div>
-      <div>العام الدراسي ${fr(year)} • ${fr("Année scolaire " + year)}</div></div></div>`;
+    <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}</div>
+      <div>${[state.settings.phone && fr("☎ " + state.settings.phone), state.settings.email && fr("✉ " + state.settings.email)].filter(Boolean).join(" • ")
+        || `العام الدراسي ${fr(year)} • ${fr("Année scolaire " + year)}`}</div></div></div>`;
 }
 const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Carte d'élève", name: s.name, number: studentNumber(s.id), photo: s.photo,
   qr: qrText(s), rows: [["الحلقة", "Groupe", esc(s.group || "")], ["المعلم", "Enseignant", esc(s.teacher || "")],
@@ -369,7 +370,7 @@ function viewReport() {
   const pay = state.payroll.filter((p) => p.month === m);
   const income = sum(monthly) + sum(reg), out = sum(exps);
   const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
-  return `<h1>التقرير الشهري</h1><div class="sub">${monthName(m)} — ملخص جاهز للطباعة أو الإرسال للإدارة</div>
+  return `<h1>البيانات المالية الشهرية</h1><div class="sub">${monthName(m)} — ملخص جاهز للطباعة أو الإرسال للإدارة</div>
   <div class="toolbar"><button class="btn outline small" id="pm">◀ الشهر السابق</button><b>${monthName(m)}</b>
     <button class="btn outline small" id="nm">الشهر التالي ▶</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
   <div class="cards"><div class="card stat green"><div class="l">الإيرادات</div><div class="v">${amt(income)}</div></div>
@@ -389,6 +390,9 @@ function viewReport() {
   <div class="panel"><h3>المصروفات</h3><table><tbody>
     ${Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<tr><td>${esc(c)}</td><td class="num">${money(v)}</td></tr>`).join("") || '<tr><td class="muted">لا مصروفات</td></tr>'}
     </tbody></table>${pay.length ? `<p class="muted">الرواتب: ${num(pay.length)} موظف — المستلم ${money(pay.reduce((a, p) => a + (p.received || 0), 0))}</p>` : ""}</div>
+  ${exps.length ? `<div class="panel"><h3>تفاصيل المصروفات (${num(exps.length)})</h3><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th class="num">المبلغ</th></tr></thead><tbody>
+    ${exps.slice().sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((e) => `<tr><td>\u2066${esc(e.date || "")}\u2069</td><td>${esc(e.category || "")}</td><td>${esc(e.note || "")}</td><td class="num">${num(e.amount)}</td></tr>`).join("")}
+    </tbody><tfoot><tr><td colspan="3">المجموع</td><td class="num">${num(out)}</td></tr></tfoot></table></div></div>` : ""}
   ${top.length ? `<div class="panel"><h3>لوحة الشرف</h3>${honorList(top)}</div>` : ""}
   ${unpaid.length ? `<div class="panel"><h3>لم يدفعوا رسوم ${monthName(m)} (${num(unpaid.length)})</h3><div class="muted">${unpaid.map((s) => esc(s.name)).join("، ")}</div></div>` : ""}`;
 }
@@ -399,6 +403,32 @@ bind.report = () => {
 const honorList = (top) => `<div class="honor">${top.map((s, i) => `<div class="honor-row"><span class="medal">${["🥇", "🥈", "🥉", "🏅", "🏅"][i]}</span>
   <b>${esc(s.name)}</b><span class="muted">${esc(s.group || "")}</span><span class="hz">${num(s.hizbs)} حزبًا</span>
   <div class="bar"><div style="width:${Math.min(100, s.hizbs * 100 / 60)}%"></div></div></div>`).join("")}</div>`;
+
+// ---------------------------------------------------------------- centre settings (admin)
+const contactLine = () => [state.settings.address, state.settings.phone && "هاتف: \u2066" + state.settings.phone + "\u2069",
+  state.settings.email && "البريد: \u2066" + state.settings.email + "\u2069"].filter(Boolean).join(" • ");
+function viewSettings() {
+  const s = state.settings;
+  const f = (id, label, v, extra = "") => `<label>${label}</label><input id="${id}" value="${esc(v || "")}" ${extra}>`;
+  return `<h1>إعدادات المركز</h1><div class="sub">تظهر في البطاقات والتقارير والشهادات، وفي الهاتف والحاسوب معًا</div>
+  <div class="panel" style="max-width:640px">
+    ${f("sn", "اسم المركز الكامل", s.name)}${f("sd", "اسم مدير المركز", s.director)}
+    <div class="row2"><div>${f("sp", "📞 هاتف المركز", s.phone, 'dir="ltr" type="tel" placeholder="+223 …"')}</div>
+      <div>${f("se", "✉️ البريد الإلكتروني للمركز", s.email, 'dir="ltr" type="email" placeholder="exemple@gmail.com"')}</div></div>
+    ${f("sa", "📍 العنوان (الحي، المدينة)", s.address)}
+    <div class="row2"><div>${f("sy", "العام الدراسي", s.academicYear, 'placeholder="2026 / 2027"')}</div><div>${f("sc", "العملة", s.currency)}</div></div>
+    <div class="modal-actions"><button class="btn" id="ssave">💾 حفظ</button></div></div>`;
+}
+bind.settings = () => {
+  $("#ssave").onclick = () => {
+    const v = (id) => $("#" + id).value.trim();
+    if (!v("sn")) { toast("اسم المركز مطلوب"); return; }
+    if (v("se") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("se"))) { toast("البريد الإلكتروني غير صحيح"); return; }
+    setDoc(doc(db, "settings", "centre"), { name: v("sn"), director: v("sd"), phone: v("sp"), email: v("se"), address: v("sa"),
+      academicYear: v("sy"), currency: v("sc") || "فرنك", updatedAt: new Date() }, { merge: true })
+      .then(() => { audit("تعديل إعدادات المركز", v("sn")); toast("تم حفظ إعدادات المركز"); }).catch(fail);
+  };
+};
 
 // ---------------------------------------------------------------- phone app
 function viewPhone() {
@@ -791,7 +821,7 @@ function viewSummary() {
     const rg = ps.filter((p) => p.month === m && p.type === "registration").reduce((a, p) => a + (p.amount || 0), 0);
     const ex = es.filter((e) => e.month === m).reduce((a, e) => a + (e.amount || 0), 0);
     const payers = ps.filter((p) => p.month === m && p.type === "monthly").length;
-    return `<tr><td>${monthName(m)}</td><td class="num">${num(mo)}</td><td class="num">${payers || ""}</td><td class="num">${num(rg)}</td>
+    return `<tr class="mrow" data-m="${m}" title="اضغط لعرض البيانات المالية لهذا الشهر"><td>📄 ${monthName(m)}</td><td class="num">${num(mo)}</td><td class="num">${payers || ""}</td><td class="num">${num(rg)}</td>
       <td class="num">${num(mo + rg)}</td><td class="num">${num(ex)}</td><td class="num" style="color:${mo + rg - ex < 0 ? "var(--red)" : "var(--green)"}"><b>${num(mo + rg - ex)}</b></td></tr>`;
   }).join("");
   return `<h1>الملخص المالي</h1><div class="sub">العام الدراسي ${yearLabel(state.filters.year)} (سبتمبر – أوت)</div>
@@ -802,7 +832,7 @@ function viewSummary() {
     <div class="card stat"><div class="l">إجمالي الإيرادات</div><div class="v">${amt(monthly + reg)}</div></div>
     <div class="card stat red"><div class="l">المصروفات</div><div class="v">${amt(exp)}</div></div>
     <div class="card stat ${monthly + reg - exp >= 0 ? "green" : "red"}"><div class="l">الرصيد الصافي</div><div class="v">${amt(monthly + reg - exp)}</div></div></div>
-  <div class="panel"><h3>حسب الشهر</h3><div class="table-wrap"><table><thead><tr><th>الشهر</th><th class="num">الرسوم الشهرية</th><th class="num">عدد الدافعين</th>
+  <div class="panel"><h3>حسب الشهر <span class="muted" style="font-size:13px;font-weight:400">— اضغط على الشهر لعرض تفاصيله</span></h3><div class="table-wrap"><table><thead><tr><th>الشهر</th><th class="num">الرسوم الشهرية</th><th class="num">عدد الدافعين</th>
     <th class="num">رسوم التسجيل</th><th class="num">الإيرادات</th><th class="num">المصروفات</th><th class="num">الصافي</th></tr></thead>
     <tbody>${rows}</tbody><tfoot><tr><td>المجموع</td><td class="num">${num(monthly)}</td><td></td><td class="num">${num(reg)}</td>
     <td class="num">${num(monthly + reg)}</td><td class="num">${num(exp)}</td><td class="num">${num(monthly + reg - exp)}</td></tr></tfoot></table></div></div>
@@ -814,6 +844,7 @@ function viewSummary() {
   </tbody></table></div></div>`;
 }
 bind.summary = () => {
+  document.querySelectorAll(".mrow").forEach((r) => r.onclick = () => { state.filters.reportMonth = r.dataset.m; location.hash = "#/report"; });
   $("#py").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], -12); render(); };
   $("#ny").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], 12); render(); };
 };

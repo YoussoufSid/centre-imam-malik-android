@@ -122,7 +122,7 @@ fun FeesScreen(state: AppState, openProfile: (String) -> Unit) {
         } else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(shown, key = { it.id }) { s ->
                 val p = paid[s.id]
-                Card(Modifier.fillMaxWidth().clickable { openProfile(s.id) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth().clickable { openProfile(s.id) }, colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(s.name, fontWeight = FontWeight.Bold)
@@ -173,12 +173,12 @@ fun StudentFeesCard(state: AppState, me: AppUser, student: Student, payments: Li
     var paying by remember { mutableStateOf<String?>(null) }
     val months = (0 until 6).map { shiftMonth(currentMonth(), -it) }
     val byMonth = payments.associateBy { it.month }
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Payments, null, tint = Gold); Spacer(Modifier.width(8.dp))
                 Text("الرسوم الشهرية", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text(if (student.monthlyFee > 0) money(student.monthlyFee) else "غير محددة", color = Color.DarkGray, fontSize = 13.sp)
+                Text(if (student.monthlyFee > 0) money(student.monthlyFee) else "غير محددة", color = SubText, fontSize = 13.sp)
             }
             months.forEach { m ->
                 val p = byMonth[m]

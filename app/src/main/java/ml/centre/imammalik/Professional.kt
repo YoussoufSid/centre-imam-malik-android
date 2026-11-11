@@ -71,21 +71,23 @@ fun SettingsScreen(state: AppState, close: () -> Unit) {
     var name by remember(v) { mutableStateOf(Centre.name) }
     var director by remember(v) { mutableStateOf(Centre.director) }
     var phone by remember(v) { mutableStateOf(Centre.phone) }
+    var email by remember(v) { mutableStateOf(Centre.email) }
     var address by remember(v) { mutableStateOf(Centre.address) }
     var year by remember(v) { mutableStateOf(Centre.academicYear) }
     var currency by remember(v) { mutableStateOf(Centre.currency) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("بيانات المركز", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Green)
-        Text("تظهر هذه البيانات في كشوف النتائج والشهادات ورسائل واتساب.", fontSize = 13.sp, color = Color.Gray,
+        Text("تظهر هذه البيانات في البطاقات وكشوف النتائج والشهادات ورسائل واتساب.", fontSize = 13.sp, color = Color.Gray,
             modifier = Modifier.padding(bottom = 12.dp))
         AppField(name, { name = it }, "اسم المركز الكامل")
         AppField(director, { director = it }, "اسم مدير المركز")
         AppField(phone, { phone = it }, "هاتف المركز", KeyboardType.Phone)
+        AppField(email, { email = it.trim() }, "البريد الإلكتروني للمركز", KeyboardType.Email)
         AppField(address, { address = it }, "العنوان (الحي، المدينة)")
         AppField(year, { year = it }, "العام الدراسي (مثال: 2026–2027)")
         AppField(currency, { currency = it }, "العملة (مثال: فرنك)")
         Spacer(Modifier.height(8.dp))
-        Button(onClick = { state.saveSettings(name, director, phone, address, year, currency, close) },
+        Button(onClick = { state.saveSettings(name, director, phone, email, address, year, currency, close) },
             modifier = Modifier.fillMaxWidth().height(50.dp)) {
             Icon(Icons.Default.Save, null); Spacer(Modifier.width(6.dp)); Text("حفظ الإعدادات")
         }

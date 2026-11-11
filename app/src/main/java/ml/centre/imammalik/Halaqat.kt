@@ -83,13 +83,13 @@ private fun HalaqaCard(
     name: String, teacher: String, schedule: String, members: List<Student>, expanded: Boolean,
     onToggle: () -> Unit, onEdit: (() -> Unit)?, editLabel: String? = null, openProfile: (String) -> Unit
 ) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
         Column {
             Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Avatar(name, 44.dp); Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(name, fontWeight = FontWeight.Bold)
-                    if (teacher.isNotBlank()) Text("المعلم: $teacher", fontSize = 13.sp, color = Color.DarkGray)
+                    if (teacher.isNotBlank()) Text("المعلم: $teacher", fontSize = 13.sp, color = SubText)
                     if (schedule.isNotBlank()) Text(schedule, fontSize = 12.sp, color = Color.Gray)
                 }
                 Text("${members.size} طالب", color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -218,7 +218,7 @@ fun BulkAddScreen(state: AppState, close: () -> Unit) {
                 label = { Text("رسوم التسجيل") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         }
 
-        if (parsed.isNotEmpty()) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        if (parsed.isNotEmpty()) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("معاينة: ${newOnes.size} طالب جديد" + if (parsed.size > newOnes.size) " • ${parsed.size - newOnes.size} موجود مسبقًا (سيُتخطّى)" else "",
                     fontWeight = FontWeight.Bold)

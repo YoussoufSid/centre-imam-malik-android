@@ -43,9 +43,24 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-val Green = Color(0xFF075B3A)
+/** Night mode, saved on the phone. Colours below follow it automatically (they are read from Compose state). */
+object ThemePref {
+    var dark by mutableStateOf(false)
+    fun load(context: android.content.Context) {
+        dark = context.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).getBoolean("dark", false)
+    }
+    fun toggle(context: android.content.Context) {
+        dark = !dark
+        context.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).edit().putBoolean("dark", dark).apply()
+    }
+}
+
+val Green: Color get() = if (ThemePref.dark) Color(0xFF2E9E6A) else Color(0xFF075B3A)
 val Gold = Color(0xFFD7A91E)
-val Cream = Color(0xFFF7F5EC)
+val Cream: Color get() = if (ThemePref.dark) Color(0xFF0F1714) else Color(0xFFF7F5EC)
+/** Card background and secondary text, light or dark. */
+val CardBg: Color get() = if (ThemePref.dark) Color(0xFF18221E) else Color.White
+val SubText: Color get() = if (ThemePref.dark) Color(0xFFB8C4BE) else Color.DarkGray
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,6 +69,7 @@ class MainActivity : ComponentActivity() {
         FirebaseApp.initializeApp(this)
         FirebaseFirestore.getInstance().firestoreSettings = FirebaseFirestoreSettings.Builder()
             .setPersistenceEnabled(true).build()
+        ThemePref.load(this)
         setContent { ImamMalikApp() }
     }
 }
@@ -63,7 +79,12 @@ fun ImamMalikApp() {
     val state = remember { AppState() }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         MaterialTheme(
-            colorScheme = lightColorScheme(primary = Green, secondary = Gold, background = Cream, surface = Color.White,
+            colorScheme = if (ThemePref.dark) darkColorScheme(primary = Green, secondary = Gold, background = Cream, surface = CardBg,
+                onPrimary = Color.White, onBackground = Color(0xFFE6ECE9), onSurface = Color(0xFFE6ECE9),
+                surfaceVariant = Color(0xFF22302A), onSurfaceVariant = Color(0xFFB8C4BE),
+                secondaryContainer = Green.copy(alpha = .3f), onSecondaryContainer = Color(0xFF9FE0C0),
+                surfaceContainer = Color(0xFF16201C), surfaceContainerHigh = Color(0xFF1D2925), surfaceContainerHighest = Color(0xFF24322C))
+            else lightColorScheme(primary = Green, secondary = Gold, background = Cream, surface = Color.White,
                 secondaryContainer = Green.copy(alpha = .12f), onSecondaryContainer = Green),
             shapes = Shapes(small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp))
         ) {
@@ -144,7 +165,7 @@ private fun AuthScreen(state: AppState) {
         }
         // Login form
         Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp).offset(y = (-18).dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(6.dp)) {
+            colors = CardDefaults.cardColors(containerColor = CardBg), elevation = CardDefaults.cardElevation(6.dp)) {
             Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (registering) "إنشاء حساب جديد" else "تسجيل الدخول", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Green)
                 Spacer(Modifier.height(12.dp))
@@ -311,6 +332,8 @@ private fun Dashboard(state: AppState, me: AppUser) {
                             runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                                 android.net.Uri.parse(WEB_DASHBOARD_URL))) }
                         })
+                        add(MenuEntry(if (ThemePref.dark) "الوضع النهاري" else "الوضع الليلي",
+                            if (ThemePref.dark) Icons.Default.LightMode else Icons.Default.DarkMode) { ThemePref.toggle(context) })
                         add(MenuEntry("حول التطبيق", Icons.Default.Info) { aboutOpen = true })
                         add(MenuEntry("تسجيل الخروج", Icons.Default.Logout) { logoutOpen = true })
                     })
@@ -403,7 +426,7 @@ object Screens {
 
 @Composable
 fun StatCard(title: String, value: String, icon: ImageVector, modifier: Modifier, tint: Color = Gold) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = CardBg)) {
         Column(Modifier.padding(14.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, null, tint = tint)
             // Amounts: number on one line (size adapted to its length), currency smaller underneath,
@@ -415,7 +438,7 @@ fun StatCard(title: String, value: String, icon: ImageVector, modifier: Modifier
             Text(number, fontSize = when { digits >= 8 -> 17.sp; digits >= 6 -> 20.sp; else -> 22.sp },
                 fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             if (isAmount) Text(Centre.currency, fontSize = 12.sp, color = Color.Gray, maxLines = 1)
-            Text(title, fontSize = 13.sp, color = Color.DarkGray, maxLines = 1)
+            Text(title, fontSize = 13.sp, color = SubText, maxLines = 1)
         }
     }
 }
@@ -451,7 +474,7 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
             }
         }
         item {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Text("﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾", Modifier.padding(16.dp).fillMaxWidth(),
                     color = Green, fontSize = 18.sp, fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center)
@@ -483,7 +506,7 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
             if (leaders.isNotEmpty()) {
                 item { SectionHeading("🏆 لوحة الشرف — الأكثر حفظًا") }
                 item {
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             leaders.forEachIndexed { i, s ->
                                 Column(Modifier.clickable { open(s) }) {
@@ -503,7 +526,7 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
                 items(todayLogs.take(5).size) { i -> LogCard(todayLogs[i], showStudent = true) }
             }
             item {
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.CloudDone, null, tint = Green); Spacer(Modifier.width(10.dp))
                         Text("يعمل التطبيق دون إنترنت، وتُرسل التغييرات تلقائيًا عند عودة الاتصال.", fontSize = 14.sp)
@@ -512,7 +535,7 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
             }
         } else {
             if (state.students.isEmpty()) item {
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Text("لم يُربط حسابك بأي طالب بعد. يرجى التواصل مع إدارة المركز لربط الحساب بملف الطالب.",
                         Modifier.padding(16.dp))
                 }

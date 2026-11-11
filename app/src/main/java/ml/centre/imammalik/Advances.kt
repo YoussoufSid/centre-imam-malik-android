@@ -51,7 +51,7 @@ fun AdvancesTab(state: AppState) {
         }
         if (state.advances.isEmpty()) item { EmptyState(Icons.Default.ReceiptLong, "لا توجد عُهَد بعد") }
         items(state.advances, key = { it.id }) { a ->
-            Card(Modifier.fillMaxWidth().clickable { openId = a.id }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(Modifier.fillMaxWidth().clickable { openId = a.id }, colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(a.recuPar, 40.dp); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
@@ -132,7 +132,7 @@ private fun AdvanceDetail(state: AppState, a: CashAdvance, back: () -> Unit) {
             }
         }
         item {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${monthName(a.month)}" + (if (a.week.isNotBlank()) " • ${a.week}" else "") + " • استلام ${ltr(a.receivedDate)}",
                         fontSize = 13.sp, color = Color.Gray)
@@ -145,7 +145,7 @@ private fun AdvanceDetail(state: AppState, a: CashAdvance, back: () -> Unit) {
                         Text(money(kotlin.math.abs(bal)), fontWeight = FontWeight.Bold, color = if (bal >= 0) Green else Red, fontSize = 17.sp)
                     }
                     if (a.settlementAmount > 0 || a.closed) Text("التسوية: ${money(a.settlementAmount)} • ${ltr(a.settlementDate)}" +
-                        if (a.closed) " • الحساب مُصفّى ✅" else "", fontSize = 13.sp, color = Color.DarkGray)
+                        if (a.closed) " • الحساب مُصفّى ✅" else "", fontSize = 13.sp, color = SubText)
                 }
             }
         }
@@ -162,7 +162,7 @@ private fun AdvanceDetail(state: AppState, a: CashAdvance, back: () -> Unit) {
         if (lines.isEmpty()) item { EmptyState(Icons.Default.ReceiptLong, "لم تُسجَّل مصروفات في هذه العهدة بعد") }
         items(lines, key = { it.id }) { l ->
             Card(Modifier.fillMaxWidth().clickable(enabled = !a.closed) { editingLine = l },
-                colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(l.note, fontWeight = FontWeight.Medium)

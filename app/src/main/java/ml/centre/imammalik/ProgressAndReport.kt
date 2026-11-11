@@ -41,7 +41,7 @@ fun HizbProgressBar(hizbs: Int, modifier: Modifier = Modifier) {
 @Composable
 fun HizbProgressCard(state: AppState, me: AppUser, student: Student) {
     var editing by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (student.hizbs >= TOTAL_HIZBS) Icons.Default.EmojiEvents else Icons.Default.AutoStories, null, tint = Gold)
@@ -52,7 +52,7 @@ fun HizbProgressCard(state: AppState, me: AppUser, student: Student) {
             Spacer(Modifier.height(10.dp))
             HizbProgressBar(student.hizbs)
             Spacer(Modifier.height(6.dp))
-            Text(hizbLabel(student.hizbs), color = Color.DarkGray, fontSize = 14.sp)
+            Text(hizbLabel(student.hizbs), color = SubText, fontSize = 14.sp)
             if (me.isStaff) {
                 if (!editing) TextButton(onClick = { editing = true }) {
                     Icon(Icons.Default.Edit, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("تحديث عدد الأحزاب")

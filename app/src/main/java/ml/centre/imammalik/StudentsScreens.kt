@@ -26,7 +26,7 @@ import com.google.firebase.firestore.ListenerRegistration
 
 @Composable
 fun StudentRow(s: Student, open: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable(onClick = open), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = open), colors = CardDefaults.cardColors(containerColor = CardBg)) {
         ListItem(
             headlineContent = { Text(s.name, fontWeight = FontWeight.Bold) },
             supportingContent = {
@@ -47,7 +47,7 @@ fun StudentRow(s: Student, open: () -> Unit) {
                     Icon(Icons.Default.ChevronLeft, "فتح الملف")
                 }
             },
-            colors = ListItemDefaults.colors(containerColor = Color.White)
+            colors = ListItemDefaults.colors(containerColor = CardBg)
         )
     }
 }
@@ -125,7 +125,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
 
     LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StudentAvatar(student, 64.dp); Spacer(Modifier.width(12.dp))
@@ -194,7 +194,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         item { Text("سجل الحضور", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         if (attendance.isEmpty()) item { Text("لا يوجد حضور مسجل بعد", color = Color.Gray) }
         items(attendance.take(30), key = { "att_" + it.id }) { r ->
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(ltr(r.date), Modifier.weight(1f))
                     StatusBadge(r.status)
@@ -228,7 +228,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
 private fun InfoLine(label: String, value: String, modifier: Modifier = Modifier) {
     if (value.isBlank()) return
     Row(modifier) {
-        Text("$label: ", fontWeight = FontWeight.Bold, color = Color.DarkGray)
+        Text("$label: ", fontWeight = FontWeight.Bold, color = SubText)
         Text(value)
     }
 }
