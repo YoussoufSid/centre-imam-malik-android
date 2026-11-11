@@ -142,7 +142,7 @@ object StaffCategory {
     fun plural(c: String) = when (c) { ADMIN -> "الإداريون"; SUPERVISOR -> "المراقبون"; WORKER -> "العمال"; else -> "المدرسون" }
     fun french(c: String) = when (c) { ADMIN -> "Personnel administratif"; SUPERVISOR -> "Surveillants"; WORKER -> "Ouvriers"; else -> "Enseignants" }
     /** French name for the bilingual staff card. */
-    fun french(category: String): String = when (category) {
+    fun frenchSingular(category: String): String = when (category) {
         TEACHER -> "Enseignant"; ADMIN -> "Administration"; SUPERVISOR -> "Surveillant"; WORKER -> "Agent"; else -> ""
     }
 }

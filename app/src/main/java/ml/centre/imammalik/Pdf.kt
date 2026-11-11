@@ -180,7 +180,7 @@ fun shareStudentCard(context: Context, student: Student) {
 /** Staff ID card (teachers, administration, supervisors, workers). */
 fun shareStaffCard(context: Context, t: Teacher) {
     shareIdCard(context, "بطاقة موظف", "CARTE PROFESSIONNELLE", t.name, staffNumber(t.id), t.photo, staffQrText(t),
-        listOf(Triple("الفئة", "Catégorie", "${t.category}  ${ltr(StaffCategory.french(t.category))}"),
+        listOf(Triple("الفئة", "Catégorie", "${t.category}  ${ltr(StaffCategory.frenchSingular(t.category))}"),
             Triple("الوظيفة", "Fonction", t.function),
             Triple("الهاتف", "Téléphone", t.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: ""),
             Triple("التعيين", "Embauche", if (t.hireDate.isBlank()) "" else ltr(frDate(t.hireDate)))),

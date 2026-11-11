@@ -284,6 +284,6 @@ class LogicTest {
         assertEquals("E001", staffNumber("staff_1"))
         assertEquals("E012", staffNumber("staff_12"))
         assertEquals("XY12AB", staffNumber("aBcDeFgH9xy12ab"))
-        assertEquals("Agent", StaffCategory.french(StaffCategory.WORKER))
+        assertEquals("Agent", StaffCategory.frenchSingular(StaffCategory.WORKER))
     }
 }
