@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=18";
+import { firebaseConfig } from "./firebase-config.js?v=19";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -76,6 +76,7 @@ const db = initializeFirestore(fb, { localCache: persistentLocalCache() });
 const state = {
   user: null, profile: null, settings: { name: DEFAULT_NAME, currency: "فرنك", phone: DEFAULT_PHONE },
   students: [], halaqat: [], payments: [], expenses: [], staff: [], payroll: [], unsub: [], loaded: false,
+  memo: { period: "WEEK", anchor: today(), group: "", key: null, logs: null, loading: null },
   filters: { q: "", group: "", feeMonth: currentMonth(), expMonth: currentMonth(), year: currentMonth(), payMonth: currentMonth() }
 };
 const isAdmin = () => state.user?.email?.toLowerCase() === ADMIN_EMAIL || state.profile?.role === "admin";
@@ -183,7 +184,7 @@ function renderLogin() {
 // [route, icon, label, adminOnly, section]
 const NAV = [
   ["home", "🏠", "الرئيسية", false, ""],
-  ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"],
+  ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"], ["quran", "📖", "الحفظ والمراجعة", false, "التعليم"],
   ["fees", "💰", "الرسوم الشهرية", true, "المالية"], ["registration", "📝", "رسوم التسجيل", true, "المالية"],
   ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"], ["report", "📄", "البيانات المالية الشهرية", true, "المالية"],
   ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"],
@@ -228,7 +229,7 @@ const route = () => (location.hash.replace("#/", "") || "home");
 function render() {
   if (!state.user || !state.profile || !isStaff()) return;
   const r = route();
-  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport, settings: viewSettings };
+  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport, settings: viewSettings, quran: viewQuran };
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
@@ -412,6 +413,135 @@ bind.report = () => {
 const honorList = (top) => `<div class="honor">${top.map((s, i) => `<div class="honor-row"><span class="medal">${["🥇", "🥈", "🥉", "🏅", "🏅"][i]}</span>
   <b>${esc(s.name)}</b><span class="muted">${esc(s.group || "")}</span><span class="hz">${num(s.hizbs)} حزبًا</span>
   <div class="bar"><div style="width:${Math.min(100, s.hizbs * 100 / 60)}%"></div></div></div>`).join("")}</div>`;
+
+// ---------------------------------------------------------------- memorization & review follow-up
+// Same rules as the phone app (MemoLog.kt): periods, per-student summary, suggested next position.
+const SURAHS = [["الفاتحة", 7], ["البقرة", 286], ["آل عمران", 200], ["النساء", 176], ["المائدة", 120], ["الأنعام", 165], ["الأعراف", 206], ["الأنفال", 75], ["التوبة", 129], ["يونس", 109], ["هود", 123], ["يوسف", 111], ["الرعد", 43], ["إبراهيم", 52], ["الحجر", 99], ["النحل", 128], ["الإسراء", 111], ["الكهف", 110], ["مريم", 98], ["طه", 135], ["الأنبياء", 112], ["الحج", 78], ["المؤمنون", 118], ["النور", 64], ["الفرقان", 77], ["الشعراء", 227], ["النمل", 93], ["القصص", 88], ["العنكبوت", 69], ["الروم", 60], ["لقمان", 34], ["السجدة", 30], ["الأحزاب", 73], ["سبأ", 54], ["فاطر", 45], ["يس", 83], ["الصافات", 182], ["ص", 88], ["الزمر", 75], ["غافر", 85], ["فصلت", 54], ["الشورى", 53], ["الزخرف", 89], ["الدخان", 59], ["الجاثية", 37], ["الأحقاف", 35], ["محمد", 38], ["الفتح", 29], ["الحجرات", 18], ["ق", 45], ["الذاريات", 60], ["الطور", 49], ["النجم", 62], ["القمر", 55], ["الرحمن", 78], ["الواقعة", 96], ["الحديد", 29], ["المجادلة", 22], ["الحشر", 24], ["الممتحنة", 13], ["الصف", 14], ["الجمعة", 11], ["المنافقون", 11], ["التغابن", 18], ["الطلاق", 12], ["التحريم", 12], ["الملك", 30], ["القلم", 52], ["الحاقة", 52], ["المعارج", 44], ["نوح", 28], ["الجن", 28], ["المزمل", 20], ["المدثر", 56], ["القيامة", 40], ["الإنسان", 31], ["المرسلات", 50], ["النبأ", 40], ["النازعات", 46], ["عبس", 42], ["التكوير", 29], ["الانفطار", 19], ["المطففين", 36], ["الانشقاق", 25], ["البروج", 22], ["الطارق", 17], ["الأعلى", 19], ["الغاشية", 26], ["الفجر", 30], ["البلد", 20], ["الشمس", 15], ["الليل", 21], ["الضحى", 11], ["الشرح", 8], ["التين", 8], ["العلق", 19], ["القدر", 5], ["البينة", 8], ["الزلزلة", 8], ["العاديات", 11], ["القارعة", 11], ["التكاثر", 8], ["العصر", 3], ["الهمزة", 9], ["الفيل", 5], ["قريش", 4], ["الماعون", 7], ["الكوثر", 3], ["الكافرون", 6], ["النصر", 3], ["المسد", 5], ["الإخلاص", 4], ["الفلق", 5], ["الناس", 6]];
+const LOG_NEW = "حفظ جديد", LOG_REV = "مراجعة";
+const GRADES = ["ممتاز", "جيد جدًا", "جيد", "مقبول", "يحتاج إعادة"];
+const PERIODS = [["DAY", "يومي"], ["WEEK", "أسبوعي"], ["MONTH", "شهري"], ["TERM", "فصلي"], ["YEAR", "سنوي"]];
+const dParse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const dKey = (d) => d.toISOString().slice(0, 10);
+const dAdd = (s, n) => { const d = dParse(s); d.setUTCDate(d.getUTCDate() + n); return dKey(d); };
+const dm = (s) => `${s.slice(8, 10)}/${s.slice(5, 7)}`;
+const TERM_NAMES = ["الفصل الأول", "الفصل الثاني", "الفصل الثالث"];
+const termOf = (m) => (m >= 9 ? 1 : m <= 3 ? 2 : 3);
+function periodRange(p, anchor) {
+  const y = +anchor.slice(0, 4), mo = +anchor.slice(5, 7), start = mo >= 9 ? y : y - 1, yl = `\u2066${start} / ${start + 1}\u2069`;
+  if (p === "DAY") return { from: anchor, to: anchor, label: `\u2066${anchor}\u2069` };
+  if (p === "WEEK") { const back = (dParse(anchor).getUTCDay() + 6) % 7; const from = dAdd(anchor, -back), to = dAdd(from, 6);
+    return { from, to, label: `أسبوع \u2066${dm(from)} – ${dm(to)}\u2069` }; }
+  if (p === "MONTH") return { from: anchor.slice(0, 7) + "-01", to: anchor.slice(0, 7) + "-31", label: monthName(anchor.slice(0, 7)) };
+  if (p === "TERM") { const t = termOf(mo); const r = t === 1 ? [`${start}-09-01`, `${start}-12-31`] : t === 2 ? [`${start + 1}-01-01`, `${start + 1}-03-31`] : [`${start + 1}-04-01`, `${start + 1}-08-31`];
+    return { from: r[0], to: r[1], label: `${TERM_NAMES[t - 1]} ${yl}` }; }
+  return { from: `${start}-09-01`, to: `${start + 1}-08-31`, label: `العام الدراسي ${yl}` };
+}
+function shiftPeriod(p, anchor, delta) {
+  if (p === "DAY") return dAdd(anchor, delta);
+  if (p === "WEEK") return dAdd(anchor, 7 * delta);
+  if (p === "MONTH") return shiftMonth(anchor.slice(0, 7), delta) + "-01";
+  if (p === "TERM") { const r = periodRange(p, anchor); return delta > 0 ? dAdd(r.to, 1) : dAdd(r.from, -1); }
+  return (+anchor.slice(0, 4) + delta) + anchor.slice(4);
+}
+const ayat = (l) => (l.fromAyah > 0 && l.toAyah >= l.fromAyah ? l.toAyah - l.fromAyah + 1 : 0);
+const gradeScore = (g) => { const i = GRADES.indexOf(g); return i < 0 ? null : 5 - i; };
+const gradeFromScore = (a) => GRADES[Math.min(GRADES.length - 1, Math.max(0, 5 - Math.round(a)))];
+const logOrder = (a, b) => (a.date || "").localeCompare(b.date || "") || ((a.createdAt?.seconds ?? a.createdAt ?? 0) - (b.createdAt?.seconds ?? b.createdAt ?? 0));
+function summarizeMemo(students, logs) {
+  const by = {}; logs.forEach((l) => (by[l.studentId] = by[l.studentId] || []).push(l));
+  return students.map((s) => {
+    const l = (by[s.id] || []).slice().sort(logOrder), nw = l.filter((x) => x.type === LOG_NEW), rv = l.filter((x) => x.type === LOG_REV);
+    const sc = l.map((x) => gradeScore(x.grade)).filter((x) => x != null);
+    return { s, logs: l, newS: nw.length, revS: rv.length, newA: nw.reduce((a, x) => a + ayat(x), 0), revA: rv.reduce((a, x) => a + ayat(x), 0),
+      surahs: [...new Set(nw.map((x) => x.surah).filter(Boolean))], avg: sc.length ? sc.reduce((a, b) => a + b, 0) / sc.length : null,
+      days: new Set(l.map((x) => x.date)).size };
+  });
+}
+function nextPosition(last) {
+  if (!last || !last.surah) return null;
+  const i = SURAHS.findIndex((x) => x[0] === last.surah); if (i < 0) return { surah: last.surah, from: 0, to: 0 };
+  const max = SURAHS[i][1], size = Math.max(1, ayat(last));
+  if (last.toAyah >= 1 && last.toAyah < max) { const f = last.toAyah + 1; return { surah: last.surah, from: f, to: Math.min(max, f + size - 1) }; }
+  if (last.toAyah <= 0) return { surah: last.surah, from: 0, to: 0 };
+  const prev = SURAHS[i > 0 ? i - 1 : i]; return { surah: prev[0], from: 1, to: Math.min(prev[1], size) };
+}
+const logText = (l) => `${l.type}: سورة ${esc(l.surah)}${l.fromAyah > 0 ? ` \u2066${l.fromAyah}–${l.toAyah}\u2069` : ""}${l.grade ? " — " + esc(l.grade) : ""}`;
+
+function loadMemo(r) {
+  const key = r.from + "|" + r.to; if (state.memo.loading === key) return; state.memo.loading = key;
+  getDocs(query(collection(db, "quranLogs"), where("date", ">=", r.from), where("date", "<=", r.to)))
+    .then((q) => { state.memo.logs = q.docs.map((d) => ({ id: d.id, ...d.data() })); state.memo.key = key; render(); })
+    .catch((e) => { state.memo.loading = null; fail(e); });
+}
+function viewQuran() {
+  const m = state.memo, r = periodRange(m.period, m.anchor), key = r.from + "|" + r.to;
+  if (m.key !== key) loadMemo(r);
+  const students = state.students.filter((s) => (s.status || ACTIVE) === ACTIVE && (!m.group || s.group === m.group));
+  const ids = new Set(students.map((s) => s.id));
+  const logs = m.key === key ? (m.logs || []).filter((l) => ids.has(l.studentId)) : [];
+  const rows = summarizeMemo(students, logs).sort((a, b) => b.newA - a.newA || (b.newS + b.revS) - (a.newS + a.revS) || a.s.name.localeCompare(b.s.name, "ar"));
+  const day = m.period === "DAY";
+  return `<h1>الحفظ والمراجعة</h1><div class="sub">سجل المتابعة اليومي والأسبوعي والشهري والفصلي والسنوي</div>
+  <div class="toolbar">${PERIODS.map(([k, t]) => `<button class="btn small ${m.period === k ? "" : "outline"}" data-per="${k}">${t}</button>`).join("")}
+    <select id="mg"><option value="">كل الحلقات</option>${groups().map((g) => `<option ${m.group === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select>
+    <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
+  <div class="toolbar"><button class="btn outline small" id="mp">◀ السابق</button><b>${r.label}</b>
+    <button class="btn outline small" id="mn" ${r.to >= today() ? "disabled" : ""}>التالي ▶</button>
+    ${m.key !== key ? '<span class="muted">جارٍ التحميل…</span>' : ""}</div>
+  <div class="cards"><div class="card stat green"><div class="l">آيات الحفظ</div><div class="v">${num(rows.reduce((a, x) => a + x.newA, 0))}</div></div>
+    <div class="card stat"><div class="l">آيات المراجعة</div><div class="v">${num(rows.reduce((a, x) => a + x.revA, 0))}</div></div>
+    <div class="card stat"><div class="l">جلسات التسميع</div><div class="v">${num(logs.length)}</div></div>
+    <div class="card stat red"><div class="l">طلاب بلا تسجيل</div><div class="v">${num(rows.filter((x) => !x.logs.length).length)}</div></div></div>
+  <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الطالب</th><th class="num">جلسات الحفظ</th><th class="num">آيات الحفظ</th>
+    <th>${day ? "التفاصيل" : "السور المحفوظة"}</th><th class="num">جلسات المراجعة</th><th class="num">آيات المراجعة</th><th>المعدل</th><th class="num">الأيام</th><th class="no-print">تسجيل</th></tr></thead><tbody>
+    ${rows.map((x, i) => `<tr class="${x.logs.length ? "" : "nolog"}"><td class="num">${i + 1}</td><td><b>${esc(x.s.name)}</b><div class="muted" style="font-size:12px">${esc(x.s.group || "")}</div></td>
+      <td class="num">${x.newS || ""}</td><td class="num">${x.newA || ""}</td>
+      <td style="white-space:normal">${day ? x.logs.map(logText).join("<br>") : esc(x.surahs.join("، "))}${x.logs.length ? "" : '<span class="muted">لم يُسجَّل شيء</span>'}</td>
+      <td class="num">${x.revS || ""}</td><td class="num">${x.revA || ""}</td><td>${x.avg != null ? gradeFromScore(x.avg) : ""}</td><td class="num">${x.days || ""}</td>
+      <td class="no-print actions"><button class="btn small" data-hifz="${x.s.id}">+ حفظ</button><button class="btn small outline" data-rev="${x.s.id}">+ مراجعة</button></td></tr>`).join("")
+      || '<tr><td colspan="10" class="muted">لا يوجد طلاب</td></tr>'}
+  </tbody></table></div>`;
+}
+bind.quran = () => {
+  const m = state.memo;
+  document.querySelectorAll("[data-per]").forEach((b) => b.onclick = () => { m.period = b.dataset.per; render(); });
+  $("#mg").onchange = (e) => { m.group = e.target.value; render(); };
+  $("#mp").onclick = () => { m.anchor = shiftPeriod(m.period, m.anchor, -1); render(); };
+  $("#mn").onclick = () => { m.anchor = shiftPeriod(m.period, m.anchor, 1); render(); };
+  const st = (id) => state.students.find((s) => s.id === id);
+  document.querySelectorAll("[data-hifz]").forEach((b) => b.onclick = () => memoForm(st(b.dataset.hifz), LOG_NEW));
+  document.querySelectorAll("[data-rev]").forEach((b) => b.onclick = () => memoForm(st(b.dataset.rev), LOG_REV));
+};
+/** Quick entry: pre-filled from the student's last record of this type; a grade button saves. */
+async function memoForm(s, type) {
+  let last = null;
+  try { const q = await getDocs(query(collection(db, "quranLogs"), where("studentId", "==", s.id)));
+    last = q.docs.map((d) => d.data()).filter((l) => l.type === type).sort(logOrder).pop() || null; } catch {}
+  const n = nextPosition(last) || { surah: "", from: 0, to: 0 };
+  openModal(`<h3>${type} — ${esc(s.name)}</h3>
+    ${last ? `<div class="muted">آخر ${type}: ${logText(last)} (\u2066${esc(last.date)}\u2069)</div>` : ""}
+    <label>السورة</label><select id="ms">${SURAHS.map(([nm, a], i) => `<option value="${nm}" ${nm === n.surah ? "selected" : ""}>${i + 1}. ${nm} (${a})</option>`).join("")}</select>
+    <div class="row2"><div><label>من آية</label><input id="mf" type="number" min="1" value="${n.from || ""}"></div>
+    <div><label>إلى آية</label><input id="mt" type="number" min="1" value="${n.to || ""}"></div></div>
+    <button class="btn small outline" id="mall" type="button">السورة كاملة</button>
+    <div class="row2"><div><label>التاريخ</label><input id="md" type="date" value="${today()}"></div><div><label>ملاحظة</label><input id="mnote"></div></div>
+    <label>اضغط التقدير للحفظ</label><div class="grade-btns">${GRADES.map((g, i) => `<button class="btn g${i}" data-g="${g}">${g}</button>`).join("")}</div>
+    <div class="modal-actions"><button class="btn outline" id="cancel">إلغاء</button></div>`, (b) => {
+    if (!n.surah) b.querySelector("#ms").value = "";
+    b.querySelector("#cancel").onclick = closeModal;
+    b.querySelector("#ms").onchange = () => { b.querySelector("#mf").value = 1; b.querySelector("#mt").value = ""; };
+    b.querySelector("#mall").onclick = () => { const x = SURAHS.find((y) => y[0] === b.querySelector("#ms").value); if (x) { b.querySelector("#mf").value = 1; b.querySelector("#mt").value = x[1]; } };
+    b.querySelectorAll("[data-g]").forEach((g) => g.onclick = () => {
+      const v = (id) => b.querySelector("#" + id).value.trim(); const from = +v("mf") || 0, to = +v("mt") || 0;
+      if (!v("ms")) { toast("اختر السورة"); return; }
+      if (from && to && to < from) { toast("رقم آية النهاية أصغر من البداية"); return; }
+      addDoc(collection(db, "quranLogs"), { studentId: s.id, studentName: s.name, date: v("md") || today(), type, surah: v("ms"), fromAyah: from, toAyah: to,
+        grade: g.dataset.g, notes: v("mnote"), teacherName: state.profile?.name || "", createdAt: new Date() })
+        .then(() => { toast(`تم تسجيل ${type} لـ ${s.name}`); state.memo.key = null; state.memo.loading = null; render(); }).catch(fail);
+      closeModal();
+    });
+  });
+}
 
 // ---------------------------------------------------------------- centre settings (admin)
 const contactLine = () => [state.settings.address, state.settings.phone && "هاتف: \u2066" + state.settings.phone + "\u2069",

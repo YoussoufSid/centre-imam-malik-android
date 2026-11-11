@@ -385,3 +385,11 @@ a.wa-phone { display: inline-flex; gap: 6px; align-items: center; padding: 3px 1
 a.wa-phone:hover { background: #c9f0d8; }
 body.dark a.wa-phone { background: #163626; color: #9fe0c0; }
 @media print { a.wa-phone { background: none; padding: 0; color: inherit; } }
+
+/* memorization follow-up */
+tr.nolog td { background: #fff5f5; }
+body.dark tr.nolog td { background: #2a1b1b; }
+.grade-btns { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.grade-btns .btn { padding: 12px; font-size: 16px; }
+.grade-btns .g0, .grade-btns .g1 { background: var(--green); } .grade-btns .g2 { background: #3B7DD8; }
+.grade-btns .g3 { background: #B7791F; } .grade-btns .g4 { background: var(--red); }
