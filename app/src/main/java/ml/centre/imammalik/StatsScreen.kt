@@ -28,7 +28,7 @@ private val Red = Color(0xFFC53030)
 private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Green)
+            SectionHeading(title)
             content()
         }
     }

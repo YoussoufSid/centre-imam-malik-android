@@ -256,9 +256,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
     val onMain = profileStudent == null && screen == null
 
     Scaffold(
-        topBar = {
+        topBar = { Column {
             TopAppBar(
-                title = { Text(profileStudent?.name ?: Screens.title(screen) ?: "مركز الإمام مالك", maxLines = 1) },
+                title = { OrnateTitle(profileStudent?.name ?: Screens.title(screen) ?: "مركز الإمام مالك") },
                 navigationIcon = {
                     if (!onMain) IconButton(onClick = { if (profileStudent != null) profileId = null else screen = null }) {
                         Icon(Icons.Default.ArrowForward, "رجوع", tint = Color.White)
@@ -311,7 +311,8 @@ private fun Dashboard(state: AppState, me: AppUser) {
                     })
                 }
             )
-        },
+            GoldRule()
+        } },
         bottomBar = {
             if (onMain) NavigationBar {
                 tabs.forEachIndexed { i, item ->

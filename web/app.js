@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=7";
+import { firebaseConfig } from "./firebase-config.js?v=8";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -219,6 +219,7 @@ function render() {
   $("#menuBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
   document.querySelectorAll(".side nav a").forEach((a) => a.addEventListener("click", () => { state.menuOpen = false; }));
   $("#logout").onclick = () => confirmBox("هل تريد تسجيل الخروج؟", () => signOut(auth), "خروج");
+  const h = document.querySelector("main > h1"); if (h) h.dataset.ico = title[1];
   bind[allowed]?.();
   if (focus && document.getElementById(focus)) { const el = document.getElementById(focus); el.focus(); try { el.setSelectionRange(caret, caret); } catch {} }
 }
@@ -235,7 +236,7 @@ function bindFilters() {
 
 // ---------------------------------------------------------------- phone app
 function viewPhone() {
-  return `<h2>📱 تطبيق الهاتف</h2>
+  return `<h1>تطبيق الهاتف</h1><div class="sub">التثبيت والتحديث على الهاتف والحاسوب</div>
   <div class="panel phone-panel">
     <h3>تثبيت التطبيق أو تحديثه على هاتف أندرويد</h3>
     <a class="btn big" href="${APK_URL}">⬇️ تنزيل أحدث إصدار</a>
