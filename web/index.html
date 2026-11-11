@@ -10,13 +10,14 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
   <div id="app"><div class="center muted">جارٍ التحميل…</div></div>
   <div id="modal" class="modal hidden"><div class="modal-box" id="modal-box"></div></div>
   <div id="toast" class="toast hidden"></div>
-  <script type="module" src="app.js?v=12"></script>
+  <script src="vendor/qrcode.js"></script>
+  <script type="module" src="app.js?v=14"></script>
   <script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js"));</script>
 </body>
 </html>

@@ -250,6 +250,11 @@ private fun Dashboard(state: AppState, me: AppUser) {
     var latestVersion by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { latestVersion = fetchLatestVersion() }
     val updateAvailable = latestVersion?.let { isNewerVersion(it, BuildConfig.VERSION_NAME) } == true
+    // Automatic update: the dialog opens by itself once per launch when a newer version is published.
+    var updateDialog by rememberSaveable { mutableStateOf(false) }
+    var updateOffered by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(updateAvailable) { if (updateAvailable && !updateOffered) { updateOffered = true; updateDialog = true } }
+    if (updateDialog && latestVersion != null) AutoUpdateDialog(latestVersion!!) { updateDialog = false }
 
     val profileStudent = profileId?.let { id -> state.students.firstOrNull { it.id == id } }
     if (profileId != null && profileStudent == null && state.students.isNotEmpty()) profileId = null
@@ -297,7 +302,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                                 state.message = when {
                                     v == null -> "تعذّر التحقق؛ تأكد من الاتصال بالإنترنت"
                                     isNewerVersion(v, BuildConfig.VERSION_NAME) -> "يتوفر الإصدار $v — جارٍ فتح التنزيل"
-                                        .also { openApkDownload(context) }
+                                        .also { updateDialog = true }
                                     else -> "أنت تستخدم أحدث إصدار (${BuildConfig.VERSION_NAME}) ✅"
                                 }
                             }
@@ -346,7 +351,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                 "الرئيسية" -> Column {
                     if (updateAvailable) {
                         Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-                            UpdateBanner(latestVersion!!) { openApkDownload(context) }
+                            UpdateBanner(latestVersion!!) { updateDialog = true }
                         }
                     }
                     HomeScreen(state, me, quickActions) { profileId = it.id }

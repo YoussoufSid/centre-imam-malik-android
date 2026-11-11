@@ -16,6 +16,17 @@ fun studentNumber(id: String): String {
     return (if (Regex("^[sS]\\d+$").matches(t)) t else t.takeLast(6)).uppercase()
 }
 
+/** Staff card number: "staff_1" → "E001"; generated ids → last 6 characters. */
+fun staffNumber(id: String): String {
+    val n = Regex("^staff_(\\d+)$").find(id.trim())?.groupValues?.get(1)?.toIntOrNull()
+    return if (n != null) "E%03d".format(n) else id.trim().takeLast(6).uppercase()
+}
+
+fun staffQrText(t: Teacher): String = "Centre Imam Malik\nN° ${staffNumber(t.id)}\n${t.name}"
+
+/** Text inside the ID card's QR code (same as the web dashboard). */
+fun qrText(s: Student): String = "Centre Imam Malik\nN° ${studentNumber(s.id)}\n${s.name}"
+
 // ---------- Updates ----------
 
 /** Always the newest phone app (public GitHub Release asset, no login needed). */
@@ -117,7 +128,9 @@ data class Teacher(
     /** Job title, e.g. "مدرس الحلقة ونائب المدير". */
     val function: String = "",
     val cessationDate: String = "",
-    val paymentMode: String = ""
+    val paymentMode: String = "",
+    /** Small JPEG data URL for the staff card ("" = no photo). */
+    val photo: String = ""
 )
 
 object StaffCategory {
@@ -128,6 +141,10 @@ object StaffCategory {
     val all = listOf(TEACHER, ADMIN, SUPERVISOR, WORKER)
     fun plural(c: String) = when (c) { ADMIN -> "الإداريون"; SUPERVISOR -> "المراقبون"; WORKER -> "العمال"; else -> "المدرسون" }
     fun french(c: String) = when (c) { ADMIN -> "Personnel administratif"; SUPERVISOR -> "Surveillants"; WORKER -> "Ouvriers"; else -> "Enseignants" }
+    /** French name for the bilingual staff card. */
+    fun frenchSingular(category: String): String = when (category) {
+        TEACHER -> "Enseignant"; ADMIN -> "Administration"; SUPERVISOR -> "Surveillant"; WORKER -> "Agent"; else -> ""
+    }
 }
 
 val PaymentModes = listOf("نقدًا", "Orange Money", "Moov Money", "تحويل بنكي")

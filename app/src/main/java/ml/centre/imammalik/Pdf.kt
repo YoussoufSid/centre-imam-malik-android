@@ -166,8 +166,30 @@ fun shareReportCard(
 }
 
 /** A4 landscape certificate of memorization (or completion when all 60 hizbs are memorized). */
-/** Student ID card at real card size (85.6 × 54 mm), drawn at 2× and scaled for crisp printing. */
+/** Student ID card at real card size (85.6 × 54 mm). */
 fun shareStudentCard(context: Context, student: Student) {
+    fun date(d: String) = if (d.isBlank()) "" else ltr(frDate(d))
+    shareIdCard(context, "بطاقة طالب", "CARTE D'ÉLÈVE", student.name, studentNumber(student.id), student.photo, qrText(student),
+        listOf(Triple("الحلقة", "Groupe", student.group), Triple("المعلم", "Enseignant", student.teacher),
+            Triple("تاريخ الميلاد", "Né(e) le", date(student.birthDate)),
+            Triple("ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: ""),
+            Triple("التسجيل", "Inscription", date(student.enrollmentDate))),
+        "card-${safeName(student.name)}.pdf")
+}
+
+/** Staff ID card (teachers, administration, supervisors, workers). */
+fun shareStaffCard(context: Context, t: Teacher) {
+    shareIdCard(context, "بطاقة موظف", "CARTE PROFESSIONNELLE", t.name, staffNumber(t.id), t.photo, staffQrText(t),
+        listOf(Triple("الفئة", "Catégorie", "${t.category}  ${ltr(StaffCategory.frenchSingular(t.category))}"),
+            Triple("الوظيفة", "Fonction", t.function),
+            Triple("الهاتف", "Téléphone", t.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: ""),
+            Triple("التعيين", "Embauche", if (t.hireDate.isBlank()) "" else ltr(frDate(t.hireDate)))),
+        "card-${safeName(t.name)}.pdf")
+}
+
+/** Bilingual ID card drawn at 2× and scaled for crisp printing: header, photo, number, fields, QR, footer. */
+private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: String, number: String, photoUrl: String,
+                        qr: String, fields: List<Triple<String, String, String>>, fileName: String) {
     val doc = PdfDocument()
     val page = doc.startPage(PdfDocument.PageInfo.Builder(243, 153, 1).create())
     val c = page.canvas
@@ -179,31 +201,37 @@ fun shareStudentCard(context: Context, student: Student) {
     c.logo(context, W - 64f, 9f, 54f)
     c.rtlText(Centre.name, W - 74f, 6f, 400f, 12.5f, 0xFFFFFFFF.toInt(), bold = true)
     c.rtlText(CENTRE_FR, W - 74f, 27f, 400f, 8.5f, 0xFFE8F1EC.toInt())
-    c.rtlText("بطاقة طالب   ${ltr("CARTE D'ÉLÈVE")}", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
+    c.rtlText("$kindAr   ${ltr(kindFr)}", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
     // photo box + number
     val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFBBBBBB.toInt(); strokeWidth = 1.5f }
-    val photo = decodePhoto(student.photo)
+    val photo = decodePhoto(photoUrl)
     if (photo != null) c.drawBitmap(photo, null, RectF(20f, 86f, 112f, 208f), Paint(Paint.FILTER_BITMAP_FLAG))
     else c.rtlText("الصورة\nPhoto", 112f, 132f, 92f, 11f, 0xFFAAAAAA.toInt(), align = Layout.Alignment.ALIGN_CENTER)
     c.drawRect(20f, 86f, 112f, 208f, box)
-    c.rtlText(ltr("N° " + studentNumber(student.id)), 126f, 212f, 120f, 12.5f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText(ltr("N° $number"), 126f, 212f, 120f, 12.5f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     // details
     val right = W - 20f; val w = 330f
-    c.rtlText(student.name, right, 88f, w, 20f, GREEN, bold = true)
+    c.rtlText(name, right, 88f, w, 20f, GREEN, bold = true)
     c.line(W - 20f - w, 114f, W - 20f, 0xFFEADFB8.toInt(), 1.2f)
     var y = 120f
-    fun field(ar: String, fr: String, value: String) {
-        if (value.isBlank()) return
+    for ((ar, fr, value) in fields) {
+        if (value.isBlank()) continue
         // label column (Arabic + French in capitals), then the value in bold
         c.rtlText("$ar  ${ltr(fr.uppercase())}", right, y + 1.5f, 118f, 9.5f, 0xFF8A9199.toInt())
         c.rtlText(value, right - 122f, y, w - 122f, 12f, 0xFF222222.toInt(), bold = true); y += 20f
     }
-    fun date(d: String) = if (d.isBlank()) "" else ltr(frDate(d))
-    field("الحلقة", "Groupe", student.group)
-    field("المعلم", "Enseignant", student.teacher)
-    field("تاريخ الميلاد", "Né(e) le", date(student.birthDate))
-    field("ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "")
-    field("التسجيل", "Inscription", date(student.enrollmentDate))
+    // QR code (bottom-left of the details area)
+    runCatching {
+        val hints = mapOf(com.google.zxing.EncodeHintType.CHARACTER_SET to "UTF-8",
+            com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L,
+            com.google.zxing.EncodeHintType.MARGIN to 1)
+        val m = com.google.zxing.qrcode.QRCodeWriter().encode(qr, com.google.zxing.BarcodeFormat.QR_CODE, 0, 0, hints)
+        val size = 74f; val left = 130f; val top = H - 46f - size - 4f; val cell = size / m.width
+        c.drawRect(left, top, left + size, top + size, Paint().apply { color = 0xFFFFFFFF.toInt() })
+        val dark = Paint().apply { color = 0xFF111111.toInt() }
+        for (yy in 0 until m.height) for (xx in 0 until m.width) if (m.get(xx, yy))
+            c.drawRect(left + xx * cell, top + yy * cell, left + (xx + 1) * cell, top + (yy + 1) * cell, dark)
+    }
     // footer (two lines, Arabic and French)
     val year = academicYearLabel(currentMonth())
     c.drawRect(0f, H - 46f, W, H, Paint().apply { color = GREEN })
@@ -213,7 +241,7 @@ fun shareStudentCard(context: Context, student: Student) {
     c.rtlText("العام الدراسي ${ltr(year)}  •  ${ltr("Année scolaire $year")}",
         W - 16f, H - 22f, W - 32f, 10.5f, GOLD, align = Layout.Alignment.ALIGN_CENTER)
     doc.finishPage(page)
-    sharePdf(context, doc, "card-${safeName(student.name)}.pdf")
+    sharePdf(context, doc, fileName)
 }
 
 fun shareCertificate(context: Context, student: Student) {

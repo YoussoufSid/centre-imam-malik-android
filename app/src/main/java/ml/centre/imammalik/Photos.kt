@@ -80,9 +80,12 @@ private fun loadBitmap(context: Context, uri: Uri): Bitmap? = runCatching {
 
 /** Round photo, or the initial-letter avatar when there is no photo. */
 @Composable
-fun StudentAvatar(s: Student, size: Dp = 40.dp) {
-    val bmp = remember(s.photo) { decodePhoto(s.photo) }
-    if (bmp == null) Avatar(s.name, size)
+fun StudentAvatar(s: Student, size: Dp = 40.dp) = PhotoAvatar(s.name, s.photo, size)
+
+@Composable
+fun PhotoAvatar(name: String, photo: String, size: Dp = 40.dp) {
+    val bmp = remember(photo) { decodePhoto(photo) }
+    if (bmp == null) Avatar(name, size)
     else Image(bmp.asImageBitmap(), null, Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop)
 }
 
@@ -105,7 +108,7 @@ fun PhotoPicker(photo: String, onChange: (String) -> Unit) {
         }
         Spacer(Modifier.width(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("صورة الطالب (للبطاقة)", fontSize = 13.sp, color = Color.Gray)
+            Text("الصورة (للبطاقة)", fontSize = 13.sp, color = Color.Gray)
             Row {
                 FilledTonalButton(onClick = { runCatching { camera.launch(null) } }, contentPadding = PaddingValues(horizontal = 10.dp)) {
                     Icon(Icons.Default.PhotoCamera, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("الكاميرا", fontSize = 13.sp)
