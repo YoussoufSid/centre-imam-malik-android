@@ -45,13 +45,16 @@ fun isNewerVersion(latest: String, current: String): Boolean {
     return false
 }
 
+/** Centre phone used when none is saved in the settings. */
+const val DEFAULT_CENTRE_PHONE = "+223 77 19 53 53"
+
 const val DEFAULT_CENTRE_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية"
 
 /** Centre identity, editable by the admin (settings/centre) and used in documents and messages. */
 object Centre {
     var name = DEFAULT_CENTRE_NAME
     var director = ""
-    var phone = ""
+    var phone = DEFAULT_CENTRE_PHONE
     var email = ""
     var address = ""
     var academicYear = ""

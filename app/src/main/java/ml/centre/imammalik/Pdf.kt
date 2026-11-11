@@ -36,6 +36,14 @@ private fun Canvas.rtlText(
     return layout.height.toFloat()
 }
 
+/** Largest text size ≤ [max] at which [text] fits on one line of [width]. */
+private fun fitTextSize(text: String, width: Float, max: Float, bold: Boolean = false): Float {
+    val p = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT }
+    var size = max
+    while (size > 6f) { p.textSize = size; if (p.measureText(text) <= width - 4f) break; size -= .25f }
+    return size
+}
+
 private fun Canvas.line(x1: Float, y: Float, x2: Float, color: Int = 0xFFDDDDDD.toInt(), w: Float = 1f) {
     drawLine(x1, y, x2, y, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; strokeWidth = w })
 }
@@ -172,7 +180,7 @@ fun shareStudentCard(context: Context, student: Student) {
     shareIdCard(context, "بطاقة طالب", "CARTE D'ÉLÈVE", student.name, studentNumber(student.id), student.photo, qrText(student),
         listOf(Triple("الحلقة", "Groupe", student.group), Triple("المعلم", "Enseignant", student.teacher),
             Triple("تاريخ الميلاد", "Né(e) le", date(student.birthDate)),
-            Triple("ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: ""),
+            Triple("هاتف ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "………………………"),
             Triple("التسجيل", "Inscription", date(student.enrollmentDate))),
         "card-${safeName(student.name)}.pdf")
 }
@@ -199,8 +207,9 @@ private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: 
     c.drawRect(0f, 0f, W, 72f, Paint().apply { color = GREEN })
     c.drawRect(0f, 72f, W, 76f, Paint().apply { color = GOLD })
     c.logo(context, W - 64f, 9f, 54f)
-    c.rtlText(Centre.name, W - 74f, 6f, 400f, 12.5f, 0xFFFFFFFF.toInt(), bold = true)
-    c.rtlText(CENTRE_FR, W - 74f, 27f, 400f, 8.5f, 0xFFE8F1EC.toInt())
+    // Arabic centre name on a single line: shrink the text until it fits the width
+    c.rtlText(Centre.name, W - 74f, 8f, 400f, fitTextSize(Centre.name, 400f, 13f, bold = true), 0xFFFFFFFF.toInt(), bold = true)
+    c.rtlText(CENTRE_FR, W - 74f, 28f, 400f, fitTextSize(CENTRE_FR, 400f, 8.5f), 0xFFE8F1EC.toInt())
     val year = academicYearLabel(currentMonth())
     c.rtlText("$kindAr   ${ltr(kindFr)}   •   ${ltr(year)}", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
     // photo box + number

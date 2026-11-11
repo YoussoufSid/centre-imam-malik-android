@@ -356,3 +356,7 @@ body.dark .ph-box { background: #101a16; border-color: #34463e; }
 
 tr.mrow { cursor: pointer; } tr.mrow:hover td { background: #fff8e1; }
 body.dark tr.mrow:hover td { background: #2a2614; }
+/* centre name on one line; guardian phone blank line to fill by hand */
+.idc-titles b { display: block; white-space: nowrap; font-size: 6.6pt; letter-spacing: -.01em; }
+.idc-row { grid-template-columns: 25mm 1fr; }
+.blank-fill { display: inline-block; width: 22mm; border-bottom: .25mm dotted #999; height: 2.6mm; }

@@ -184,7 +184,7 @@ class AppState {
             if (snap != null && snap.exists()) {
                 Centre.name = snap.getString("name")?.ifBlank { null } ?: DEFAULT_CENTRE_NAME
                 Centre.director = snap.getString("director") ?: ""
-                Centre.phone = snap.getString("phone") ?: ""
+                Centre.phone = snap.getString("phone")?.ifBlank { null } ?: DEFAULT_CENTRE_PHONE
                 Centre.email = snap.getString("email") ?: ""
                 Centre.address = snap.getString("address") ?: ""
                 Centre.academicYear = snap.getString("academicYear") ?: ""

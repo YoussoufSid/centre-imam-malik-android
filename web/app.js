@@ -7,13 +7,14 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=15";
+import { firebaseConfig } from "./firebase-config.js?v=16";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const HADITH = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»";
 const DUA = "اللهم اجزِ مؤسِّس هذا المركز الحاج بانيما يارا خيرَ الجزاء، واجعل هذا العمل في ميزان حسناته، " +
   "واغفر له ولوالديه، ولجميع المسلمين والمسلمات، الأحياء منهم والأموات. آمين";
+const DEFAULT_PHONE = "+223 77 19 53 53";
 const DEFAULT_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const AR_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const EXPENSE_CATEGORIES = ["رواتب المعلمين", "الإيجار", "الكهرباء والماء", "المصاحف والكتب", "الأدوات واللوازم", "الصيانة", "النقل", "مصروفات يومية", "أخرى"];
@@ -73,7 +74,7 @@ const db = initializeFirestore(fb, { localCache: persistentLocalCache() });
 
 // ---------------------------------------------------------------- state
 const state = {
-  user: null, profile: null, settings: { name: DEFAULT_NAME, currency: "فرنك" },
+  user: null, profile: null, settings: { name: DEFAULT_NAME, currency: "فرنك", phone: DEFAULT_PHONE },
   students: [], halaqat: [], payments: [], expenses: [], staff: [], payroll: [], unsub: [], loaded: false,
   filters: { q: "", group: "", feeMonth: currentMonth(), expMonth: currentMonth(), year: currentMonth(), payMonth: currentMonth() }
 };
@@ -91,7 +92,8 @@ function audit(action, details) {
 function listen() {
   state.unsub.forEach((u) => u()); state.unsub = [];
   const sub = (ref, fn) => state.unsub.push(onSnapshot(ref, fn, fail));
-  sub(doc(db, "settings", "centre"), (s) => { if (s.exists()) state.settings = { name: DEFAULT_NAME, currency: "فرنك", ...s.data() }; render(); });
+  sub(doc(db, "settings", "centre"), (s) => { if (s.exists()) { state.settings = { name: DEFAULT_NAME, currency: "فرنك", ...s.data() };
+    if (!state.settings.phone) state.settings.phone = DEFAULT_PHONE; } render(); });
   sub(collection(db, "students"), (q) => {
     state.students = q.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"));
     state.loaded = true; render();
@@ -324,7 +326,7 @@ function idCardHtml({ kindAr, kindFr, name, number, photo, qr, rows }) {
 }
 const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Carte d'élève", name: s.name, number: studentNumber(s.id), photo: s.photo,
   qr: qrText(s), rows: [["الحلقة", "Groupe", esc(s.group || "")], ["المعلم", "Enseignant", esc(s.teacher || "")],
-    ["الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : ""], ["ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : ""],
+    ["الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : ""], ["هاتف ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : '<span class="blank-fill"></span>'],
     ["التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : ""]] });
 /** Staff card number: "staff_1" → "E001"; generated ids → last 6 characters (same rule as the app). */
 const staffNumber = (id) => { const m = /^staff_(\d+)$/.exec(id); return m ? "E" + String(+m[1]).padStart(3, "0") : String(id).slice(-6).toUpperCase(); };
