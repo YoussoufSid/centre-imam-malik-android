@@ -476,14 +476,14 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
             }
             val leaders = active.filter { it.hizbs > 0 }.sortedByDescending { it.hizbs }.take(5)
             if (leaders.isNotEmpty()) {
-                item { Text("الأكثر حفظًا", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                item { SectionHeading("🏆 لوحة الشرف — الأكثر حفظًا") }
                 item {
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             leaders.forEachIndexed { i, s ->
                                 Column(Modifier.clickable { open(s) }) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("${i + 1}. ${s.name}", Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                                        Text("${listOf("🥇", "🥈", "🥉", "🏅", "🏅")[i]}  ${s.name}", Modifier.weight(1f), fontWeight = FontWeight.Medium)
                                         Text("${s.hizbs} حزبًا", color = Green, fontSize = 13.sp)
                                     }
                                     HizbProgressBar(s.hizbs, Modifier.padding(top = 4.dp))
