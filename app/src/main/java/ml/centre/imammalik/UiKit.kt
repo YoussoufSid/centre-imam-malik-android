@@ -54,7 +54,7 @@ fun QuickActions(actions: List<QuickAction>) {
                 row.forEach { a ->
                     Card(
                         Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = a.onClick),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                        colors = CardDefaults.cardColors(containerColor = CardBg)
                     ) {
                         Column(Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {

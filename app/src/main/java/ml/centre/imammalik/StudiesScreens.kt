@@ -62,7 +62,7 @@ fun GradeEntryScreen(state: AppState, close: () -> Unit) {
         Text("اكتب درجة كل طالب من $MAX_SCORE، واترك الخانة فارغة لمن لم يُختبر.", fontSize = 12.sp, color = Color.Gray)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(shown, key = { it.id }) { s ->
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(s.name, Modifier.weight(1f), fontWeight = FontWeight.Medium)
                         ScoreField(scores[s.id] ?: "", { scores[s.id] = it }, Modifier.width(96.dp))
@@ -94,7 +94,7 @@ fun StudentGradesCard(state: AppState, me: AppUser, student: Student, grades: Li
     var term by remember { mutableStateOf<String?>(null) }
     val shown = grades.filter { term == null || it.term == term }
     val avg = if (shown.isEmpty()) null else shown.sumOf { it.score } / shown.size
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.School, null, tint = Gold); Spacer(Modifier.width(8.dp))

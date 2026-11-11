@@ -30,7 +30,7 @@ fun AttendanceScreen(state: AppState) {
             IconButton(onClick = { state.changeAttendanceDate(-1) }) { Icon(Icons.Default.ChevronRight, "اليوم السابق") }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (isToday) "حضور اليوم" else "حضور يوم سابق", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(ltr(state.attendanceDate), color = Color.DarkGray)
+                Text(ltr(state.attendanceDate), color = SubText)
             }
             IconButton(onClick = { state.changeAttendanceDate(1) }, enabled = !isToday) { Icon(Icons.Default.ChevronLeft, "اليوم التالي") }
         }
@@ -47,7 +47,7 @@ fun AttendanceScreen(state: AppState) {
         } else LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(active, key = { it.id }) { s ->
                 val current = byStudent[s.id]?.status
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     Column(Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(s.name, Modifier.weight(1f), fontWeight = FontWeight.Bold)
@@ -77,7 +77,7 @@ fun LogCard(log: QuranLog, showStudent: Boolean, onDelete: (() -> Unit)? = null,
     }
     Card(
         Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = CardBg)
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(if (log.type == LogTypes.NEW) Icons.Default.MenuBook else Icons.Default.Replay, null,
@@ -87,7 +87,7 @@ fun LogCard(log: QuranLog, showStudent: Boolean, onDelete: (() -> Unit)? = null,
                 if (showStudent) Text(log.studentName, fontWeight = FontWeight.Bold)
                 Text("${log.type} • سورة ${log.surah} ${log.range}".trim(), fontWeight = if (showStudent) FontWeight.Normal else FontWeight.Bold)
                 Text(listOf(ltr(log.date), log.teacherName).filter { it.isNotBlank() }.joinToString(" • "), fontSize = 12.sp, color = Color.Gray)
-                if (log.notes.isNotBlank()) Text(log.notes, fontSize = 13.sp, color = Color.DarkGray)
+                if (log.notes.isNotBlank()) Text(log.notes, fontSize = 13.sp, color = SubText)
             }
             if (log.grade.isNotBlank()) Text(log.grade, color = gradeColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             if (onDelete != null) IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "حذف", tint = Color.Gray) }
@@ -188,7 +188,7 @@ fun LogDialog(state: AppState, initialStudent: Student?, close: () -> Unit) {
 fun <T> PickerDialog(title: String, options: List<Pair<String, T>>, dismiss: () -> Unit, pick: (T) -> Unit) {
     var q by remember { mutableStateOf("") }
     Dialog(onDismissRequest = dismiss) {
-        Card(Modifier.fillMaxWidth().heightIn(max = 520.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Card(Modifier.fillMaxWidth().heightIn(max = 520.dp), colors = CardDefaults.cardColors(containerColor = CardBg)) {
             Column(Modifier.padding(16.dp)) {
                 Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 OutlinedTextField(q, { q = it }, Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -215,11 +215,11 @@ fun UsersScreen(state: AppState) {
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         Text("حسابات المستخدمين", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 10.dp))
         Text("حدد صفة كل حساب، واربط حسابات أولياء الأمور والطلاب بملفات الطلاب ليتمكنوا من متابعة الحفظ والحضور.",
-            fontSize = 13.sp, color = Color.DarkGray)
+            fontSize = 13.sp, color = SubText)
         LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.users, key = { it.uid }) { u ->
                 Card(Modifier.fillMaxWidth().clickable(enabled = !u.email.equals(ADMIN_EMAIL, true)) { editing = u },
-                    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     ListItem(
                         headlineContent = { Text(u.name.ifBlank { "بدون اسم" }, fontWeight = FontWeight.Bold) },
                         supportingContent = {
@@ -229,7 +229,7 @@ fun UsersScreen(state: AppState) {
                         },
                         leadingContent = { Icon(Icons.Default.AccountCircle, null, tint = Green) },
                         trailingContent = { Text(Roles.label(u.role), color = Gold, fontWeight = FontWeight.Bold) },
-                        colors = ListItemDefaults.colors(containerColor = Color.White)
+                        colors = ListItemDefaults.colors(containerColor = CardBg)
                     )
                 }
             }

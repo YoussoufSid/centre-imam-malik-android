@@ -34,7 +34,7 @@ private val Red = Color(0xFFC53030)
 fun TeachersScreen(state: AppState) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab, containerColor = Color.White, contentColor = Green) {
+        TabRow(selectedTabIndex = tab, containerColor = CardBg, contentColor = Green) {
             listOf("الموظفون", "الحضور", "الرواتب").forEachIndexed { i, t ->
                 Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) })
             }
@@ -96,7 +96,7 @@ private fun TeacherListTab(state: AppState) {
                 items(list, key = { it.id }) { t ->
                     val groups = state.halaqat.filter { it.teacher.trim() == t.name.trim() }
                     val count = state.students.count { s -> groups.any { it.name == s.group } && s.status == "نشط" }
-                    Card(Modifier.fillMaxWidth().clickable { editing = t }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Card(Modifier.fillMaxWidth().clickable { editing = t }, colors = CardDefaults.cardColors(containerColor = CardBg)) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             PhotoAvatar(t.name, t.photo, 44.dp); Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
@@ -104,7 +104,7 @@ private fun TeacherListTab(state: AppState) {
                                     Text(t.name, fontWeight = FontWeight.Bold)
                                     if (t.status != "نشط") Text("  (${t.status})", fontSize = 12.sp, color = Color.Gray)
                                 }
-                                if (t.function.isNotBlank()) Text(t.function, fontSize = 13.sp, color = Color.DarkGray)
+                                if (t.function.isNotBlank()) Text(t.function, fontSize = 13.sp, color = SubText)
                                 if (groups.isNotEmpty()) Text(groups.joinToString("، ") { it.name } + " • $count طالب",
                                     fontSize = 12.sp, color = Color.Gray)
                                 Text("الراتب: ${money(t.salary)}" + if (t.hireDate.isNotBlank()) " • منذ ${ltr(t.hireDate)}" else "",
@@ -209,7 +209,7 @@ private fun TeacherAttendanceTab(state: AppState) {
         items(active, key = { it.id }) { t ->
             val current = byTeacher[t.id]?.status
             val m = monthData?.get(t.id).orEmpty()
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                 Column(Modifier.padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -272,7 +272,7 @@ private fun SalariesTab(state: AppState) {
                 item(key = "h_$cat") { Text(StaffCategory.plural(cat), fontWeight = FontWeight.Bold, color = Green) }
                 items(group, key = { it.id }) { t ->
                     val e = entries[t.id]
-                    Card(Modifier.fillMaxWidth().clickable { editing = t }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Card(Modifier.fillMaxWidth().clickable { editing = t }, colors = CardDefaults.cardColors(containerColor = CardBg)) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             PhotoAvatar(t.name, t.photo, 40.dp); Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
@@ -377,7 +377,7 @@ fun AuditScreen(state: AppState) {
             shown.isEmpty() -> EmptyState(Icons.Default.History, "لا توجد عمليات مسجلة")
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
                 items(shown) { e ->
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
                         Column(Modifier.padding(10.dp)) {
                             Row {
                                 Text(e.action, Modifier.weight(1f), fontWeight = FontWeight.Bold,
