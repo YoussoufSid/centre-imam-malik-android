@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=8";
+import { firebaseConfig } from "./firebase-config.js?v=9";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -183,7 +183,7 @@ const NAV = [
   ["home", "🏠", "الرئيسية", false, ""],
   ["students", "👥", "الطلاب", false, "التعليم"], ["halaqat", "🕌", "الحلقات", false, "التعليم"],
   ["fees", "💰", "الرسوم الشهرية", true, "المالية"], ["registration", "📝", "رسوم التسجيل", true, "المالية"],
-  ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"],
+  ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"], ["report", "📄", "التقرير الشهري", true, "المالية"],
   ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"],
   ["phone", "📱", "تطبيق الهاتف", false, "التطبيق"]
 ];
@@ -197,25 +197,29 @@ function navHtml(active) {
   }).join("");
 }
 window.addEventListener("hashchange", () => render());
+const dark = () => localStorage.getItem("theme") === "dark";
+const applyTheme = () => document.body.classList.toggle("dark", dark());
+applyTheme();
 const route = () => (location.hash.replace("#/", "") || "home");
 
 function render() {
   if (!state.user || !state.profile || !isStaff()) return;
   const r = route();
-  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone };
+  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport };
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
   $("#app").innerHTML = `<div class="layout${state.menuOpen ? " menu-open" : ""}">
     <header class="mbar"><button id="menuBtn" aria-label="القائمة">☰</button><b>${title[1]} ${title[2]}</b>
-      <img src="logo.png" alt=""></header>
+      <button id="theme2" aria-label="الوضع الليلي">${dark() ? "☀️" : "🌙"}</button><img src="logo.png" alt=""></header>
     <aside class="side">
       <div class="brand"><img src="logo.png" alt=""><b>${esc(state.settings.name || DEFAULT_NAME)}</b></div>
       <nav>${navHtml(allowed)}</nav>
       <div class="user">${esc(state.profile?.name || state.user.email)}<br>${isAdmin() ? "الإدارة" : "معلم"}<br>
-      <button id="logout">تسجيل الخروج</button></div></aside>
+      <button id="logout">تسجيل الخروج</button> <button id="theme">${dark() ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button></div></aside>
     <main><div class="print-head"><img src="logo.png" alt=""><h3>${esc(state.settings.name || DEFAULT_NAME)}</h3>
       <div>${esc(state.settings.address || "")}</div></div>${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main></div>`;
+  ["#theme", "#theme2"].forEach((id) => { $(id).onclick = () => { localStorage.setItem("theme", dark() ? "light" : "dark"); applyTheme(); render(); }; });
   $("#menuBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
   document.querySelectorAll(".side nav a").forEach((a) => a.addEventListener("click", () => { state.menuOpen = false; }));
   $("#logout").onclick = () => confirmBox("هل تريد تسجيل الخروج؟", () => signOut(auth), "خروج");
@@ -233,6 +237,89 @@ function bindFilters() {
   const q = $("#fq"); if (q) q.oninput = () => { state.filters.q = q.value; render(); };
   const g = $("#fgroup"); if (g) g.onchange = () => { state.filters.group = g.value; render(); };
 }
+
+// ---------------------------------------------------------------- WhatsApp
+/** Mali numbers: 8 digits → +223; "00" prefix dropped. Same rule as the phone app. */
+function waNumber(phone) {
+  let d = String(phone || "").replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.length === 8) d = "223" + d;
+  return d.length >= 10 ? d : null;
+}
+const waLink = (phone, text) => { const n = waNumber(phone); return n ? `https://wa.me/${n}?text=${encodeURIComponent(text)}` : null; };
+
+// ---------------------------------------------------------------- certificate (printable, Islamic frame)
+function printCertificate(s) {
+  const h = s.hizbs || 0, khatm = h >= 60;
+  const body = khatm ? "قد أتمّ حفظ كتاب الله تعالى كاملًا (ستين حزبًا) بفضل الله وتوفيقه."
+    : h === 0 ? "تقديرًا لجهده ومواظبته في حلقات تحفيظ القرآن الكريم."
+    : `قد أتمّ حفظ ${h} حزبًا من كتاب الله تعالى${h >= 2 ? ` (≈ ${Math.floor(h / 2)} جزءًا)` : ""}، تقديرًا لجهده ومواظبته.`;
+  let hijri = ""; try { hijri = new Date().toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
+  const box = document.createElement("div"); box.id = "cert";
+  box.innerHTML = `<div class="cert"><div class="cert-in">
+    <span class="corner tl">۞</span><span class="corner tr">۞</span><span class="corner bl">۞</span><span class="corner br">۞</span>
+    <img src="logo.png" alt=""><div class="cert-centre">${esc(state.settings.name || DEFAULT_NAME)}</div>
+    <div class="cert-title">${khatm ? "شهادة ختم القرآن الكريم" : "شهادة تقدير"}</div>
+    <div class="cert-orn">❁ ❁ ❁</div>
+    <p>يشهد المركز بأن الطالب/ة</p><div class="cert-name">${esc(s.name)}</div><p class="cert-body">${body}</p>
+    <p class="cert-ayah">﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾</p>
+    <p class="muted">نسأل الله أن يجعله من أهل القرآن الذين هم أهل الله وخاصته.</p>
+    <div class="cert-sign"><div>حُرّر بتاريخ \u2066${today()}\u2069${hijri ? `<br>الموافق ${esc(hijri)}` : ""}</div>
+      ${s.teacher ? `<div>المعلم<br><b>${esc(s.teacher)}</b><hr></div>` : ""}<div>مدير المركز<br><b>${esc(state.settings.director || "")}</b><hr></div></div>
+  </div></div><div class="no-print cert-actions"><button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button></div>`;
+  document.body.appendChild(box); document.body.classList.add("cert-mode");
+  const close = () => { box.remove(); document.body.classList.remove("cert-mode"); };
+  box.querySelector("#cprint").onclick = () => window.print();
+  box.querySelector("#cclose").onclick = close;
+}
+
+// ---------------------------------------------------------------- monthly report (admin)
+function viewReport() {
+  const m = state.filters.reportMonth || currentMonth();
+  const sum = (l) => l.reduce((a, x) => a + (x.amount || 0), 0);
+  const active = state.students.filter((s) => (s.status || ACTIVE) === ACTIVE);
+  const newSt = state.students.filter((s) => (s.enrollmentDate || "").startsWith(m));
+  const monthly = state.payments.filter((p) => p.type === "monthly" && p.month === m);
+  const reg = state.payments.filter((p) => p.type === "registration" && p.month === m);
+  const billable = active.filter((s) => (s.monthlyFee || 0) > 0);
+  const paidIds = new Set(monthly.map((p) => p.studentId));
+  const unpaid = billable.filter((s) => !paidIds.has(s.id));
+  const expected = billable.reduce((a, s) => a + s.monthlyFee, 0);
+  const exps = state.expenses.filter((e) => e.month === m);
+  const cats = {}; exps.forEach((e) => { cats[e.category] = (cats[e.category] || 0) + (e.amount || 0); });
+  const pay = state.payroll.filter((p) => p.month === m);
+  const income = sum(monthly) + sum(reg), out = sum(exps);
+  const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
+  return `<h1>التقرير الشهري</h1><div class="sub">${monthName(m)} — ملخص جاهز للطباعة أو الإرسال للإدارة</div>
+  <div class="toolbar"><button class="btn outline small" id="pm">◀ الشهر السابق</button><b>${monthName(m)}</b>
+    <button class="btn outline small" id="nm">الشهر التالي ▶</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
+  <div class="cards"><div class="card stat green"><div class="l">الإيرادات</div><div class="v">${amt(income)}</div></div>
+    <div class="card stat red"><div class="l">المصروفات</div><div class="v">${amt(out)}</div></div>
+    <div class="card stat ${income - out >= 0 ? "green" : "red"}"><div class="l">الرصيد</div><div class="v">${amt(income - out)}</div></div></div>
+  <div class="panel"><h3>الطلاب</h3><table><tbody>
+    <tr><td>الطلاب النشطون</td><td class="num">${num(active.length)}</td></tr>
+    <tr><td>الطلاب / الطالبات</td><td class="num">${num(active.filter((s) => s.gender === "ذكر").length)} / ${num(active.filter((s) => s.gender === "أنثى").length)}</td></tr>
+    <tr><td>المسجلون الجدد هذا الشهر</td><td class="num">${num(newSt.length)}</td></tr>
+    <tr><td>الحلقات</td><td class="num">${num(groups().length)}</td></tr></tbody></table></div>
+  <div class="panel"><h3>الرسوم</h3><table><tbody>
+    <tr><td>الرسوم الشهرية المحصّلة</td><td class="num">${money(sum(monthly))}</td></tr>
+    <tr><td>المتوقع</td><td class="num">${money(expected)}</td></tr>
+    <tr><td>نسبة التحصيل</td><td class="num">${num(expected ? Math.round(sum(monthly) * 100 / expected) : 0)}٪</td></tr>
+    <tr><td>دفعوا / لم يدفعوا</td><td class="num">${num(billable.length - unpaid.length)} / <b style="color:var(--red)">${num(unpaid.length)}</b></td></tr>
+    <tr><td>رسوم التسجيل</td><td class="num">${money(sum(reg))}</td></tr></tbody></table></div>
+  <div class="panel"><h3>المصروفات</h3><table><tbody>
+    ${Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<tr><td>${esc(c)}</td><td class="num">${money(v)}</td></tr>`).join("") || '<tr><td class="muted">لا مصروفات</td></tr>'}
+    </tbody></table>${pay.length ? `<p class="muted">الرواتب: ${num(pay.length)} موظف — المستلم ${money(pay.reduce((a, p) => a + (p.received || 0), 0))}</p>` : ""}</div>
+  ${top.length ? `<div class="panel"><h3>لوحة الشرف</h3>${honorList(top)}</div>` : ""}
+  ${unpaid.length ? `<div class="panel"><h3>لم يدفعوا رسوم ${monthName(m)} (${num(unpaid.length)})</h3><div class="muted">${unpaid.map((s) => esc(s.name)).join("، ")}</div></div>` : ""}`;
+}
+bind.report = () => {
+  const go = (d) => { state.filters.reportMonth = shiftMonth(state.filters.reportMonth || currentMonth(), d); render(); };
+  $("#pm").onclick = () => go(-1); $("#nm").onclick = () => go(1);
+};
+const honorList = (top) => `<div class="honor">${top.map((s, i) => `<div class="honor-row"><span class="medal">${["🥇", "🥈", "🥉", "🏅", "🏅"][i]}</span>
+  <b>${esc(s.name)}</b><span class="muted">${esc(s.group || "")}</span><span class="hz">${num(s.hizbs)} حزبًا</span>
+  <div class="bar"><div style="width:${Math.min(100, s.hizbs * 100 / 60)}%"></div></div></div>`).join("")}</div>`;
 
 // ---------------------------------------------------------------- phone app
 function viewPhone() {
@@ -294,6 +381,8 @@ function viewHome() {
     <div class="row-between muted" style="margin-top:6px"><span>دفع <b style="color:var(--green)">${paidCount}</b> من ${billable.length} (${pct}٪) — المحصَّل ${money(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</span>
     <span>لم يدفع <b style="color:var(--red)">${unpaid}</b></span></div></div>` : ""}
   <div class="shortcuts">${shortcuts.map(([h, i, t]) => `<a href="${h}" class="shortcut"><span>${i}</span>${t}</a>`).join("")}</div>
+  ${(() => { const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
+    return top.length ? `<h3 class="sec-title">🏆 لوحة الشرف — الأكثر حفظًا</h3><div class="panel">${honorList(top)}</div>` : ""; })()}
   <h3 class="sec-title">الحلقات</h3>
   <div class="halaqa-cards">${groups().map((g) => { const l = active.filter((s) => s.group === g); const h = state.halaqat.find((x) => x.name === g);
     const boys = l.filter((s) => s.gender === "ذكر").length, girls = l.filter((s) => s.gender === "أنثى").length;
@@ -317,12 +406,14 @@ function viewStudents() {
     ${isAdmin() ? `<td class="num">${num(s.monthlyFee)}</td>` : ""}
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
     <td class="actions no-print"><button class="btn small outline" data-edit="${s.id}">تعديل</button>
+    <button class="btn small gold" data-cert="${s.id}" title="شهادة">🎓</button>
     ${isAdmin() ? `<button class="btn small danger" data-del="${s.id}">حذف</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="10" class="muted">لا توجد نتائج</td></tr>`}
   </tbody></table></div>`;
 }
 bind.students = () => {
   bindFilters();
   $("#add").onclick = () => studentForm({ status: ACTIVE, enrollmentDate: today(), group: state.filters.group && state.filters.group !== "-" ? state.filters.group : "" });
+  document.querySelectorAll("[data-cert]").forEach((b) => b.onclick = () => printCertificate(state.students.find((s) => s.id === b.dataset.cert)));
   document.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => studentForm(state.students.find((s) => s.id === b.dataset.edit)));
   document.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => {
     const s = state.students.find((x) => x.id === b.dataset.del);
@@ -444,9 +535,11 @@ function viewFees() {
       return `<td class="cell ${cls}" data-s="${s.id}" data-m="${m}" title="${monthName(m)}">${p ? num(p.amount) : (m <= cm && fee > 0 ? "—" : "")}</td>`; }).join("");
     const due = fee * dueMonths; const late = Math.max(0, due - paid);
     totPaid += paid; totDue += due; totLate += late;
+    const wa = late ? waLink(s.phone, `السلام عليكم ورحمة الله وبركاته،\nنذكّركم بأن على الطالب/ة ${s.name} رسومًا متأخرة قدرها ${num(late).replace(/[\u2066\u2069]/g, "")} ${state.settings.currency || "فرنك"} (العام الدراسي ${yearLabel(state.filters.year)}).\nجزاكم الله خيرًا.\n${state.settings.name || DEFAULT_NAME}`) : null;
     return `<tr><td class="num">${i + 1}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:12px">${esc(s.group)}</div></td>
       <td class="num">${num(fee)}</td>${cells}<td class="num"><b>${num(paid)}</b></td><td class="num">${num(due)}</td>
-      <td class="num" style="color:${late ? "var(--red)" : "inherit"}"><b>${num(late)}</b></td></tr>`;
+      <td class="num" style="color:${late ? "var(--red)" : "inherit"}"><b>${num(late)}</b></td>
+      <td class="no-print">${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" title="تذكير ولي الأمر عبر واتساب">💬</a>` : ""}</td></tr>`;
   }).join("");
   const colTotals = months.map((m) => list.reduce((a, s) => a + (pay[`${m}_${s.id}`]?.amount || 0), 0));
   return `<h1>الرسوم الشهرية</h1><div class="sub">العام الدراسي ${yearLabel(state.filters.year)} — اضغط على خانة الشهر لتسجيل الدفع أو إلغائه</div>
@@ -459,10 +552,10 @@ function viewFees() {
     <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
   <div class="table-wrap grid"><table><thead><tr><th class="num">#</th><th>الطالب</th><th class="num">الرسم</th>
     ${months.map((m) => `<th class="num">${AR_MONTHS[+m.slice(5) - 1]}</th>`).join("")}
-    <th class="num">المدفوع</th><th class="num">المستحق</th><th class="num">المتأخرات</th></tr></thead>
+    <th class="num">المدفوع</th><th class="num">المستحق</th><th class="num">المتأخرات</th><th class="no-print">تذكير</th></tr></thead>
   <tbody>${rows || '<tr><td colspan="18" class="muted">لا يوجد طلاب</td></tr>'}</tbody>
   <tfoot><tr><td></td><td>المجموع</td><td></td>${colTotals.map((t) => `<td class="num">${num(t)}</td>`).join("")}
-    <td class="num">${num(totPaid)}</td><td class="num">${num(totDue)}</td><td class="num">${num(totLate)}</td></tr></tfoot></table></div>`;
+    <td class="num">${num(totPaid)}</td><td class="num">${num(totDue)}</td><td class="num">${num(totLate)}</td><td class="no-print"></td></tr></tfoot></table></div>`;
 }
 bind.fees = () => {
   bindFilters();

@@ -175,6 +175,10 @@ fun shareCertificate(context: Context, student: Student) {
     val border = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     border.color = GREEN; border.strokeWidth = 10f; c.drawRect(22f, 22f, W - 22f, H - 22f, border)
     border.color = GOLD; border.strokeWidth = 2.5f; c.drawRect(38f, 38f, W - 38f, H - 38f, border)
+    border.strokeWidth = 1f; c.drawRect(44f, 44f, W - 44f, H - 44f, border)
+    // Islamic ornaments: rosettes in the four corners
+    for ((x, y) in listOf(50f to 48f, W - 50f to 48f, 50f to H - 84f, W - 50f to H - 84f))
+        c.rtlText("۞", x + 22f, y, 44f, 28f, GOLD, align = Layout.Alignment.ALIGN_CENTER)
 
     val inner = W - 160f; val right = W - 80f
     c.logo(context, W / 2 - 42f, 52f, 84f)
@@ -182,9 +186,11 @@ fun shareCertificate(context: Context, student: Student) {
     val khatm = student.hizbs >= TOTAL_HIZBS
     c.rtlText(if (khatm) "شهادة ختم القرآن الكريم" else "شهادة تقدير", right, 182f, inner, 34f, GOLD, bold = true,
         align = Layout.Alignment.ALIGN_CENTER)
+    c.rtlText("❁   ❁   ❁", right, 226f, inner, 11f, GOLD, align = Layout.Alignment.ALIGN_CENTER)
     c.rtlText("يشهد المركز بأن الطالب/ة", right, 248f, inner, 17f, GREY, align = Layout.Alignment.ALIGN_CENTER)
     c.rtlText(student.name, right, 278f, inner, 30f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     val body = if (khatm) "قد أتمّ حفظ كتاب الله تعالى كاملًا (ستين حزبًا) بفضل الله وتوفيقه."
+    else if (student.hizbs == 0) "تقديرًا لجهده ومواظبته في حلقات تحفيظ القرآن الكريم."
     else "قد أتمّ حفظ ${student.hizbs} حزبًا من كتاب الله تعالى" + (if (student.hizbs >= 2) " (≈ ${student.hizbs / 2} جزءًا)" else "") +
         "، تقديرًا لجهده ومواظبته."
     c.rtlText(body, right, 334f, inner, 18f, 0xFF222222.toInt(), align = Layout.Alignment.ALIGN_CENTER)
