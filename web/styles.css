@@ -320,3 +320,13 @@ body.dark .hcard b, body.dark .hnums b { color: #7fd4ac; }
 .idc-info { line-height: 1.38; }
 .idc-photo { text-align: center; }
 .idc-foot { line-height: 1.3; font-size: 6pt; padding: .8mm 1mm; }
+
+/* ---------- Student photos ---------- */
+.photo-pick { display: flex; gap: 14px; align-items: center; margin-bottom: 6px; }
+.photo-pick label.btn { display: inline-block; margin: 0 0 6px; color: var(--green); font-size: 13px; }
+.ph-box { width: 84px; height: 112px; border-radius: 10px; border: 2px dashed #cbd5d1; display: flex; align-items: center; justify-content: center; font-size: 40px; overflow: hidden; background: #fafaf7; flex: none; }
+.ph-box img, .idc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.idc-photo { overflow: hidden; }
+.avatar { display: inline-block; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; vertical-align: middle; margin-inline-end: 8px; background: #e9efe9; }
+.avatar:empty { display: none; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }

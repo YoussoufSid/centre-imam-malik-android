@@ -96,7 +96,9 @@ data class Student(
     /** Monthly fee in FCFA (0 = exempt / not set). */
     val monthlyFee: Int = 0,
     /** One-time registration fee in FCFA (0 = none). */
-    val registrationFee: Int = 0
+    val registrationFee: Int = 0,
+    /** Small JPEG data URL for the ID card ("" = no photo). */
+    val photo: String = ""
 )
 
 // ---------- Teachers ----------

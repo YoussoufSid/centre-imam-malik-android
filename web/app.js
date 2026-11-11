@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=10";
+import { firebaseConfig } from "./firebase-config.js?v=11";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -284,7 +284,7 @@ function cardHtml(s) {
       ${row("الحلقة", "Groupe", esc(s.group || ""))}${row("المعلم", "Enseignant", esc(s.teacher || ""))}
       ${row("تاريخ الميلاد", "Né(e) le", s.birthDate ? ltrText(frDate(s.birthDate)) : "")}
       ${row("ولي الأمر", "Tuteur", s.phone ? ltrText(s.phone) : "")}${row("التسجيل", "Inscription", s.enrollmentDate ? ltrText(frDate(s.enrollmentDate)) : "")}</div>
-      <div class="idc-side"><div class="idc-photo">الصورة<br>Photo</div><div class="idc-no">رقم / ${ltrText("N° " + studentNumber(s.id))}</div></div></div>
+      <div class="idc-side"><div class="idc-photo">${s.photo ? `<img src="${s.photo}" alt="">` : "الصورة<br>Photo"}</div><div class="idc-no">رقم / ${ltrText("N° " + studentNumber(s.id))}</div></div></div>
     <div class="idc-foot">📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${ltrText("Daoudabougou, Bamako")}${state.settings.phone ? ` • ☎ ${ltrText(state.settings.phone)}` : ""}<br>
       العام الدراسي ${ltrText(year)} • ${ltrText("Année scolaire " + year)}</div></div>`;
 }
@@ -431,7 +431,7 @@ function viewStudents() {
     <span class="muted">${list.length} نتيجة</span></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
-  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><b>${esc(s.name)}</b></td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
+  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b></td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
     <td>${esc(s.teacher)}</td><td dir="ltr" style="text-align:right">${esc(s.phone)}</td><td class="num">${s.hizbs || 0}/60</td>
     ${isAdmin() ? `<td class="num">${num(s.monthlyFee)}</td>` : ""}
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
@@ -454,9 +454,28 @@ bind.students = () => {
   });
 };
 
+/** Reads an image file, centre-crops it to 3:4 and returns a small JPEG data URL (~10 KB). */
+function resizePhoto(file, w = 240, h = 320) {
+  return new Promise((ok, ko) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.max(w / img.width, h / img.height), sw = w / r, sh = h / r;
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, 0, 0, w, h);
+      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ko(new Error("تعذّرت قراءة الصورة")); };
+    img.src = url;
+  });
+}
+
 function studentForm(s) {
   const opts = groups().map((g) => `<option ${s.group === g ? "selected" : ""}>${esc(g)}</option>`).join("");
   openModal(`<h3>${s.id ? "تعديل ملف الطالب" : "إضافة طالب"}</h3>
+    <div class="photo-pick"><div class="ph-box" id="phBox">${s.photo ? `<img src="${s.photo}" alt="">` : "👤"}</div><div>
+      <label class="btn small outline">📷 إضافة / تغيير الصورة<input type="file" id="phFile" accept="image/*" hidden></label>
+      <button class="btn small danger ${s.photo ? "" : "hidden"}" id="phDel" type="button">حذف الصورة</button>
+      <div class="muted" style="font-size:12px">تظهر على بطاقة الطالب. على الهاتف يمكن التقاطها بالكاميرا.</div></div></div>
     <label>الاسم الكامل</label><input id="n" value="${esc(s.name)}">
     <div class="row2"><div><label>الجنس</label><select id="g"><option></option><option ${s.gender === "ذكر" ? "selected" : ""}>ذكر</option><option ${s.gender === "أنثى" ? "selected" : ""}>أنثى</option></select></div>
     <div><label>الحلقة</label><select id="gr"><option value="">بدون حلقة</option>${opts}</select></div></div>
@@ -471,6 +490,11 @@ function studentForm(s) {
     <div class="modal-actions"><button class="btn" id="save">حفظ</button><button class="btn outline" id="cancel">إلغاء</button></div>`, (b) => {
     b.querySelector("#gr").onchange = (e) => { const h = state.halaqat.find((x) => x.name === e.target.value); if (h?.teacher && !b.querySelector("#t").value) b.querySelector("#t").value = h.teacher; };
     b.querySelector("#cancel").onclick = closeModal;
+    let photo;  // undefined = unchanged, "" = removed, data URL = new
+    const showPhoto = (p) => { b.querySelector("#phBox").innerHTML = p ? `<img src="${p}" alt="">` : "👤"; b.querySelector("#phDel").classList.toggle("hidden", !p); };
+    b.querySelector("#phFile").onchange = (e) => { const f = e.target.files[0]; if (!f) return;
+      resizePhoto(f).then((p) => { photo = p; showPhoto(p); }).catch(fail); };
+    b.querySelector("#phDel").onclick = () => { photo = ""; showPhoto(""); };
     b.querySelector("#save").onclick = () => {
       const v = (id) => b.querySelector("#" + id)?.value?.trim() ?? "";
       if (!v("n")) { toast("اسم الطالب مطلوب"); return; }
@@ -479,6 +503,7 @@ function studentForm(s) {
       if (isAdmin()) { data.monthlyFee = +v("mf") || 0; data.registrationFee = +v("rf") || 0; }
       const ref = s.id ? doc(db, "students", s.id) : doc(collection(db, "students"));
       if (!s.id) data.hizbs = 0;
+      if (photo !== undefined) data.photo = photo;
       setDoc(ref, data, { merge: true }).then(() => toast(s.id ? "تم تحديث بيانات الطالب" : "تمت إضافة الطالب")).catch(fail);
       closeModal();
     };

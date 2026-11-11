@@ -182,8 +182,10 @@ fun shareStudentCard(context: Context, student: Student) {
     c.rtlText("بطاقة طالب  •  Carte d'élève", W - 74f, 46f, 400f, 12f, GOLD, bold = true)
     // photo box + number
     val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFBBBBBB.toInt(); strokeWidth = 1.5f }
-    c.drawRect(20f, 92f, 112f, 204f, box)
-    c.rtlText("الصورة\nPhoto", 112f, 132f, 92f, 11f, 0xFFAAAAAA.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    val photo = decodePhoto(student.photo)
+    if (photo != null) c.drawBitmap(photo, null, RectF(20f, 86f, 112f, 208f), Paint(Paint.FILTER_BITMAP_FLAG))
+    else c.rtlText("الصورة\nPhoto", 112f, 132f, 92f, 11f, 0xFFAAAAAA.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+    c.drawRect(20f, 86f, 112f, 208f, box)
     c.rtlText("رقم / ${ltr("N° " + studentNumber(student.id))}", 126f, 210f, 120f, 11f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     // details
     val right = W - 20f; val w = 330f

@@ -40,7 +40,7 @@ fun StudentRow(s: Student, open: () -> Unit) {
                     }
                 }
             },
-            leadingContent = { Avatar(s.name) },
+            leadingContent = { StudentAvatar(s) },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (s.status != "نشط") Text(s.status, color = Color.Gray, fontSize = 12.sp)
@@ -127,7 +127,10 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
         item {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(student.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Green)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StudentAvatar(student, 64.dp); Spacer(Modifier.width(12.dp))
+                        Text(student.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Green)
+                    }
                     InfoLine("الحالة", student.status)
                     InfoLine("الجنس", student.gender)
                     InfoLine("تاريخ الميلاد", student.birthDate)
@@ -258,14 +261,16 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
     var fee by remember { mutableStateOf(existing?.monthlyFee?.takeIf { it > 0 }?.toString() ?: "") }
     var regFee by remember { mutableStateOf(existing?.registrationFee?.takeIf { it > 0 }?.toString() ?: "") }
     var confirmDelete by remember { mutableStateOf(false) }
+    var photo by remember { mutableStateOf(existing?.photo ?: "") }
     val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status,
-        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0, registrationFee = regFee.toIntOrNull() ?: 0)
+        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0, registrationFee = regFee.toIntOrNull() ?: 0, photo = photo)
 
     AlertDialog(
         onDismissRequest = close,
         title = { Text(if (existing == null) "إضافة طالب" else "تعديل ملف الطالب") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                PhotoPicker(photo) { photo = it }
                 AppField(name, { name = it }, "الاسم الكامل")
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("الجنس:", fontWeight = FontWeight.Bold)
