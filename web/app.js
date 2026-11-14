@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=21";
+import { firebaseConfig } from "./firebase-config.js?v=22";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -195,14 +195,24 @@ const NAV = [
 ];
 const APK_URL = "https://github.com/YoussoufSid/centre-imam-malik-android/releases/latest/download/centre-imam-malik.apk";
 const SITE_URL = "https://youssoufsid.github.io/centre-imam-malik-android/";
+function navCount(r) {
+  const act = (l) => l.filter((x) => (x.status || ACTIVE) === ACTIVE).length;
+  if (r === "students") return act(state.students);
+  if (r === "halaqat") return groups().length;
+  if (r === "staff") return act(state.staff);
+  return null;
+}
 function navHtml(active) {
   let last = null;
   return NAV.filter((n) => !n[3] || isAdmin()).map((n) => {
     const head = n[4] && n[4] !== last ? `<div class="nav-sec">${n[4]}</div>` : ""; last = n[4];
-    return `${head}<a href="#/${n[0]}" class="${n[0] === active ? "active" : ""}"><span class="ico">${n[1]}</span>${n[2]}</a>`;
+    const cnt = navCount(n[0]);
+    return `${head}<a href="#/${n[0]}" class="${n[0] === active ? "active" : ""}"><span class="ico">${n[1]}</span>${n[2]}${cnt != null ? `<span class="cnt">${cnt}</span>` : ""}</a>`;
   }).join("");
 }
-window.addEventListener("hashchange", () => render());
+window.addEventListener("hashchange", () => { state.menuOpen = false; render(); });
+window.addEventListener("online", () => { toast("✅ عاد الاتصال بالإنترنت — تُرسل التغييرات الآن"); render(); });
+window.addEventListener("offline", () => { toast("📴 انقطع الإنترنت — يمكنك متابعة العمل"); render(); });
 
 // ---------------------------------------------------------------- automatic update
 // Every published version bumps "app.js?v=N" in index.html. The page checks it on open, every 10 minutes and
@@ -236,18 +246,30 @@ function render() {
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
+  const bnav = [["home", "🏠", "الرئيسية"], ["students", "👥", "الطلاب"], ["quran", "📖", "الحفظ"],
+    isAdmin() ? ["fees", "💰", "المالية"] : ["halaqat", "🕌", "الحلقات"]];
   $("#app").innerHTML = `<div class="layout${state.menuOpen ? " menu-open" : ""}">
-    <header class="mbar"><button id="menuBtn" aria-label="القائمة">☰</button><b>${title[1]} ${title[2]}</b>
-      <button id="theme2" aria-label="الوضع الليلي">${dark() ? "☀️" : "🌙"}</button><img src="logo.png" alt=""></header>
+    <header class="mbar"><img src="logo.png" alt=""><b>${allowed === "home" ? "مركز الإمام مالك" : title[2]}</b>
+      <button id="theme2" class="round" aria-label="الوضع الليلي">${dark() ? "☀️" : "🌙"}</button></header>
+    <div class="backdrop" id="backdrop"></div>
     <aside class="side">
-      <div class="brand"><img src="logo.png" alt=""><b>${esc(state.settings.name || DEFAULT_NAME)}</b></div>
+      <div class="brand"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
+        <div class="brand-sub">لوحة إدارة المركز <span class="flag-ml"><i></i><i></i><i></i></span></div></div></div>
       <nav>${navHtml(allowed)}</nav>
-      <div class="user">${esc(state.profile?.name || state.user.email)}<br>${isAdmin() ? "الإدارة" : "معلم"}<br>
-      <button id="logout">تسجيل الخروج</button> <button id="theme">${dark() ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button></div></aside>
+      <div class="user"><b>${esc(state.profile?.name || state.user.email)}</b><div class="role">${isAdmin() ? "👑 الإدارة — صلاحية كاملة" : "📖 معلم"}</div>
+      <button id="refreshApp" class="side-btn">🔄 تحديث التطبيق</button>
+      <button id="theme" class="side-btn">${dark() ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button>
+      <button id="logout" class="side-btn danger-soft">↩ تسجيل الخروج</button></div></aside>
     <main><div class="print-head"><img src="logo.png" alt=""><h3>${esc(state.settings.name || DEFAULT_NAME)}</h3>
-      <div>${esc(contactLine())}</div></div>${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main></div>`;
+      <div>${esc(contactLine())}</div></div>${navigator.onLine ? "" : '<div class="offline-bar">📴 بدون إنترنت — تعمل بالبيانات المحفوظة على الجهاز، وتُرسل التغييرات وحدها عند عودة الاتصال</div>'}
+      ${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main>
+    <nav class="bnav">${bnav.map(([r, i, t]) => `<a href="#/${r}" class="${allowed === r ? "on" : ""}"><span>${i}</span>${t}</a>`).join("")}
+      <a href="javascript:void 0" id="moreBtn" class="${state.menuOpen ? "on" : ""}"><span>☰</span>المزيد</a></nav></div>`;
   ["#theme", "#theme2"].forEach((id) => { $(id).onclick = () => { localStorage.setItem("theme", dark() ? "light" : "dark"); applyTheme(); render(); }; });
-  $("#menuBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
+  $("#moreBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
+  $("#backdrop").onclick = () => { state.menuOpen = false; render(); };
+  $("#refreshApp").onclick = () => { toast("جارٍ تحديث التطبيق…"); navigator.serviceWorker?.getRegistration().then((r) => r?.update()).finally(() => setTimeout(() => location.reload(), 600)); };
+  if (!state.welcomed && !sessionStorage.getItem("welcomed")) { state.welcomed = true; showWelcome(); }
   document.querySelectorAll(".side nav a").forEach((a) => a.addEventListener("click", () => { state.menuOpen = false; }));
   $("#logout").onclick = () => confirmBox("هل تريد تسجيل الخروج؟", () => signOut(auth), "خروج");
   const h = document.querySelector("main > h1"); if (h) h.dataset.ico = title[1];
@@ -703,6 +725,43 @@ function viewPhone() {
 }
 bind.phone = () => { const b = $("#copySite"); if (b) b.onclick = () => navigator.clipboard?.writeText(SITE_URL).then(() => toast("تم نسخ الرابط")); };
 
+// ---------------------------------------------------------------- welcome after login (once per session)
+const SALAWAT = "اللهم صلِّ وسلِّم وبارك على نبينا محمد، وعلى آله وصحبه أجمعين ﷺ";
+function showWelcome() {
+  const name = (state.profile?.name || "").trim();
+  const box = document.createElement("div"); box.id = "welcome";
+  const step1 = `<div class="wl-step">
+      <img class="wl-logo" src="logo.png" alt=""><span class="flag-ml big"><i></i><i></i><i></i></span>
+      <div class="wl-basmala">بسم الله الرحمن الرحيم</div>
+      <h1>أهلًا وسهلًا بك${name ? ` يا <span class="wl-name">${esc(name)}</span>` : ""}</h1>
+      <div class="wl-sub">${esc(state.settings.name || DEFAULT_NAME)}</div>
+      <div class="wl-orn">❁ ❁ ❁</div>
+      <div class="wl-salawat">${SALAWAT}</div>
+      <div class="wl-dua">${DUA.replace(/\s*آمين$/, "")}</div>
+      <div class="wl-amin">آمين</div>
+      <button class="wl-btn" id="wl1">الدخول إلى المركز ←</button></div>`;
+  const step2 = `<div class="wl-step wl-arch-page"><div class="wl-arch"><div class="wl-arch-in" style="background-image:url(building.jpg)"></div></div>
+      <div class="wl-verse">﴿ادْخُلُوهَا بِسَلَامٍ آمِنِينَ﴾</div><div class="wl-ref">سورة الحجر، الآية 46</div>
+      <button class="wl-btn" id="wl2">الدخول ←</button></div>`;
+  box.innerHTML = step1; document.body.appendChild(box);
+  const done = () => { sessionStorage.setItem("welcomed", "1"); box.classList.add("out"); setTimeout(() => box.remove(), 450); };
+  box.querySelector("#wl1").onclick = () => { box.innerHTML = step2; box.querySelector("#wl2").onclick = done; };
+}
+
+// ---------------------------------------------------------------- backup (download all data as one file)
+async function downloadBackup() {
+  toast("جارٍ تجهيز النسخة الاحتياطية…");
+  const out = { app: "centre-imam-malik", date: new Date().toISOString() };
+  for (const c of ["students", "halaqat", "payments", "expenses", "teachers", "payroll", "settings", "quranLogs", "attendance", "grades", "cashAdvances"]) {
+    try { out[c] = (await getDocs(collection(db, c))).docs.map((d) => ({ id: d.id, ...d.data() })); } catch { out[c] = null; }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: "application/json" }));
+  a.download = `centre-imam-malik-backup-${today()}.json`; a.click();
+  localStorage.setItem("lastBackup", today()); toast("✅ تم تنزيل النسخة الاحتياطية"); render();
+}
+const backupDue = () => { const l = localStorage.getItem("lastBackup"); return !l || dAdd(l, 7) <= today(); };
+
 // ---------------------------------------------------------------- home
 function viewHome() {
   const active = state.students.filter((s) => (s.status || ACTIVE) === ACTIVE);
@@ -718,22 +777,31 @@ function viewHome() {
   let hijri = ""; try { hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
   const shortcuts = [["#/students", "👥", "الطلاب"], ["#/halaqat", "🕌", "الحلقات"],
     ...(isAdmin() ? [["#/fees", "💰", "تسجيل الرسوم"], ["#/expenses", "🧾", "مصروف جديد"], ["#/payroll", "💵", "الرواتب"], ["#/summary", "📊", "الملخص المالي"]] : [])];
-  return `<div class="banner">
-      <div class="banner-text">
-        <div class="banner-date">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div>
-        <h1>السلام عليكم ورحمة الله وبركاته</h1>
-        <p>${WELCOME}</p>
-        <p class="hadith">${HADITH}</p>
-        <div class="dua">🤲 ${DUA}</div>
+  const recent = state.students.slice().sort((a, b) => (b.enrollmentDate || "").localeCompare(a.enrollmentDate || "") || b.id.localeCompare(a.id)).slice(0, 4);
+  const staffN = state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length;
+  const sections = [["#/students", "👥", active.length, "الطلاب", `${active.filter((s) => s.gender === "ذكر").length} طالب • ${active.filter((s) => s.gender === "أنثى").length} طالبة`],
+    ["#/halaqat", "🕌", groups().length, "الحلقات", "حلقات التحفيظ"],
+    ["#/quran", "📖", "", "الحفظ والمراجعة", "سجل المتابعة"],
+    ...(isAdmin() ? [["#/staff", "👨‍🏫", staffN, "الموظفون", "المدرسون والعمال"], ["#/fees", "💰", pct + "٪", "رسوم الشهر", `دفع ${paidCount} من ${billable.length}`]] : []),
+    ["#/calendar", "📅", "", "التقويم الدراسي", "الفصول والعطل"]];
+  return `<div class="home-hero">
+      <div class="hero-photo" style="background-image:url(building.jpg)"></div>
+      <div class="hero-body">
+        <div class="hero-tag">● ${esc(state.settings.name || DEFAULT_NAME)}</div>
+        <div class="hero-date">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div>
+        <div class="hero-small">قال الله تعالى</div>
+        <div class="hero-verse">﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾</div>
+        <div class="hero-ref">سورة القمر، الآية 17</div>
+        <p>${HADITH} — حفظٌ نتابعه، وعلمٌ نتعلمه، وخيرٌ نتشارك فيه.</p>
+        <div class="hero-btns"><a href="#/quran" class="hero-btn gold">تسجيل الحفظ اليوم ←</a>
+          <a href="#/students" class="hero-btn ghost">👥 الطلاب</a></div>
       </div>
-      <div class="banner-img"><div class="kb" style="background-image:url(building.jpg)"></div></div>
     </div>
-  <div class="cards">
-    <div class="card stat green"><div class="l">الطلاب النشطون</div><div class="v">${active.length}</div></div>
-    <div class="card stat"><div class="l">الطلاب / الطالبات</div><div class="v">${active.filter((s) => s.gender === "ذكر").length} / ${active.filter((s) => s.gender === "أنثى").length}</div></div>
-    <div class="card stat"><div class="l">الحلقات</div><div class="v">${groups().length}</div></div>
-    ${isAdmin() ? `<div class="card stat gold"><div class="l">الموظفون</div><div class="v">${state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length}</div></div>` : ""}
-  </div>
+  ${isAdmin() && backupDue() ? `<div class="backup-bar">💾 ${localStorage.getItem("lastBackup") ? "مرّ أسبوع على آخر نسخة احتياطية." : "لم تُنزَّل نسخة احتياطية من هذا الجهاز بعد."}
+    <a href="javascript:void 0" id="dlBackup">نزّلها الآن</a></div>` : ""}
+  <div class="row-between"><h3 class="sec-title">أقسام المركز</h3>${isAdmin() ? '<a href="#/report" class="muted">التقرير الشهري ←</a>' : ""}</div>
+  <div class="sections">${sections.map(([h, i, n, t, sub]) => `<a href="${h}" class="sec-card"><span class="sec-ico">${i}</span>
+    ${n !== "" ? `<b class="sec-n">${n}</b>` : ""}<span class="sec-t">${t}</span><span class="sec-sub">${esc(sub)}</span></a>`).join("")}</div>
   ${isAdmin() ? `<div class="panel"><div class="row-between"><h3>رسوم ${monthName(m)}</h3><a href="#/fees" class="btn small outline">فتح جدول الرسوم ←</a></div>
     <div class="progress"><div style="width:${pct}%"></div></div>
     <div class="row-between muted" style="margin-top:6px"><span>دفع <b style="color:var(--green)">${paidCount}</b> من ${billable.length} (${pct}٪) — المحصَّل ${money(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</span>
@@ -742,6 +810,11 @@ function viewHome() {
   <div class="shortcuts">${shortcuts.map(([h, i, t]) => `<a href="${h}" class="shortcut"><span>${i}</span>${t}</a>`).join("")}</div>
   ${(() => { const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
     return top.length ? `<h3 class="sec-title">🏆 لوحة الشرف — الأكثر حفظًا</h3><div class="panel">${honorList(top)}</div>` : ""; })()}
+  ${recent.length ? `<h3 class="sec-title">أحدث الطلاب المسجلين</h3><div class="recent">${recent.map((s) => `<div class="recent-card">
+    <span class="avatar big">${s.photo ? `<img src="${s.photo}" alt="">` : "👤"}</span><div><b>${esc(s.name)}</b>
+    <div><span class="pill num">🔢 \u2066${studentNumber(s.id)}\u2069</span>${s.group ? `<span class="pill">🕌 ${esc(s.group)}</span>` : ""}</div>
+    ${s.enrollmentDate ? `<div class="muted">📅 \u2066${esc(s.enrollmentDate)}\u2069</div>` : ""}</div>
+    ${(s.status || ACTIVE) === ACTIVE ? '<span class="ok-check">✅</span>' : ""}</div>`).join("")}</div>` : ""}
   <h3 class="sec-title">الحلقات</h3>
   <div class="halaqa-cards">${groups().map((g) => { const l = active.filter((s) => s.group === g); const h = state.halaqat.find((x) => x.name === g);
     const boys = l.filter((s) => s.gender === "ذكر").length, girls = l.filter((s) => s.gender === "أنثى").length;
@@ -750,6 +823,7 @@ function viewHome() {
       <div class="hnums"><span><b>${l.length}</b> طالب</span><span>👦 ${boys}</span><span>👧 ${girls}</span></div></a>`; }).join("")}</div>`;
 }
 bind.home = () => {
+  const b = $("#dlBackup"); if (b) b.onclick = downloadBackup;
   document.querySelectorAll(".glink").forEach((a) => a.onclick = () => { state.filters.group = a.dataset.g; });
   document.querySelectorAll("[data-fu]").forEach((b) => b.onclick = () => { Object.assign(state.memo, { period: b.dataset.fu, anchor: today(), group: "" }); location.hash = "#/quran"; });
 };
