@@ -388,6 +388,15 @@ private fun Dashboard(state: AppState, me: AppUser) {
                 "الحفظ" -> QuranScreen(state) { profileId = it }
                 "المالية" -> FinanceScreen(state) { profileId = it }
             }
+            // Offline / waiting-to-send notice: the app keeps working with the data saved on the phone
+            if (me.isStaff && (state.isOffline || state.hasPendingWrites)) {
+                Card(Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4D6))) {
+                    Text(if (state.isOffline) "📴 بدون إنترنت — تعمل بالبيانات المحفوظة على الهاتف، وتُرسل التغييرات وحدها عند عودة الاتصال"
+                         else "⏳ تغييرات بانتظار الإرسال إلى الخادم…",
+                        Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = Color(0xFF6D4C00), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
             state.message?.let { msg ->
                 Card(
                     Modifier.align(Alignment.BottomCenter).padding(12.dp),
@@ -463,7 +472,8 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
                 Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                     Image(painterResource(R.drawable.centre_logo), null, Modifier.size(72.dp)); Spacer(Modifier.width(14.dp))
                     Column {
-                        Text("السلام عليكم ورحمة الله وبركاته", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("أهلًا وسهلًا بك يا ${me.name.ifBlank { "أخي الكريم" }}", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("السلام عليكم ورحمة الله وبركاته", color = Gold, fontSize = 13.sp)
                         Text(me.name.ifBlank { me.email }, color = Color.White.copy(.9f))
                         Text("الصفة: ${Roles.label(me.role)}", color = Gold, fontSize = 13.sp)
                         val hijri = remember { hijriToday() }
