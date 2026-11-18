@@ -22,8 +22,8 @@ android {
         applicationId = "ml.centre.imammalik"
         minSdk = 24
         targetSdk = 35
-        versionCode = 34
-        versionName = "2.19.0"
+        versionCode = 35
+        versionName = "2.20.0"
     }
     // Fixed debug key (public, committed): only used as a fallback so CI builds stay installable over each other.
     // When the private release key is configured (CI secrets → env vars below), the release APK is signed with it instead.

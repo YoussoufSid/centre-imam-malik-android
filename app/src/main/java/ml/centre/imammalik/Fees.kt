@@ -47,6 +47,27 @@ fun studentsWithArrears(students: List<Student>, yearMonths: List<String>, payme
         .filter { it.amount > 0 }
         .sortedWith(compareBy({ it.student.group.ifBlank { "￿" } }, { it.student.name }))
 
+/** Home «تنبيهات» card (admin): students in arrears, with a button to open the reminders. */
+@androidx.compose.runtime.Composable
+fun ArrearsAlertCard(state: AppState, openReminders: () -> Unit) {
+    val now = today(); val months = academicYearMonths(now)
+    var payments by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Payment>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(state.monthPayments, state.students.size) { state.loadMonths(months.first(), months.last()) { p, _ -> payments = p } }
+    val late = studentsWithArrears(state.students, months, payments.orEmpty(), now, Centre.feeDueDay)
+    if (payments == null || late.isEmpty()) return
+    androidx.compose.material3.Card(androidx.compose.ui.Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = CardBg)) {
+        androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.padding(14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.weight(1f)) {
+                androidx.compose.material3.Text("تنبيهات", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Green)
+                androidx.compose.material3.Text("${late.size} طالبًا متأخرون عن الدفع — ${money(late.sumOf { it.amount })} للتحصيل",
+                    color = androidx.compose.ui.graphics.Color(0xFFC53030))
+            }
+            androidx.compose.material3.FilledTonalButton(onClick = openReminders) { androidx.compose.material3.Text("عرض") }
+        }
+    }
+}
+
 /** "1 520 000" without direction marks (for WhatsApp / plain text). */
 fun plainAmount(n: Int): String = "%,d".format(Locale.US, n).replace(',', ' ')
 

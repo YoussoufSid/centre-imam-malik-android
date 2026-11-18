@@ -401,7 +401,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                             UpdateBanner(latestVersion!!) { updateDialog = true }
                         }
                     }
-                    HomeScreen(state, me, quickActions, onReport = { p -> state.memoRequest = p; goTo("الحفظ") },
+                    HomeScreen(state, me, quickActions, onReport = { p -> state.memoRequest = p; goTo("الحفظ") }, onFinance = { goTo("المالية") },
                         onCalendar = { open(Screens.CALENDAR) }) { profileId = it.id }
                 }
                 "الطلاب", "أبنائي" -> StudentsScreen(state, me, onGradeEntry = { open(Screens.GRADES) },
@@ -481,7 +481,7 @@ fun StatCard(title: String, value: String, icon: ImageVector, modifier: Modifier
 }
 
 @Composable
-private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAction>, onReport: (LogPeriod) -> Unit = {},
+private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAction>, onReport: (LogPeriod) -> Unit = {}, onFinance: () -> Unit = {},
                        onCalendar: () -> Unit = {}, open: (Student) -> Unit) {
     val active = state.students.filter { it.status == "نشط" }
     val present = state.todayAttendance.count { AttendanceStatus.isPresent(it.status) }
@@ -519,6 +519,7 @@ private fun HomeScreen(state: AppState, me: AppUser, quickActions: List<QuickAct
                     textAlign = TextAlign.Center)
             }
         }
+        if (me.isAdmin) item { ArrearsAlertCard(state, onFinance) }
         if (me.isStaff) item { FollowUpHomeCard(state, onReport, onCalendar) }
         if (quickActions.isNotEmpty()) item { QuickActions(quickActions) }
         item { DuaCard() }

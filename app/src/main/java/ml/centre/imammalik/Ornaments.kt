@@ -25,11 +25,14 @@ fun OrnateTitle(title: String) {
     }
 }
 
-/** Thin gold line that fades at both ends, under the top bar. */
+/** The three colours of the Mali flag as a thin stripe under the top bar (like the website). */
 @Composable
 fun GoldRule(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(3.dp).background(
-        Brush.horizontalGradient(listOf(Green, Gold, Color(0xFFF4D77A), Gold, Green))))
+    Row(modifier.fillMaxWidth().height(4.dp)) {
+        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF14B53A)))
+        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFFCD116)))
+        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFCE1126)))
+    }
 }
 
 /** Section heading: ❁ title, then a short gold rule. */
