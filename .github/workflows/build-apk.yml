@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: '22'
       - name: Run website logic tests
-        run: node --test web/tests/
+        run: node --test web/tests/*.test.mjs
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
