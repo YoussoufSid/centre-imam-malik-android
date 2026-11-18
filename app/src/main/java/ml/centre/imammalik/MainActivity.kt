@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
         FirebaseFirestore.getInstance().firestoreSettings = FirebaseFirestoreSettings.Builder()
             .setPersistenceEnabled(true).build()
         ThemePref.load(this)
+        UpdatePref.load(this)
         setContent { ImamMalikApp() }
     }
 }
@@ -280,7 +281,9 @@ private fun Dashboard(state: AppState, me: AppUser) {
     LaunchedEffect(updateAvailable) {
         if (updateAvailable && !updateOffered) {
             updateOffered = true
-            if (android.os.SystemClock.elapsedRealtime() - openedAt < 90_000) runUpdate(context, manual = false)
+            // Mobile data is expensive: with «Wi-Fi only» (default) the update waits for Wi-Fi and the banner is shown instead.
+            val allowed = !(UpdatePref.wifiOnly && isMeteredNow(context))
+            if (allowed && android.os.SystemClock.elapsedRealtime() - openedAt < 90_000) runUpdate(context, manual = false)
         }
     }
     // Coming back to the app after a while: look for a new version again (the banner appears if there is one).
@@ -350,6 +353,8 @@ private fun Dashboard(state: AppState, me: AppUser) {
                             runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                                 android.net.Uri.parse(WEB_DASHBOARD_URL))) }
                         })
+                        add(MenuEntry(if (UpdatePref.wifiOnly) "☑ التحديث التلقائي عبر Wi-Fi فقط" else "☐ التحديث التلقائي عبر Wi-Fi فقط",
+                            Icons.Default.Wifi) { UpdatePref.toggle(context) })
                         add(MenuEntry(if (ThemePref.dark) "الوضع النهاري" else "الوضع الليلي",
                             if (ThemePref.dark) Icons.Default.LightMode else Icons.Default.DarkMode) { ThemePref.toggle(context) })
                         add(MenuEntry("حول التطبيق", Icons.Default.Info) { aboutOpen = true })

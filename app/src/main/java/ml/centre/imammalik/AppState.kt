@@ -130,9 +130,8 @@ class AppState {
         auth.createUserWithEmailAndPassword(email.trim(), password)
             .addOnSuccessListener { result ->
                 val u = result.user ?: return@addOnSuccessListener
-                val role = if (isAdminEmail(email)) Roles.ADMIN else Roles.STUDENT
                 db.collection("users").document(u.uid)
-                    .set(mapOf("name" to name.trim(), "email" to email.trim(), "role" to role, "createdAt" to Date()))
+                    .set(mapOf("name" to name.trim(), "email" to email.trim(), "role" to Roles.STUDENT, "createdAt" to Date()))
                     .addOnCompleteListener {
                         busy = false; firebaseUser = u
                         listenProfile(u.uid, u.email ?: "")
@@ -154,7 +153,19 @@ class AppState {
         firebaseUser = null; profile = null
     }
 
-    private fun isAdminEmail(email: String) = email.trim().equals(ADMIN_EMAIL, ignoreCase = true)
+    private var healTried = false
+    /**
+     * The administration is whoever has role «admin» in their users document (no e-mail is written in the code).
+     * Self-heal for accounts created before that: if the server lets this account read the admin-only audit log
+     * (i.e. it is the administration), store the role in its document. Other accounts get «permission denied» and nothing changes.
+     */
+    private fun healAdminRole(uid: String) {
+        if (healTried) return
+        healTried = true
+        db.collection("auditLog").limit(1).get().addOnSuccessListener {
+            db.collection("users").document(uid).set(mapOf("role" to Roles.ADMIN), SetOptions.merge())
+        }
+    }
 
     // ---------- Profile & role-based data ----------
 
@@ -164,7 +175,8 @@ class AppState {
             if (error != null) { message = arabicError(error.message) }
             val p = snap?.takeIf { it.exists() }?.let { toUser(it) }
                 ?: AppUser(uid = uid, email = email, role = Roles.STUDENT)
-            val fixed = if (isAdminEmail(email)) p.copy(role = Roles.ADMIN) else p
+            val fixed = p
+            if (fixed.role != Roles.ADMIN && fixed.role != Roles.TEACHER) healAdminRole(uid)
             val old = profile
             profile = fixed
             if (old == null || old.role != fixed.role || old.studentIds != fixed.studentIds || old.groups != fixed.groups) startData(fixed)

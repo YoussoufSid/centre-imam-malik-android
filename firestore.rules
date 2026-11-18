@@ -1,27 +1,39 @@
 rules_version = '2';
+// ⚠️ لا تنشر هذه القواعد قبل أن يظهر في «إعدادات المركز» (الهاتف أو الحاسوب) السطر: «🔒 حساب الإدارة مؤمَّن».
+// صلاحية الإدارة صارت محفوظة في وثيقة حساب المدير (role = admin) بدل بريد مكتوب في الملف.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function isAdmin() {
-      return signedIn() && request.auth.token.email == 'sidibey487@gmail.com';
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
     function me() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    function hasProfile() {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-    function isStaff() { return isAdmin() || (hasProfile() && me().role == 'teacher'); }
+    // The administration = role "admin" in the user's own document. Only an admin can change that document's role
+    // (see /users below), so nobody can promote themselves.
+    function isAdmin() { return hasProfile() && me().role == 'admin'; }
+    function isStaff() { return hasProfile() && (me().role == 'admin' || me().role == 'teacher'); }
     // Parents and students may only read the student files linked to their account by the admin.
     function linkedTo(studentId) {
       return hasProfile() && studentId in me().get('studentIds', []);
     }
+    // Size limits: a field is either absent or a string of at most n characters (blocks huge / malformed records).
+    function okStr(d, k, n) { return !(k in d) || (d[k] is string && d[k].size() <= n); }
+    function validStudent() {
+      let d = request.resource.data;
+      return okStr(d, 'name', 120) && okStr(d, 'nameFr', 120) && okStr(d, 'photo', 60000) && okStr(d, 'phone', 40) && okStr(d, 'address', 200);
+    }
+    function validLog() {
+      let d = request.resource.data;
+      return okStr(d, 'surah', 60) && okStr(d, 'grade', 30) && okStr(d, 'notes', 500) && okStr(d, 'type', 30);
+    }
 
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      // Self-registration always creates a plain account; the admin promotes it later.
       allow create: if signedIn() && request.auth.uid == uid
-                    && (request.resource.data.role == 'student'
-                        || (request.resource.data.role == 'admin' && isAdmin()))
+                    && request.resource.data.role == 'student'
                     && !('studentIds' in request.resource.data);
       // Users may only change their own name/phone; role and links are set by the admin.
       allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
@@ -30,7 +42,7 @@ service cloud.firestore {
     }
     match /students/{studentId} {
       allow read: if isStaff() || linkedTo(studentId);
-      allow create, update: if isStaff();
+      allow create, update: if isStaff() && validStudent();
       allow delete: if isAdmin();
     }
     match /attendance/{recordId} {
@@ -82,7 +94,7 @@ service cloud.firestore {
     }
     match /quranLogs/{recordId} {
       allow read: if isStaff() || linkedTo(resource.data.studentId);
-      allow create, update: if isStaff();
+      allow create, update: if isStaff() && validLog();
       allow delete: if isAdmin();
     }
   }

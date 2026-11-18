@@ -3,7 +3,6 @@ package ml.centre.imammalik
 import java.text.SimpleDateFormat
 import java.util.*
 
-const val ADMIN_EMAIL = "sidibey487@gmail.com"
 
 const val WELCOME_TEXT = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية"
 const val HADITH_TEXT = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»"

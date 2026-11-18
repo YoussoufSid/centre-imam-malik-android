@@ -4,3 +4,7 @@ local.properties
 build/
 app/build/
 *.iml
+
+*.jks
+*.keystore.private
+release-key*

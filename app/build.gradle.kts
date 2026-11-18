@@ -22,16 +22,26 @@ android {
         applicationId = "ml.centre.imammalik"
         minSdk = 24
         targetSdk = 35
-        versionCode = 33
-        versionName = "2.18.1"
+        versionCode = 34
+        versionName = "2.19.0"
     }
-    // Fixed debug key so every CI build can be installed over the previous one.
+    // Fixed debug key (public, committed): only used as a fallback so CI builds stay installable over each other.
+    // When the private release key is configured (CI secrets → env vars below), the release APK is signed with it instead.
+    val releaseStorePath = System.getenv("RELEASE_KEYSTORE_PATH")
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        if (!releaseStorePath.isNullOrBlank() && file(releaseStorePath).exists()) {
+            create("release") {
+                storeFile = file(releaseStorePath)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
         }
     }
     buildTypes {
@@ -41,7 +51,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     testOptions { unitTests.isReturnDefaultValues = true }

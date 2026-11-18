@@ -19,12 +19,37 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Set up Node (website logic tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run website logic tests
+        run: node --test web/tests/*.test.mjs
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest --stacktrace
+      # Private release key (optional): add the four repository secrets below to sign the release APK with it.
+      # Without them the build falls back to the public debug key (installable, but not secure against look-alike APKs).
+      - name: Prepare private release key (if configured)
+        env:
+          KS_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "RELEASE_STORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_ALIAS=$KS_ALIAS" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+            echo "Signing the release APK with the private key."
+          else
+            echo "No private key configured: using the debug key."
+          fi
       - name: Build APKs (optimised release + debug)
         run: gradle :app:assembleRelease :app:assembleDebug --stacktrace
       - name: Upload test report
@@ -57,10 +82,12 @@ jobs:
         run: |
           V=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
           cp app/build/outputs/apk/release/app-release.apk centre-imam-malik.apk
+          # SHA-256 next to the APK: the app checks the download against it before installing
+          sha256sum centre-imam-malik.apk | cut -d' ' -f1 > centre-imam-malik.apk.sha256
           if gh release view "v$V" >/dev/null 2>&1; then
-            gh release upload "v$V" centre-imam-malik.apk --clobber
+            gh release upload "v$V" centre-imam-malik.apk centre-imam-malik.apk.sha256 --clobber
           else
-            gh release create "v$V" centre-imam-malik.apk --target "$GITHUB_SHA" --latest \
+            gh release create "v$V" centre-imam-malik.apk centre-imam-malik.apk.sha256 --target "$GITHUB_SHA" --latest \
               --title "مركز الإمام مالك — الإصدار $V" \
               --notes "تطبيق الهاتف لمركز الإمام مالك. للتثبيت: نزّل centre-imam-malik.apk وافتحه على الهاتف."
           fi
