@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=22";
+import { firebaseConfig } from "./firebase-config.js?v=23";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -688,6 +688,7 @@ function viewSettings() {
       <div>${f("se", "✉️ البريد الإلكتروني للمركز", s.email, 'dir="ltr" type="email" placeholder="exemple@gmail.com"')}</div></div>
     ${f("sa", "📍 العنوان (الحي، المدينة)", s.address)}
     <div class="row2"><div>${f("sy", "العام الدراسي", s.academicYear, 'placeholder="2026 / 2027"')}</div><div>${f("sc", "العملة", s.currency)}</div></div>
+    ${f("sdue", "يوم بدء احتساب التأخير في دفع الرسوم (من كل شهر)", s.feeDueDay || 25, 'type="number" min="1" max="31"')}
     <div class="modal-actions"><button class="btn" id="ssave">💾 حفظ</button></div></div>`;
 }
 bind.settings = () => {
@@ -696,7 +697,7 @@ bind.settings = () => {
     if (!v("sn")) { toast("اسم المركز مطلوب"); return; }
     if (v("se") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("se"))) { toast("البريد الإلكتروني غير صحيح"); return; }
     setDoc(doc(db, "settings", "centre"), { name: v("sn"), director: v("sd"), phone: v("sp"), email: v("se"), address: v("sa"),
-      academicYear: v("sy"), currency: v("sc") || "فرنك", updatedAt: new Date() }, { merge: true })
+      academicYear: v("sy"), currency: v("sc") || "فرنك", feeDueDay: Math.min(31, Math.max(1, +v("sdue") || 25)), updatedAt: new Date() }, { merge: true })
       .then(() => { audit("تعديل إعدادات المركز", v("sn")); toast("تم حفظ إعدادات المركز"); }).catch(fail);
   };
 };
@@ -991,11 +992,70 @@ function halaqaForm(h) {
   });
 }
 
+// ---------------------------------------------------------------- fee arrears & parent reminders
+// A month's fee is overdue from the due day (default the 25th) of that month — same rule as the phone app (Fees.kt).
+const FR_MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const frMonthName = (m) => { const [y, mm] = m.split("-"); return `${FR_MONTHS[+mm - 1] ?? m} ${y}`; };
+const dueDay = () => Math.min(31, Math.max(1, +state.settings.feeDueDay || 25));
+const isMonthDue = (m, t = today()) => { const cur = t.slice(0, 7); return m < cur || (m === cur && +t.slice(8, 10) >= dueDay()); };
+const plainNum = (n) => Number(n || 0).toLocaleString("en-US").replace(/,/g, " ");
+/** Arrears of a student in an academic year: unpaid due months and the amount still owed (fee × due months − paid). */
+function feeArrears(s, months) {
+  const mine = state.payments.filter((p) => p.type === "monthly" && p.studentId === s.id);
+  const due = months.filter((m) => isMonthDue(m));
+  const unpaid = due.filter((m) => !mine.some((p) => p.month === m));
+  return { s, months: unpaid, amount: Math.max(0, (s.monthlyFee || 0) * due.length - mine.reduce((a, p) => a + (p.amount || 0), 0)) };
+}
+const arrearsList = (months, students) => students.filter((s) => (s.status || ACTIVE) === ACTIVE && (s.monthlyFee || 0) > 0)
+  .map((s) => feeArrears(s, months)).filter((a) => a.amount > 0)
+  .sort((a, b) => (a.s.group || "\uFFFF").localeCompare(b.s.group || "\uFFFF", "ar") || a.s.name.localeCompare(b.s.name, "ar"));
+/** Arabic + French WhatsApp message (same text as the phone app). */
+function reminderMessage(a) {
+  const c = state.settings.currency || "فرنك", d = dueDay(), name = state.settings.name || DEFAULT_NAME;
+  return `السلام عليكم ورحمة الله وبركاته،\nنُذكّركم بأن على الطالب/ة ${a.s.name} رسومًا دراسية متأخرة${a.months.length ? " عن: " + a.months.map(monthName).join("، ") : ""}.\n` +
+    `المبلغ المتأخر: ${plainNum(a.amount)} ${c}\n(تُستحق الرسوم قبل يوم ${d} من كل شهر). نرجو التسوية في أقرب وقت، جزاكم الله خيرًا.\n\n` +
+    `Assalamou alaykoum wa rahmatullah,\nNous vous rappelons que l'élève ${a.s.name} a des frais de scolarité impayés${a.months.length ? " pour : " + a.months.map(frMonthName).join(", ") : ""}.\n` +
+    `Montant dû : ${plainNum(a.amount)} FCFA\n(Les frais sont exigibles avant le ${d} de chaque mois.) Merci de régulariser dès que possible. Qu'Allah vous récompense.\n\n` +
+    `${name}${state.settings.phone ? " • " + state.settings.phone : ""}`;
+}
+/** One printed slip (Arabic + French). */
+function reminderSlip(a) {
+  const d = dueDay(), c = state.settings.currency || "فرنك", contact = [state.settings.phone, state.settings.email].filter(Boolean).join("  •  ");
+  return `<div class="slip"><div class="slip-head"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b><em class="fr">${CENTRE_FR}</em></div></div>
+    <div class="slip-title">تذكير بدفع الرسوم الدراسية<div class="fr">Rappel de paiement des frais de scolarité</div></div>
+    <div class="slip-to"><b>إلى وليّ أمر الطالب/ة: ${esc(a.s.name)}</b>${a.s.group ? ` — ${esc(a.s.group)}` : ""}
+      <div class="fr">À l'attention du parent / tuteur de l'élève : ${esc(a.s.name)}</div></div>
+    ${a.months.length ? `<div class="slip-months">الأشهر غير المسدَّدة: ${a.months.map(monthName).join("، ")}<div class="fr">Mois impayés : ${a.months.map(frMonthName).join(", ")}</div></div>` : ""}
+    <div class="slip-amount">المبلغ المتأخر: \u2066${plainNum(a.amount)}\u2069 ${esc(c)}<div class="fr">Montant dû : ${plainNum(a.amount)} FCFA</div></div>
+    <div class="slip-msg">نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم ${d} من كل شهر. جزاكم الله خيرًا.
+      <div class="fr">Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le ${d} de chaque mois. Qu'Allah vous récompense.</div></div>
+    <div class="slip-foot"><span>الإدارة / L'administration</span><span class="fr">${esc(contact)}</span><span class="fr">${frDate(today())}</span></div></div>`;
+}
+/** Print preview: several slips per A4 (2 / 4 / 6), plus a WhatsApp list to send them one by one. */
+function showReminders(list, label) {
+  if (!list.length) { toast("لا يوجد طلاب متأخرون 👍"); return; }
+  const box = document.createElement("div"); box.id = "cert"; box.dataset.slips = "6";
+  const draw = () => { box.querySelector(".slips").className = "slips per" + box.dataset.slips; };
+  box.innerHTML = `<div class="no-print cert-actions">
+      <div><b>تذكيرات أولياء الأمور — ${esc(label)} (${list.length})</b></div>
+      <div style="margin:8px 0">عدد التذكيرات في الورقة A4: ${[2, 4, 6].map((n) => `<button class="btn small ${n === 6 ? "" : "outline"}" data-n="${n}">${n}</button>`).join(" ")}</div>
+      <button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button>
+      <details class="wa-list"><summary>💬 إرسال عبر واتساب (${list.filter((a) => waNumber(a.s.phone)).length} لديهم رقم)</summary>
+        ${list.map((a) => { const l = waLink(a.s.phone, reminderMessage(a)); return `<div class="wa-row"><span>${esc(a.s.name)} <span class="muted">${esc(a.s.group || "")}</span></span>
+          ${l ? `<a class="wa" href="${l}" target="_blank" rel="noopener">💬 إرسال</a>` : '<span class="muted">لا رقم</span>'}</div>`; }).join("")}</details></div>
+    <div class="slips per6">${list.map(reminderSlip).join("")}</div>`;
+  document.body.appendChild(box); document.body.classList.add("cert-mode");
+  box.querySelectorAll("[data-n]").forEach((b) => b.onclick = () => { box.dataset.slips = b.dataset.n; box.querySelectorAll("[data-n]").forEach((x) => x.classList.toggle("outline", x !== b)); draw(); });
+  box.querySelector("#cprint").onclick = () => window.print();
+  box.querySelector("#cclose").onclick = () => { box.remove(); document.body.classList.remove("cert-mode"); };
+}
+
 // ---------------------------------------------------------------- monthly fees grid
 function viewFees() {
   const months = academicMonths(state.filters.year);
   const cm = currentMonth();
-  const dueMonths = months.filter((m) => m <= cm).length;
+  const isDue = (m) => isMonthDue(m);
+  const dueMonths = months.filter(isDue).length;
   const list = filterStudents(state.students).filter((s) => (s.status || ACTIVE) === ACTIVE || state.payments.some((p) => p.studentId === s.id));
   const pay = {}; state.payments.filter((p) => p.type === "monthly").forEach((p) => { pay[`${p.month}_${p.studentId}`] = p; });
   let totPaid = 0, totDue = 0, totLate = 0;  // arrears summed per student (advance payments don't offset others)
@@ -1003,15 +1063,16 @@ function viewFees() {
     const fee = s.monthlyFee || 0;
     let paid = 0;
     const cells = months.map((m) => { const p = pay[`${m}_${s.id}`]; if (p) paid += p.amount || 0;
-      const cls = p ? "paid" : (m <= cm && fee > 0 ? "late" : (m > cm ? "future" : ""));
-      return `<td class="cell ${cls}" data-s="${s.id}" data-m="${m}" title="${monthName(m)}">${p ? num(p.amount) : (m <= cm && fee > 0 ? "—" : "")}</td>`; }).join("");
+      const cls = p ? "paid" : (isDue(m) && fee > 0 ? "late" : (m > cm ? "future" : ""));
+      return `<td class="cell ${cls}" data-s="${s.id}" data-m="${m}" title="${monthName(m)}">${p ? num(p.amount) : (isDue(m) && fee > 0 ? "—" : "")}</td>`; }).join("");
     const due = fee * dueMonths; const late = Math.max(0, due - paid);
     totPaid += paid; totDue += due; totLate += late;
-    const wa = late ? waLink(s.phone, `السلام عليكم ورحمة الله وبركاته،\nنذكّركم بأن على الطالب/ة ${s.name} رسومًا متأخرة قدرها ${num(late).replace(/[\u2066\u2069]/g, "")} ${state.settings.currency || "فرنك"} (العام الدراسي ${yearLabel(state.filters.year)}).\nجزاكم الله خيرًا.\n${state.settings.name || DEFAULT_NAME}`) : null;
+    const arr = late ? { s, months: months.filter((m) => isDue(m) && !pay[`${m}_${s.id}`]), amount: late } : null;
+    const wa = arr ? waLink(s.phone, reminderMessage(arr)) : null;
     return `<tr><td class="num">${i + 1}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:12px">${esc(s.group)}</div></td>
       <td class="num">${num(fee)}</td>${cells}<td class="num"><b>${num(paid)}</b></td><td class="num">${num(due)}</td>
       <td class="num" style="color:${late ? "var(--red)" : "inherit"}"><b>${num(late)}</b></td>
-      <td class="no-print">${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" title="تذكير ولي الأمر عبر واتساب">💬</a>` : ""}</td></tr>`;
+      <td class="no-print">${late ? `<button class="slipbtn" data-rem="${s.id}" title="طباعة تذكير">🖨️</button>` : ""}${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" title="تذكير ولي الأمر عبر واتساب (عربي وفرنسي)">💬</a>` : ""}</td></tr>`;
   }).join("");
   const colTotals = months.map((m) => list.reduce((a, s) => a + (pay[`${m}_${s.id}`]?.amount || 0), 0));
   return `<h1>الرسوم الشهرية</h1><div class="sub">العام الدراسي ${yearLabel(state.filters.year)} — اضغط على خانة الشهر لتسجيل الدفع أو إلغائه</div>
@@ -1021,7 +1082,9 @@ function viewFees() {
   <div class="toolbar"><button class="btn outline small" id="py">◀ السنة السابقة</button><b>${yearLabel(state.filters.year)}</b>
     <button class="btn outline small" id="ny">السنة التالية ▶</button>
     <input id="fq" placeholder="🔍 بحث" value="${esc(state.filters.q)}">${groupSelect()}
-    <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
+    <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
+    <button class="btn gold no-print" id="remAll">🧾 تذكيرات أولياء الأمور</button></div>
+  <div class="muted" style="margin-bottom:6px">يبدأ احتساب التأخير من يوم ${dueDay()} من كل شهر.</div>
   <div class="table-wrap grid"><table><thead><tr><th class="num">#</th><th>الطالب</th><th class="num">الرسم</th>
     ${months.map((m) => `<th class="num">${AR_MONTHS[+m.slice(5) - 1]}</th>`).join("")}
     <th class="num">المدفوع</th><th class="num">المستحق</th><th class="num">المتأخرات</th><th class="no-print">تذكير</th></tr></thead>
@@ -1031,6 +1094,11 @@ function viewFees() {
 }
 bind.fees = () => {
   bindFilters();
+  const months = academicMonths(state.filters.year);
+  $("#remAll").onclick = () => showReminders(arrearsList(months, filterStudents(state.students)),
+    state.filters.group && state.filters.group !== "-" ? state.filters.group : "كل الحلقات");
+  document.querySelectorAll("[data-rem]").forEach((b) => b.onclick = () => {
+    const s = state.students.find((x) => x.id === b.dataset.rem); showReminders(arrearsList(months, [s]), s.name); });
   $("#py").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], -12); render(); };
   $("#ny").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], 12); render(); };
   document.querySelectorAll("td.cell").forEach((td) => td.onclick = () => {

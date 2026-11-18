@@ -507,3 +507,33 @@ body.dark .recent-card { border-color: #2a3832; border-inline-end-color: var(--g
 }
 @media print { .bnav, .backdrop, #welcome, .offline-bar, .backup-bar, .home-hero { display: none !important; } }
 .hero-date { font-size: 12.5px; opacity: .8; margin-top: 4px; }
+
+/* ---------- Parent reminder slips (Arabic + French), 2 / 4 / 6 per A4 ---------- */
+.slips { display: grid; background: #fff; margin: auto; width: 210mm; padding: 5mm; gap: 0; }
+.slips.per6 { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 95mm; }
+.slips.per4 { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 143mm; }
+.slips.per2 { grid-template-columns: 1fr; grid-auto-rows: 143mm; }
+.slip { border: 1px dashed #aaa; padding: 3.5mm 4mm; display: flex; flex-direction: column; gap: 1.6mm; font-size: 8.5pt; overflow: hidden; color: #222; break-inside: avoid; }
+.slips.per4 .slip, .slips.per2 .slip { font-size: 10.5pt; gap: 2.6mm; padding: 5mm; }
+.slip .fr { color: #555; font-size: .88em; }
+.slip-head { display: flex; align-items: center; gap: 2mm; background: #075B3A; color: #fff; padding: 1.4mm 2mm; border-radius: 1.5mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.slip-head img { width: 9mm; height: 9mm; border-radius: 50%; background: #fff; }
+.slip-head b { display: block; font-size: 1em; } .slip-head em { display: block; font-style: italic; font-size: .72em; color: #e8f1ec; direction: ltr; text-align: right; }
+.slip-title { text-align: center; color: #b7791f; font-weight: 800; font-size: 1.2em; }
+.slip-title .fr { color: #555; font-weight: 700; font-size: .75em; }
+.slip-to { line-height: 1.5; } .slip-months { line-height: 1.5; }
+.slip-amount { background: #fff4d6; color: #b7791f; font-weight: 800; text-align: center; padding: 1.5mm; border-radius: 1.5mm; font-size: 1.15em; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.slip-amount .fr { color: #b7791f; font-size: .8em; }
+.slip-msg { line-height: 1.5; font-size: .95em; }
+.slip-foot { margin-top: auto; border-top: 1px solid #ddd; padding-top: 1.5mm; display: flex; justify-content: space-between; gap: 2mm; font-size: .85em; color: #555; }
+.wa-list { margin-top: 10px; background: rgba(255,255,255,.12); border-radius: 12px; padding: 8px 12px; color: #fff; text-align: right; max-width: 560px; margin-inline: auto; }
+.wa-list summary { cursor: pointer; font-weight: 700; }
+.wa-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid rgba(255,255,255,.2); }
+.wa-row .muted { color: #cfe3d9; }
+button.slipbtn { border: 0; background: #eef3f0; border-radius: 8px; padding: 3px 7px; margin-inline-end: 4px; font-size: 16px; }
+@media print {
+  @page slipsA4 { size: A4 portrait; margin: 0; }
+  body.cert-mode .slips { page: slipsA4; width: 210mm; padding: 5mm; }
+  body.cert-mode .slips.per6 { grid-auto-rows: 95mm; } body.cert-mode .slips.per4, body.cert-mode .slips.per2 { grid-auto-rows: 143mm; }
+}
+.slip-head em.fr { color: #e8f1ec; font-size: .72em; }
