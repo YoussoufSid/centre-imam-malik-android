@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=26";
+import { firebaseConfig } from "./firebase-config.js?v=27";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -37,6 +37,8 @@ const money = (n) => `${num(n)} ${state.settings.currency || "فرنك"}`;
 // Card amount: big number on one line, small currency label.
 const amt = (n) => `${num(n)}<span class="cur">${esc(state.settings.currency || "فرنك")}</span>`;
 const ACTIVE = "نشط";
+/** Photos are stored as JPEG data URLs made by the app. Anything else (a tampered record) is ignored, so a record can never inject markup. */
+const safePhoto = (p) => (typeof p === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]{20,}$/.test(p) ? p : "");
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.classList.remove("hidden");
@@ -351,7 +353,7 @@ function idCardHtml({ kindAr, kindFr, name, nameFr = "", number, photo, qr, rows
   return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div class="idc-titles"><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
       <em class="fr">${CENTRE_FR}</em><span class="idc-kind">${kindAr} <i class="fr">${kindFr}</i> • ${fr(year)}</span></div></div>
     <div class="idc-body"><div class="idc-info">${qrSvg(qr)}<div class="idc-name">${esc(name)}</div>${nameFr ? `<div class="idc-name-fr fr">${esc(nameFr)}</div>` : ""}${rows.map(row).join("")}</div>
-      <div class="idc-side"><div class="idc-photo">${photo ? `<img src="${photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
+      <div class="idc-side"><div class="idc-photo">${safePhoto(photo) ? `<img src="${safePhoto(photo)}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
         <div class="idc-no">${fr("N° " + number)}</div></div></div>
     <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}</div>
       <div>${[state.settings.phone && fr("☎ " + state.settings.phone), state.settings.email && fr("✉ " + state.settings.email)].filter(Boolean).join(" • ")
@@ -813,7 +815,7 @@ function viewHome() {
   ${(() => { const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
     return top.length ? `<h3 class="sec-title">🏆 لوحة الشرف — الأكثر حفظًا</h3><div class="panel">${honorList(top)}</div>` : ""; })()}
   ${recent.length ? `<h3 class="sec-title">أحدث الطلاب المسجلين</h3><div class="recent">${recent.map((s) => `<div class="recent-card">
-    <span class="avatar big">${s.photo ? `<img src="${s.photo}" alt="">` : "👤"}</span><div><b>${esc(s.name)}</b>
+    <span class="avatar big">${safePhoto(s.photo) ? `<img src="${safePhoto(s.photo)}" alt="">` : "👤"}</span><div><b>${esc(s.name)}</b>
     <div><span class="pill num">🔢 \u2066${studentNumber(s.id)}\u2069</span>${s.group ? `<span class="pill">🕌 ${esc(s.group)}</span>` : ""}</div>
     ${s.enrollmentDate ? `<div class="muted">📅 \u2066${esc(s.enrollmentDate)}\u2069</div>` : ""}</div>
     ${(s.status || ACTIVE) === ACTIVE ? '<span class="ok-check">✅</span>' : ""}</div>`).join("")}</div>` : ""}
@@ -839,7 +841,7 @@ function viewStudents() {
     <span class="muted">${list.length} نتيجة</span></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
-  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b>${s.nameFr ? `<div class="fr muted" style="font-size:12px">${esc(s.nameFr)}</div>` : ""}</td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
+  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${safePhoto(s.photo) ? `<img src="${safePhoto(s.photo)}" alt="">` : ""}</span><b>${esc(s.name)}</b>${s.nameFr ? `<div class="fr muted" style="font-size:12px">${esc(s.nameFr)}</div>` : ""}</td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
     <td>${esc(s.teacher)}</td><td>${guardianPhone(s)}</td><td class="num">${s.hizbs || 0}/60</td>
     ${isAdmin() ? `<td class="num">${num(s.monthlyFee)}</td>` : ""}
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
@@ -878,14 +880,14 @@ function resizePhoto(file, w = 240, h = 320) {
 }
 
 /** Photo box + buttons for the student and staff forms (camera offered on phones). */
-const photoPickerHtml = (photo) => `<div class="photo-pick"><div class="ph-box" id="phBox">${photo ? `<img src="${photo}" alt="">` : "👤"}</div><div>
+const photoPickerHtml = (photo) => `<div class="photo-pick"><div class="ph-box" id="phBox">${safePhoto(photo) ? `<img src="${safePhoto(photo)}" alt="">` : "👤"}</div><div>
   <label class="btn small outline">📷 إضافة / تغيير الصورة<input type="file" id="phFile" accept="image/*" hidden></label>
   <button class="btn small danger ${photo ? "" : "hidden"}" id="phDel" type="button">حذف الصورة</button>
   <div class="muted" style="font-size:12px">تظهر على البطاقة. على الهاتف يمكن التقاطها بالكاميرا.</div></div></div>`;
 /** Wires the picker; returns a getter: undefined = unchanged, "" = removed, data URL = new photo. */
 function bindPhotoPicker(b) {
   let photo;
-  const show = (p) => { b.querySelector("#phBox").innerHTML = p ? `<img src="${p}" alt="">` : "👤"; b.querySelector("#phDel").classList.toggle("hidden", !p); };
+  const show = (p) => { b.querySelector("#phBox").innerHTML = safePhoto(p) ? `<img src="${safePhoto(p)}" alt="">` : "👤"; b.querySelector("#phDel").classList.toggle("hidden", !p); };
   b.querySelector("#phFile").onchange = (e) => { const f = e.target.files[0]; if (!f) return;
     resizePhoto(f).then((p) => { photo = p; show(p); }).catch(fail); };
   b.querySelector("#phDel").onclick = () => { photo = ""; show(""); };
@@ -1264,7 +1266,7 @@ function viewStaff() {
       <th class="num">الراتب الأساسي</th><th>طريقة الدفع</th><th>تاريخ التعيين</th><th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
       ${list.map((t, i) => { const hs = state.halaqat.filter((h) => (h.teacher || "").trim() === (t.name || "").trim());
         const cnt = state.students.filter((s) => hs.some((h) => h.name === s.group) && (s.status || ACTIVE) === ACTIVE).length;
-        return `<tr data-st="${t.id}" style="cursor:pointer" title="اضغط لفتح ملف الموظف"><td class="num">${i + 1}</td><td><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : ""}</span><b>${esc(t.name)}</b>${t.notes ? `<div class="muted" style="font-size:12px">${esc(t.notes)}</div>` : ""}</td>
+        return `<tr data-st="${t.id}" style="cursor:pointer" title="اضغط لفتح ملف الموظف"><td class="num">${i + 1}</td><td><span class="avatar">${safePhoto(t.photo) ? `<img src="${safePhoto(t.photo)}" alt="">` : ""}</span><b>${esc(t.name)}</b>${t.notes ? `<div class="muted" style="font-size:12px">${esc(t.notes)}</div>` : ""}</td>
         <td>${esc(t.function)}</td><td dir="ltr" style="text-align:right">${esc(t.phone)}</td>
         ${cat === "مدرس" ? `<td>${hs.map((h) => esc(h.name)).join("، ") || '<span class="muted">—</span>'}</td><td class="num">${hs.length ? cnt : ""}</td>` : ""}
         <td class="num">${num(t.salary)}</td><td>${esc(t.paymentMode)}</td><td>${esc(t.hireDate)}</td>
