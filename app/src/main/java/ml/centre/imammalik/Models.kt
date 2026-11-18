@@ -56,6 +56,10 @@ object Centre {
     var director = ""
     var phone = DEFAULT_CENTRE_PHONE
     var email = ""
+    /** Day of the month from which a month's fee counts as overdue. */
+    var feeDueDay = DEFAULT_FEE_DUE_DAY
+    /** Last day of the month for paying the fee (written in reminders). */
+    var feePayDay = DEFAULT_FEE_PAY_DAY
     var address = ""
     var academicYear = ""
     var currency = "فرنك"
@@ -114,8 +118,13 @@ data class Student(
     /** One-time registration fee in FCFA (0 = none). */
     val registrationFee: Int = 0,
     /** Small JPEG data URL for the ID card ("" = no photo). */
-    val photo: String = ""
-)
+    val photo: String = "",
+    /** Name in French (ID card, reminders). Blank = the Arabic name is used. */
+    val nameFr: String = ""
+) {
+    /** Name for French text. */
+    val frenchName get() = nameFr.ifBlank { name }
+}
 
 // ---------- Teachers ----------
 

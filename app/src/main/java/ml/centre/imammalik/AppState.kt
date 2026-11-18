@@ -195,6 +195,8 @@ class AppState {
                 Centre.director = snap.getString("director") ?: ""
                 Centre.phone = snap.getString("phone")?.ifBlank { null } ?: DEFAULT_CENTRE_PHONE
                 Centre.email = snap.getString("email") ?: ""
+                Centre.feeDueDay = (snap.getLong("feeDueDay")?.toInt() ?: DEFAULT_FEE_DUE_DAY).coerceIn(1, 31)
+                Centre.feePayDay = (snap.getLong("feePayDay")?.toInt() ?: DEFAULT_FEE_PAY_DAY).coerceIn(1, 31)
                 Centre.address = snap.getString("address") ?: ""
                 Centre.academicYear = snap.getString("academicYear") ?: ""
                 Centre.currency = snap.getString("currency")?.ifBlank { null } ?: "فرنك"
@@ -274,7 +276,7 @@ class AppState {
             "phone" to student.phone.trim(), "address" to student.address.trim(),
             "enrollmentDate" to student.enrollmentDate.trim(), "status" to student.status,
             "monthlyFee" to student.monthlyFee, "registrationFee" to student.registrationFee,
-            "photo" to student.photo, "updatedAt" to Date()
+            "photo" to student.photo, "nameFr" to student.nameFr.trim(), "updatedAt" to Date()
         )
         // merge keeps fields edited elsewhere (e.g. hizb progress).
         val task = if (student.id.isBlank()) db.collection("students").document().set(data)
@@ -897,13 +899,14 @@ class AppState {
 
     // ---------- Centre settings (admin) ----------
 
-    fun saveSettings(name: String, director: String, phone: String, email: String, address: String, year: String, currency: String, done: () -> Unit) {
+    fun saveSettings(name: String, director: String, phone: String, email: String, address: String, year: String, currency: String,
+                     feeDueDay: Int = Centre.feeDueDay, feePayDay: Int = Centre.feePayDay, done: () -> Unit) {
         if (name.isBlank()) { message = "اسم المركز مطلوب"; return }
         done(); message = "تم حفظ إعدادات المركز"
         db.collection("settings").document("centre").set(mapOf(
             "name" to name.trim(), "director" to director.trim(), "phone" to phone.trim(), "email" to email.trim(),
             "address" to address.trim(), "academicYear" to year.trim(), "currency" to currency.trim().ifBlank { "فرنك" },
-            "updatedAt" to Date()
+            "feeDueDay" to feeDueDay.coerceIn(1, 31), "feePayDay" to feePayDay.coerceIn(1, 31), "updatedAt" to Date()
         ), SetOptions.merge()).addOnFailureListener { message = arabicError(it.message) }
         audit("تعديل إعدادات المركز", name.trim())
     }
@@ -1037,7 +1040,8 @@ class AppState {
         hizbs = d.getLong("hizbs")?.toInt() ?: 0,
         monthlyFee = d.getLong("monthlyFee")?.toInt() ?: 0,
         registrationFee = d.getLong("registrationFee")?.toInt() ?: 0,
-        photo = d.getString("photo") ?: ""
+        photo = d.getString("photo") ?: "",
+        nameFr = d.getString("nameFr") ?: ""
     )
 
     private fun toAnnouncement(d: DocumentSnapshot) = Announcement(

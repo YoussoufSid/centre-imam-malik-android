@@ -1,8 +1,12 @@
 package ml.centre.imammalik
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -68,56 +72,102 @@ suspend fun downloadUpdate(context: Context, onProgress: (Float) -> Unit): java.
     }.getOrNull()
 }
 
-/** Hands the downloaded APK to Android's installer (the person confirms «تحديث»). */
+/** Where the update flow is: download progress (0..1) or installing; read by the home screen. */
+object UpdateState {
+    var progress by mutableStateOf<Float?>(null)
+    var installing by mutableStateOf(false)
+    var running = false
+}
+
+/**
+ * Installs the downloaded APK through PackageInstaller. On Android 12+ an update of an app that this app itself
+ * installed earlier needs no confirmation («USER_ACTION_NOT_REQUIRED»); otherwise Android asks once
+ * (the receiver below opens that confirmation).
+ */
 fun installUpdate(context: Context, file: java.io.File): Boolean = runCatching {
-    val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
-    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "application/vnd.android.package-archive")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-    })
+    val installer = context.packageManager.packageInstaller
+    val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+        setAppPackageName(context.packageName)
+        if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+    }
+    val id = installer.createSession(params)
+    installer.openSession(id).use { session ->
+        file.inputStream().use { input ->
+            session.openWrite("update.apk", 0, file.length()).use { out -> input.copyTo(out); session.fsync(out) }
+        }
+        val result = PendingIntent.getBroadcast(context, id,
+            Intent(context, UpdateInstallReceiver::class.java).setPackage(context.packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        session.commit(result.intentSender)
+    }
     true
 }.getOrDefault(false)
 
+/** Receives the installer's answer: shows Android's confirmation when needed, falls back to the browser on failure. */
+class UpdateInstallReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1)) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                @Suppress("DEPRECATION")
+                val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                              else intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                confirm?.let { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+            }
+            PackageInstaller.STATUS_SUCCESS -> UpdateState.installing = false
+            else -> { UpdateState.installing = false; openApkDownload(context) }   // blocked / failed: manual download
+        }
+    }
+}
+
 /**
- * Shown automatically when a newer version exists: one tap downloads inside the app with a progress bar,
- * then opens the installer. Falls back to the browser download if anything fails.
+ * Downloads the newest APK in the background and installs it. [manual] = started by a tap: a failed download
+ * opens the browser instead of staying silent.
  */
+suspend fun runUpdate(context: Context, manual: Boolean) {
+    if (UpdateState.running) return
+    UpdateState.running = true
+    try {
+        UpdateState.progress = 0f
+        val f = downloadUpdate(context) { UpdateState.progress = it }
+        UpdateState.progress = null
+        if (f == null) { if (manual) openApkDownload(context); return }
+        UpdateState.installing = true
+        if (!installUpdate(context, f)) { UpdateState.installing = false; openApkDownload(context) }
+    } finally { UpdateState.progress = null; UpdateState.running = false }
+}
+
+/** Confirmation for a manual update (banner / menu). Progress is shown by [UpdateStatusCard]. */
 @Composable
 fun AutoUpdateDialog(latest: String, close: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
-    var progress by remember { mutableStateOf<Float?>(null) }
     AlertDialog(
-        onDismissRequest = { if (progress == null) close() },
+        onDismissRequest = close,
         icon = { Icon(Icons.Default.SystemUpdate, null, tint = Green) },
         title = { Text("يتوفر إصدار جديد ($latest)") },
-        text = {
-            Column {
-                if (progress == null) Text("التحديث يأخذ دقيقة واحدة، وبياناتك محفوظة. بعد التنزيل اضغط «تحديث» ثم «فتح».")
-                else {
-                    Text("جارٍ تنزيل التحديث… ${(progress!! * 100).toInt()}٪")
-                    Spacer(Modifier.height(10.dp))
-                    LinearProgressIndicator(progress = { progress!! }, modifier = Modifier.fillMaxWidth(), color = Green)
-                }
-            }
-        },
-        confirmButton = {
-            if (progress == null) Button(onClick = {
-                progress = 0f
-                scope.launch {
-                    val f = downloadUpdate(context) { progress = it }
-                    if (f == null || !installUpdate(context, f)) openApkDownload(context)
-                    close()
-                }
-            }) { Text("تحديث الآن") }
-        },
-        dismissButton = { if (progress == null) TextButton(onClick = close) { Text("لاحقًا") } }
+        text = { Text("يُنزَّل التحديث ويُثبَّت وحده، وبياناتك محفوظة. قد يُغلق التطبيق لحظة؛ افتحه بعدها.") },
+        confirmButton = { Button(onClick = { close(); scope.launch { runUpdate(context, manual = true) } }) { Text("تحديث الآن") } },
+        dismissButton = { TextButton(onClick = close) { Text("لاحقًا") } }
     )
+}
+
+/** Small card while an update downloads / installs. */
+@Composable
+fun UpdateStatusCard(modifier: Modifier = Modifier) {
+    val p = UpdateState.progress
+    if (p == null && !UpdateState.installing) return
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = Green)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(if (p != null) "🔄 جارٍ تنزيل التحديث… ${(p * 100).toInt()}٪" else "🔄 جارٍ تثبيت التحديث… قد يُغلق التطبيق لحظة",
+                color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            if (p != null) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), color = Gold)
+        }
+    }
 }
 
 /** Opens the browser on the newest APK: Android downloads it, then a tap installs it over the current app. */
 fun openApkDownload(context: Context) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(APK_DOWNLOAD_URL))) }
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(APK_DOWNLOAD_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 @Composable

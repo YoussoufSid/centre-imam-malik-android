@@ -182,7 +182,7 @@ fun shareStudentCard(context: Context, student: Student) {
             Triple("تاريخ الميلاد", "Né(e) le", date(student.birthDate)),
             Triple("هاتف ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "………………………"),
             Triple("التسجيل", "Inscription", date(student.enrollmentDate))),
-        "card-${safeName(student.name)}.pdf")
+        "card-${safeName(student.name)}.pdf", student.nameFr)
 }
 
 /** Staff ID card (teachers, administration, supervisors, workers). */
@@ -197,7 +197,7 @@ fun shareStaffCard(context: Context, t: Teacher) {
 
 /** Bilingual ID card drawn at 2× and scaled for crisp printing: header, photo, number, fields, QR, footer. */
 private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: String, number: String, photoUrl: String,
-                        qr: String, fields: List<Triple<String, String, String>>, fileName: String) {
+                        qr: String, fields: List<Triple<String, String, String>>, fileName: String, nameFr: String = "") {
     val doc = PdfDocument()
     val page = doc.startPage(PdfDocument.PageInfo.Builder(243, 153, 1).create())
     val c = page.canvas
@@ -221,9 +221,11 @@ private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: 
     c.rtlText(ltr("N° $number"), 126f, 212f, 120f, 12.5f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     // details
     val right = W - 20f; val w = 330f
-    c.rtlText(name, right, 88f, w, 20f, GREEN, bold = true)
-    c.line(W - 20f - w, 114f, W - 20f, 0xFFEADFB8.toInt(), 1.2f)
-    var y = 120f
+    c.rtlText(name, right, 86f, w, 19f, GREEN, bold = true)
+    val extra = if (nameFr.isNotBlank()) 15f else 0f
+    if (nameFr.isNotBlank()) c.ltrText(nameFr, W - 20f - w, 109f, w, 11f, GREY, bold = true, align = Layout.Alignment.ALIGN_OPPOSITE)
+    c.line(W - 20f - w, 114f + extra, W - 20f, 0xFFEADFB8.toInt(), 1.2f)
+    var y = 120f + extra
     for ((ar, fr, value) in fields) {
         if (value.isBlank()) continue
         // label column (Arabic + French in capitals), then the value in bold
@@ -636,4 +638,94 @@ fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, gro
     }
     doc.finishPage(page)
     sharePdf(context, doc, "hifz-${period.name.lowercase()}-${range.from}.pdf")
+}
+
+/** Height of [text] laid out in [width] (for aligned two-column rows). */
+private fun measureText(text: String, width: Float, size: Float, bold: Boolean, ltr: Boolean): Float {
+    val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = size; typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT }
+    return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.toInt())
+        .setTextDirection(if (ltr) TextDirectionHeuristics.LTR else TextDirectionHeuristics.RTL).build().height.toFloat()
+}
+
+/** Left-to-right text (French) in a box; same as [rtlText] but LTR paragraphs. */
+private fun Canvas.ltrText(text: String, left: Float, top: Float, width: Float, size: Float, color: Int = 0xFF222222.toInt(),
+                           bold: Boolean = false, align: Layout.Alignment = Layout.Alignment.ALIGN_NORMAL): Float {
+    val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = size; this.color = color
+        typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT }
+    val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width.toInt())
+        .setAlignment(align).setTextDirection(TextDirectionHeuristics.LTR).build()
+    save(); translate(left, top); layout.draw(this); restore()
+    return layout.height.toFloat()
+}
+
+/**
+ * Parent reminders about unpaid fees, Arabic + French, [perPage] slips per A4 page (2, 4 or 6), cut along the dotted lines.
+ * One slip per student, or one sheet with all students of a halaqa / the whole centre.
+ */
+fun shareFeeReminders(context: Context, items: List<FeeArrears>, perPage: Int, payDay: Int) {
+    val W = 595f; val H = 842f; val M = 18f
+    val cols = if (perPage == 2) 1 else 2
+    val rows = perPage / cols
+    val cw = (W - 2 * M) / cols; val ch = (H - 2 * M) / rows
+    val doc = PdfDocument()
+    var pageNo = 0
+    var page: PdfDocument.Page? = null
+    var c: Canvas? = null
+    val frCentre = CENTRE_FR
+    items.forEachIndexed { idx, a ->
+        val slot = idx % perPage
+        if (slot == 0) {
+            page?.let { doc.finishPage(it) }
+            pageNo++
+            page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create()); c = page!!.canvas
+            // cutting guides
+            val guide = Paint().apply { color = 0xFFBBBBBB.toInt(); strokeWidth = .8f; pathEffect = android.graphics.DashPathEffect(floatArrayOf(4f, 4f), 0f) }
+            for (r in 1 until rows) c!!.drawLine(M, M + r * ch, W - M, M + r * ch, guide)
+            for (k in 1 until cols) c!!.drawLine(M + k * cw, M, M + k * cw, H - M, guide)
+        }
+        val cv = c!!
+        val left = M + (slot % cols) * cw; val top = M + (slot / cols) * ch
+        val pad = 10f; val iw = cw - 2 * pad
+        val s = when (perPage) { 6 -> .78f; 4 -> 1f; else -> 1.15f }          // text scale
+        val gap = 8f; val colW = (iw - gap) / 2
+        val arRight = left + cw - pad                // Arabic column: right half
+        val frLeft = left + pad                      // French column: left half
+        var y = top + pad
+        /** One aligned row: Arabic on the right, French on the left; returns the row height. */
+        fun row(ar: String, arSize: Float, arColor: Int, arBold: Boolean, fr: String, frSize: Float, frColor: Int, frBold: Boolean,
+                fill: Int? = null, pre: Float = 0f): Float {
+            val h = maxOf(measureText(ar, colW, arSize * s, arBold, false), measureText(fr, colW, frSize * s, frBold, true)) + 2 * pre
+            if (fill != null) cv.drawRect(left + pad, y, left + cw - pad, y + h, Paint().apply { color = fill })
+            cv.rtlText(ar, arRight - pre, y + pre, colW - pre, arSize * s, arColor, arBold)
+            cv.ltrText(fr, frLeft + pre, y + pre, colW - pre, frSize * s, frColor, frBold)
+            return h
+        }
+        // header: Arabic name (right) · logo (centre) · French name (left)
+        val nameH = maxOf(measureText(Centre.name, colW - 14f, 9f * s, true, false), measureText(frCentre, colW - 14f, 6.2f * s, false, true), 26f * s)
+        cv.drawRect(left + pad, y, left + cw - pad, y + nameH + 8f, Paint().apply { color = GREEN })
+        cv.logo(context, left + pad + iw / 2 - 13f * s, y + 4f, 26f * s)
+        cv.rtlText(Centre.name, arRight - 6f, y + 4f, colW - 14f, 9f * s, 0xFFFFFFFF.toInt(), bold = true)
+        cv.ltrText(frCentre, frLeft + 6f, y + 4f, colW - 14f, 6.2f * s, 0xFFE8F1EC.toInt())
+        y += nameH + 14f
+        y += row("تذكير بدفع الرسوم الدراسية", 11f, GOLD, true, "Rappel de paiement des frais de scolarité", 9.5f, GOLD, true) + 7f
+        y += row("إلى وليّ أمر الطالب/ة: ${a.student.name}" + (if (a.student.group.isNotBlank()) " — ${a.student.group}" else ""), 9.5f, GREEN, true,
+            "À l'attention du parent / tuteur de l'élève : ${a.student.frenchName}", 8.5f, GREEN, true) + 6f
+        if (a.months.isNotEmpty()) y += row("الأشهر غير المسدَّدة: ${a.months.joinToString("، ") { monthName(it) }}", 9f, 0xFF222222.toInt(), false,
+            "Mois impayés : ${a.months.joinToString(", ") { frenchMonthName(it) }}", 8.5f, GREY, false) + 6f
+        y += row("المبلغ المتأخر: ${plainAmount(a.amount)} ${Centre.currency}", 11f, 0xFFB7791F.toInt(), true,
+            "Montant dû : ${plainAmount(a.amount)} FCFA", 9.5f, 0xFFB7791F.toInt(), true, fill = 0xFFFFF4D6.toInt(), pre = 5f) + 7f
+        y += row("نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم $payDay من كل شهر. جزاكم الله خيرًا.", 8.5f, 0xFF222222.toInt(), false,
+            "Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le $payDay de chaque mois. Qu'Allah vous récompense.",
+            7.8f, GREY, false)
+        // footer: Arabic (right) · contact and date · French (left)
+        val fy = top + ch - 22f * s - pad
+        cv.line(left + pad, fy, left + cw - pad, 0xFFDDDDDD.toInt())
+        cv.rtlText("الإدارة", arRight, fy + 5f, colW / 2, 8f * s, GREY, bold = true)
+        cv.ltrText("L'administration", frLeft, fy + 5f, colW / 2, 8f * s, GREY, bold = true)
+        val contact = (listOf(Centre.phone, Centre.email).filter { it.isNotBlank() } + frDate(today())).joinToString("  •  ")
+        cv.ltrText(contact, left + pad, fy + 5f + 11f * s, iw, 7.5f * s, GREY, align = Layout.Alignment.ALIGN_CENTER)
+    }
+    page?.let { doc.finishPage(it) }
+    if (pageNo == 0) { doc.close(); return }
+    sharePdf(context, doc, "rappels-${today()}.pdf")
 }

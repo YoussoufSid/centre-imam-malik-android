@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=21";
+import { firebaseConfig } from "./firebase-config.js?v=26";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -195,14 +195,24 @@ const NAV = [
 ];
 const APK_URL = "https://github.com/YoussoufSid/centre-imam-malik-android/releases/latest/download/centre-imam-malik.apk";
 const SITE_URL = "https://youssoufsid.github.io/centre-imam-malik-android/";
+function navCount(r) {
+  const act = (l) => l.filter((x) => (x.status || ACTIVE) === ACTIVE).length;
+  if (r === "students") return act(state.students);
+  if (r === "halaqat") return groups().length;
+  if (r === "staff") return act(state.staff);
+  return null;
+}
 function navHtml(active) {
   let last = null;
   return NAV.filter((n) => !n[3] || isAdmin()).map((n) => {
     const head = n[4] && n[4] !== last ? `<div class="nav-sec">${n[4]}</div>` : ""; last = n[4];
-    return `${head}<a href="#/${n[0]}" class="${n[0] === active ? "active" : ""}"><span class="ico">${n[1]}</span>${n[2]}</a>`;
+    const cnt = navCount(n[0]);
+    return `${head}<a href="#/${n[0]}" class="${n[0] === active ? "active" : ""}"><span class="ico">${n[1]}</span>${n[2]}${cnt != null ? `<span class="cnt">${cnt}</span>` : ""}</a>`;
   }).join("");
 }
-window.addEventListener("hashchange", () => render());
+window.addEventListener("hashchange", () => { state.menuOpen = false; render(); });
+window.addEventListener("online", () => { toast("✅ عاد الاتصال بالإنترنت — تُرسل التغييرات الآن"); render(); });
+window.addEventListener("offline", () => { toast("📴 انقطع الإنترنت — يمكنك متابعة العمل"); render(); });
 
 // ---------------------------------------------------------------- automatic update
 // Every published version bumps "app.js?v=N" in index.html. The page checks it on open, every 10 minutes and
@@ -236,18 +246,30 @@ function render() {
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
+  const bnav = [["home", "🏠", "الرئيسية"], ["students", "👥", "الطلاب"], ["quran", "📖", "الحفظ"],
+    isAdmin() ? ["fees", "💰", "المالية"] : ["halaqat", "🕌", "الحلقات"]];
   $("#app").innerHTML = `<div class="layout${state.menuOpen ? " menu-open" : ""}">
-    <header class="mbar"><button id="menuBtn" aria-label="القائمة">☰</button><b>${title[1]} ${title[2]}</b>
-      <button id="theme2" aria-label="الوضع الليلي">${dark() ? "☀️" : "🌙"}</button><img src="logo.png" alt=""></header>
+    <header class="mbar"><img src="logo.png" alt=""><b>${allowed === "home" ? "مركز الإمام مالك" : title[2]}</b>
+      <button id="theme2" class="round" aria-label="الوضع الليلي">${dark() ? "☀️" : "🌙"}</button></header>
+    <div class="backdrop" id="backdrop"></div>
     <aside class="side">
-      <div class="brand"><img src="logo.png" alt=""><b>${esc(state.settings.name || DEFAULT_NAME)}</b></div>
+      <div class="brand"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
+        <div class="brand-sub">لوحة إدارة المركز <span class="flag-ml"><i></i><i></i><i></i></span></div></div></div>
       <nav>${navHtml(allowed)}</nav>
-      <div class="user">${esc(state.profile?.name || state.user.email)}<br>${isAdmin() ? "الإدارة" : "معلم"}<br>
-      <button id="logout">تسجيل الخروج</button> <button id="theme">${dark() ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button></div></aside>
+      <div class="user"><b>${esc(state.profile?.name || state.user.email)}</b><div class="role">${isAdmin() ? "👑 الإدارة — صلاحية كاملة" : "📖 معلم"}</div>
+      <button id="refreshApp" class="side-btn">🔄 تحديث التطبيق</button>
+      <button id="theme" class="side-btn">${dark() ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button>
+      <button id="logout" class="side-btn danger-soft">↩ تسجيل الخروج</button></div></aside>
     <main><div class="print-head"><img src="logo.png" alt=""><h3>${esc(state.settings.name || DEFAULT_NAME)}</h3>
-      <div>${esc(contactLine())}</div></div>${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main></div>`;
+      <div>${esc(contactLine())}</div></div>${navigator.onLine ? "" : '<div class="offline-bar">📴 بدون إنترنت — تعمل بالبيانات المحفوظة على الجهاز، وتُرسل التغييرات وحدها عند عودة الاتصال</div>'}
+      ${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main>
+    <nav class="bnav">${bnav.map(([r, i, t]) => `<a href="#/${r}" class="${allowed === r ? "on" : ""}"><span>${i}</span>${t}</a>`).join("")}
+      <a href="javascript:void 0" id="moreBtn" class="${state.menuOpen ? "on" : ""}"><span>☰</span>المزيد</a></nav></div>`;
   ["#theme", "#theme2"].forEach((id) => { $(id).onclick = () => { localStorage.setItem("theme", dark() ? "light" : "dark"); applyTheme(); render(); }; });
-  $("#menuBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
+  $("#moreBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
+  $("#backdrop").onclick = () => { state.menuOpen = false; render(); };
+  $("#refreshApp").onclick = () => { toast("جارٍ تحديث التطبيق…"); navigator.serviceWorker?.getRegistration().then((r) => r?.update()).finally(() => setTimeout(() => location.reload(), 600)); };
+  if (!state.welcomed && !sessionStorage.getItem("welcomed")) { state.welcomed = true; showWelcome(); }
   document.querySelectorAll(".side nav a").forEach((a) => a.addEventListener("click", () => { state.menuOpen = false; }));
   $("#logout").onclick = () => confirmBox("هل تريد تسجيل الخروج؟", () => signOut(auth), "خروج");
   const h = document.querySelector("main > h1"); if (h) h.dataset.ico = title[1];
@@ -256,7 +278,7 @@ function render() {
 }
 const bind = {};
 const filterStudents = (list) => list.filter((s) =>
-  (!state.filters.q || (s.name || "").includes(state.filters.q.trim()) || (s.phone || "").includes(state.filters.q.trim())) &&
+  (!state.filters.q || (s.name || "").includes(state.filters.q.trim()) || (s.nameFr || "").toLowerCase().includes(state.filters.q.trim().toLowerCase()) || (s.phone || "").includes(state.filters.q.trim())) &&
   (!state.filters.group || (state.filters.group === "-" ? !s.group : s.group === state.filters.group)));
 const groupSelect = (id = "fgroup") => `<select id="${id}"><option value="">كل الحلقات</option>${groups().map((g) =>
   `<option ${state.filters.group === g ? "selected" : ""}>${esc(g)}</option>`).join("")}<option value="-" ${state.filters.group === "-" ? "selected" : ""}>بدون حلقة</option></select>`;
@@ -323,19 +345,19 @@ function qrSvg(text) {
 }
 /** Bilingual (Arabic / French) ID card. French text uses a Latin font (class "fr"). */
 const fr = (t) => `<span class="fr">${esc(t)}</span>`;
-function idCardHtml({ kindAr, kindFr, name, number, photo, qr, rows }) {
+function idCardHtml({ kindAr, kindFr, name, nameFr = "", number, photo, qr, rows }) {
   const year = yearLabel(currentMonth());
   const row = ([ar, frLabel, v]) => v ? `<div class="idc-row"><span class="lbl">${ar} <span class="fr">${frLabel}</span></span><span class="val">${v}</span></div>` : "";
   return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div class="idc-titles"><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
       <em class="fr">${CENTRE_FR}</em><span class="idc-kind">${kindAr} <i class="fr">${kindFr}</i> • ${fr(year)}</span></div></div>
-    <div class="idc-body"><div class="idc-info">${qrSvg(qr)}<div class="idc-name">${esc(name)}</div>${rows.map(row).join("")}</div>
+    <div class="idc-body"><div class="idc-info">${qrSvg(qr)}<div class="idc-name">${esc(name)}</div>${nameFr ? `<div class="idc-name-fr fr">${esc(nameFr)}</div>` : ""}${rows.map(row).join("")}</div>
       <div class="idc-side"><div class="idc-photo">${photo ? `<img src="${photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
         <div class="idc-no">${fr("N° " + number)}</div></div></div>
     <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}</div>
       <div>${[state.settings.phone && fr("☎ " + state.settings.phone), state.settings.email && fr("✉ " + state.settings.email)].filter(Boolean).join(" • ")
         || `العام الدراسي ${fr(year)} • ${fr("Année scolaire " + year)}`}</div></div></div>`;
 }
-const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Carte d'élève", name: s.name, number: studentNumber(s.id), photo: s.photo,
+const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Carte d'élève", name: s.name, nameFr: s.nameFr, number: studentNumber(s.id), photo: s.photo,
   qr: qrText(s), rows: [["الحلقة", "Groupe", esc(s.group || "")], ["المعلم", "Enseignant", esc(s.teacher || "")],
     ["الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : ""], ["هاتف ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : '<span class="blank-fill"></span>'],
     ["التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : ""]] });
@@ -666,6 +688,8 @@ function viewSettings() {
       <div>${f("se", "✉️ البريد الإلكتروني للمركز", s.email, 'dir="ltr" type="email" placeholder="exemple@gmail.com"')}</div></div>
     ${f("sa", "📍 العنوان (الحي، المدينة)", s.address)}
     <div class="row2"><div>${f("sy", "العام الدراسي", s.academicYear, 'placeholder="2026 / 2027"')}</div><div>${f("sc", "العملة", s.currency)}</div></div>
+    <div class="row2"><div>${f("sdue", "يوم بدء احتساب التأخير (من كل شهر)", s.feeDueDay || 25, 'type="number" min="1" max="31"')}</div>
+      <div>${f("spay", "آخر موعد لدفع الرسوم — يُكتب في التذكيرات", s.feePayDay || 30, 'type="number" min="1" max="31"')}</div></div>
     <div class="modal-actions"><button class="btn" id="ssave">💾 حفظ</button></div></div>`;
 }
 bind.settings = () => {
@@ -674,7 +698,7 @@ bind.settings = () => {
     if (!v("sn")) { toast("اسم المركز مطلوب"); return; }
     if (v("se") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("se"))) { toast("البريد الإلكتروني غير صحيح"); return; }
     setDoc(doc(db, "settings", "centre"), { name: v("sn"), director: v("sd"), phone: v("sp"), email: v("se"), address: v("sa"),
-      academicYear: v("sy"), currency: v("sc") || "فرنك", updatedAt: new Date() }, { merge: true })
+      academicYear: v("sy"), currency: v("sc") || "فرنك", feeDueDay: Math.min(31, Math.max(1, +v("sdue") || 25)), feePayDay: Math.min(31, Math.max(1, +v("spay") || 30)), updatedAt: new Date() }, { merge: true })
       .then(() => { audit("تعديل إعدادات المركز", v("sn")); toast("تم حفظ إعدادات المركز"); }).catch(fail);
   };
 };
@@ -703,6 +727,43 @@ function viewPhone() {
 }
 bind.phone = () => { const b = $("#copySite"); if (b) b.onclick = () => navigator.clipboard?.writeText(SITE_URL).then(() => toast("تم نسخ الرابط")); };
 
+// ---------------------------------------------------------------- welcome after login (once per session)
+const SALAWAT = "اللهم صلِّ وسلِّم وبارك على نبينا محمد، وعلى آله وصحبه أجمعين ﷺ";
+function showWelcome() {
+  const name = (state.profile?.name || "").trim();
+  const box = document.createElement("div"); box.id = "welcome";
+  const step1 = `<div class="wl-step">
+      <img class="wl-logo" src="logo.png" alt=""><span class="flag-ml big"><i></i><i></i><i></i></span>
+      <div class="wl-basmala">بسم الله الرحمن الرحيم</div>
+      <h1>أهلًا وسهلًا بك${name ? ` يا <span class="wl-name">${esc(name)}</span>` : ""}</h1>
+      <div class="wl-sub">${esc(state.settings.name || DEFAULT_NAME)}</div>
+      <div class="wl-orn">❁ ❁ ❁</div>
+      <div class="wl-salawat">${SALAWAT}</div>
+      <div class="wl-dua">${DUA.replace(/\s*آمين$/, "")}</div>
+      <div class="wl-amin">آمين</div>
+      <button class="wl-btn" id="wl1">الدخول إلى المركز ←</button></div>`;
+  const step2 = `<div class="wl-step wl-arch-page"><div class="wl-arch"><div class="wl-arch-in" style="background-image:url(building.jpg)"></div></div>
+      <div class="wl-verse">﴿ادْخُلُوهَا بِسَلَامٍ آمِنِينَ﴾</div><div class="wl-ref">سورة الحجر، الآية 46</div>
+      <button class="wl-btn" id="wl2">الدخول ←</button></div>`;
+  box.innerHTML = step1; document.body.appendChild(box);
+  const done = () => { sessionStorage.setItem("welcomed", "1"); box.classList.add("out"); setTimeout(() => box.remove(), 450); };
+  box.querySelector("#wl1").onclick = () => { box.innerHTML = step2; box.querySelector("#wl2").onclick = done; };
+}
+
+// ---------------------------------------------------------------- backup (download all data as one file)
+async function downloadBackup() {
+  toast("جارٍ تجهيز النسخة الاحتياطية…");
+  const out = { app: "centre-imam-malik", date: new Date().toISOString() };
+  for (const c of ["students", "halaqat", "payments", "expenses", "teachers", "payroll", "settings", "quranLogs", "attendance", "grades", "cashAdvances"]) {
+    try { out[c] = (await getDocs(collection(db, c))).docs.map((d) => ({ id: d.id, ...d.data() })); } catch { out[c] = null; }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: "application/json" }));
+  a.download = `centre-imam-malik-backup-${today()}.json`; a.click();
+  localStorage.setItem("lastBackup", today()); toast("✅ تم تنزيل النسخة الاحتياطية"); render();
+}
+const backupDue = () => { const l = localStorage.getItem("lastBackup"); return !l || dAdd(l, 7) <= today(); };
+
 // ---------------------------------------------------------------- home
 function viewHome() {
   const active = state.students.filter((s) => (s.status || ACTIVE) === ACTIVE);
@@ -718,22 +779,31 @@ function viewHome() {
   let hijri = ""; try { hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
   const shortcuts = [["#/students", "👥", "الطلاب"], ["#/halaqat", "🕌", "الحلقات"],
     ...(isAdmin() ? [["#/fees", "💰", "تسجيل الرسوم"], ["#/expenses", "🧾", "مصروف جديد"], ["#/payroll", "💵", "الرواتب"], ["#/summary", "📊", "الملخص المالي"]] : [])];
-  return `<div class="banner">
-      <div class="banner-text">
-        <div class="banner-date">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div>
-        <h1>السلام عليكم ورحمة الله وبركاته</h1>
-        <p>${WELCOME}</p>
-        <p class="hadith">${HADITH}</p>
-        <div class="dua">🤲 ${DUA}</div>
+  const recent = state.students.slice().sort((a, b) => (b.enrollmentDate || "").localeCompare(a.enrollmentDate || "") || b.id.localeCompare(a.id)).slice(0, 4);
+  const staffN = state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length;
+  const sections = [["#/students", "👥", active.length, "الطلاب", `${active.filter((s) => s.gender === "ذكر").length} طالب • ${active.filter((s) => s.gender === "أنثى").length} طالبة`],
+    ["#/halaqat", "🕌", groups().length, "الحلقات", "حلقات التحفيظ"],
+    ["#/quran", "📖", "", "الحفظ والمراجعة", "سجل المتابعة"],
+    ...(isAdmin() ? [["#/staff", "👨‍🏫", staffN, "الموظفون", "المدرسون والعمال"], ["#/fees", "💰", pct + "٪", "رسوم الشهر", `دفع ${paidCount} من ${billable.length}`]] : []),
+    ["#/calendar", "📅", "", "التقويم الدراسي", "الفصول والعطل"]];
+  return `<div class="home-hero">
+      <div class="hero-photo" style="background-image:url(building.jpg)"></div>
+      <div class="hero-body">
+        <div class="hero-tag">● ${esc(state.settings.name || DEFAULT_NAME)}</div>
+        <div class="hero-date">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div>
+        <div class="hero-small">قال الله تعالى</div>
+        <div class="hero-verse">﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾</div>
+        <div class="hero-ref">سورة القمر، الآية 17</div>
+        <p>${HADITH} — حفظٌ نتابعه، وعلمٌ نتعلمه، وخيرٌ نتشارك فيه.</p>
+        <div class="hero-btns"><a href="#/quran" class="hero-btn gold">تسجيل الحفظ اليوم ←</a>
+          <a href="#/students" class="hero-btn ghost">👥 الطلاب</a></div>
       </div>
-      <div class="banner-img"><div class="kb" style="background-image:url(building.jpg)"></div></div>
     </div>
-  <div class="cards">
-    <div class="card stat green"><div class="l">الطلاب النشطون</div><div class="v">${active.length}</div></div>
-    <div class="card stat"><div class="l">الطلاب / الطالبات</div><div class="v">${active.filter((s) => s.gender === "ذكر").length} / ${active.filter((s) => s.gender === "أنثى").length}</div></div>
-    <div class="card stat"><div class="l">الحلقات</div><div class="v">${groups().length}</div></div>
-    ${isAdmin() ? `<div class="card stat gold"><div class="l">الموظفون</div><div class="v">${state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length}</div></div>` : ""}
-  </div>
+  ${isAdmin() && backupDue() ? `<div class="backup-bar">💾 ${localStorage.getItem("lastBackup") ? "مرّ أسبوع على آخر نسخة احتياطية." : "لم تُنزَّل نسخة احتياطية من هذا الجهاز بعد."}
+    <a href="javascript:void 0" id="dlBackup">نزّلها الآن</a></div>` : ""}
+  <div class="row-between"><h3 class="sec-title">أقسام المركز</h3>${isAdmin() ? '<a href="#/report" class="muted">التقرير الشهري ←</a>' : ""}</div>
+  <div class="sections">${sections.map(([h, i, n, t, sub]) => `<a href="${h}" class="sec-card"><span class="sec-ico">${i}</span>
+    ${n !== "" ? `<b class="sec-n">${n}</b>` : ""}<span class="sec-t">${t}</span><span class="sec-sub">${esc(sub)}</span></a>`).join("")}</div>
   ${isAdmin() ? `<div class="panel"><div class="row-between"><h3>رسوم ${monthName(m)}</h3><a href="#/fees" class="btn small outline">فتح جدول الرسوم ←</a></div>
     <div class="progress"><div style="width:${pct}%"></div></div>
     <div class="row-between muted" style="margin-top:6px"><span>دفع <b style="color:var(--green)">${paidCount}</b> من ${billable.length} (${pct}٪) — المحصَّل ${money(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</span>
@@ -742,6 +812,11 @@ function viewHome() {
   <div class="shortcuts">${shortcuts.map(([h, i, t]) => `<a href="${h}" class="shortcut"><span>${i}</span>${t}</a>`).join("")}</div>
   ${(() => { const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
     return top.length ? `<h3 class="sec-title">🏆 لوحة الشرف — الأكثر حفظًا</h3><div class="panel">${honorList(top)}</div>` : ""; })()}
+  ${recent.length ? `<h3 class="sec-title">أحدث الطلاب المسجلين</h3><div class="recent">${recent.map((s) => `<div class="recent-card">
+    <span class="avatar big">${s.photo ? `<img src="${s.photo}" alt="">` : "👤"}</span><div><b>${esc(s.name)}</b>
+    <div><span class="pill num">🔢 \u2066${studentNumber(s.id)}\u2069</span>${s.group ? `<span class="pill">🕌 ${esc(s.group)}</span>` : ""}</div>
+    ${s.enrollmentDate ? `<div class="muted">📅 \u2066${esc(s.enrollmentDate)}\u2069</div>` : ""}</div>
+    ${(s.status || ACTIVE) === ACTIVE ? '<span class="ok-check">✅</span>' : ""}</div>`).join("")}</div>` : ""}
   <h3 class="sec-title">الحلقات</h3>
   <div class="halaqa-cards">${groups().map((g) => { const l = active.filter((s) => s.group === g); const h = state.halaqat.find((x) => x.name === g);
     const boys = l.filter((s) => s.gender === "ذكر").length, girls = l.filter((s) => s.gender === "أنثى").length;
@@ -750,6 +825,7 @@ function viewHome() {
       <div class="hnums"><span><b>${l.length}</b> طالب</span><span>👦 ${boys}</span><span>👧 ${girls}</span></div></a>`; }).join("")}</div>`;
 }
 bind.home = () => {
+  const b = $("#dlBackup"); if (b) b.onclick = downloadBackup;
   document.querySelectorAll(".glink").forEach((a) => a.onclick = () => { state.filters.group = a.dataset.g; });
   document.querySelectorAll("[data-fu]").forEach((b) => b.onclick = () => { Object.assign(state.memo, { period: b.dataset.fu, anchor: today(), group: "" }); location.hash = "#/quran"; });
 };
@@ -763,7 +839,7 @@ function viewStudents() {
     <span class="muted">${list.length} نتيجة</span></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
-  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b></td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
+  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b>${s.nameFr ? `<div class="fr muted" style="font-size:12px">${esc(s.nameFr)}</div>` : ""}</td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
     <td>${esc(s.teacher)}</td><td>${guardianPhone(s)}</td><td class="num">${s.hizbs || 0}/60</td>
     ${isAdmin() ? `<td class="num">${num(s.monthlyFee)}</td>` : ""}
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
@@ -820,7 +896,8 @@ function studentForm(s) {
   const opts = groups().map((g) => `<option ${s.group === g ? "selected" : ""}>${esc(g)}</option>`).join("");
   openModal(`<h3>${s.id ? "تعديل ملف الطالب" : "إضافة طالب"}</h3>
     ${photoPickerHtml(s.photo)}
-    <label>الاسم الكامل</label><input id="n" value="${esc(s.name)}">
+    <label>الاسم الكامل بالعربية</label><input id="n" value="${esc(s.name)}">
+    <label>Nom complet en français (الاسم بالفرنسية)</label><input id="nfr" dir="ltr" style="text-align:left" value="${esc(s.nameFr)}" placeholder="Ex. Adama Diallo">
     <div class="row2"><div><label>الجنس</label><select id="g"><option></option><option ${s.gender === "ذكر" ? "selected" : ""}>ذكر</option><option ${s.gender === "أنثى" ? "selected" : ""}>أنثى</option></select></div>
     <div><label>الحلقة</label><select id="gr"><option value="">بدون حلقة</option>${opts}</select></div></div>
     <div class="row2"><div><label>تاريخ الميلاد</label><input id="bd" type="date" value="${esc(s.birthDate)}"></div>
@@ -838,7 +915,7 @@ function studentForm(s) {
     b.querySelector("#save").onclick = () => {
       const v = (id) => b.querySelector("#" + id)?.value?.trim() ?? "";
       if (!v("n")) { toast("اسم الطالب مطلوب"); return; }
-      const data = { name: v("n"), gender: v("g"), group: v("gr"), birthDate: v("bd"), enrollmentDate: v("ed"), phone: v("ph"),
+      const data = { name: v("n"), nameFr: v("nfr"), gender: v("g"), group: v("gr"), birthDate: v("bd"), enrollmentDate: v("ed"), phone: v("ph"),
         teacher: v("t"), level: v("lv"), address: v("ad"), status: v("st"), updatedAt: new Date() };
       if (isAdmin()) { data.monthlyFee = +v("mf") || 0; data.registrationFee = +v("rf") || 0; }
       const ref = s.id ? doc(db, "students", s.id) : doc(collection(db, "students"));
@@ -917,11 +994,73 @@ function halaqaForm(h) {
   });
 }
 
+// ---------------------------------------------------------------- fee arrears & parent reminders
+// A month's fee is overdue from the due day (default the 25th) of that month — same rule as the phone app (Fees.kt).
+const FR_MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const frMonthName = (m) => { const [y, mm] = m.split("-"); return `${FR_MONTHS[+mm - 1] ?? m} ${y}`; };
+const dueDay = () => Math.min(31, Math.max(1, +state.settings.feeDueDay || 25));   // arrears start counting from this day
+const payDay = () => Math.min(31, Math.max(1, +state.settings.feePayDay || 30));   // «pay before day N», written in reminders
+const isMonthDue = (m, t = today()) => { const cur = t.slice(0, 7); return m < cur || (m === cur && +t.slice(8, 10) >= dueDay()); };
+const plainNum = (n) => Number(n || 0).toLocaleString("en-US").replace(/,/g, " ");
+/** Arrears of a student in an academic year: unpaid due months and the amount still owed (fee × due months − paid). */
+function feeArrears(s, months) {
+  const mine = state.payments.filter((p) => p.type === "monthly" && p.studentId === s.id);
+  const due = months.filter((m) => isMonthDue(m));
+  const unpaid = due.filter((m) => !mine.some((p) => p.month === m));
+  return { s, months: unpaid, amount: Math.max(0, (s.monthlyFee || 0) * due.length - mine.reduce((a, p) => a + (p.amount || 0), 0)) };
+}
+const arrearsList = (months, students) => students.filter((s) => (s.status || ACTIVE) === ACTIVE && (s.monthlyFee || 0) > 0)
+  .map((s) => feeArrears(s, months)).filter((a) => a.amount > 0)
+  .sort((a, b) => (a.s.group || "\uFFFF").localeCompare(b.s.group || "\uFFFF", "ar") || a.s.name.localeCompare(b.s.name, "ar"));
+/** Arabic + French WhatsApp message (same text as the phone app). */
+function reminderMessage(a) {
+  const c = state.settings.currency || "فرنك", d = payDay(), name = state.settings.name || DEFAULT_NAME;
+  return `السلام عليكم ورحمة الله وبركاته،\nنُذكّركم بأن على الطالب/ة ${a.s.name} رسومًا دراسية متأخرة${a.months.length ? " عن: " + a.months.map(monthName).join("، ") : ""}.\n` +
+    `المبلغ المتأخر: ${plainNum(a.amount)} ${c}\n(تُستحق الرسوم قبل يوم ${d} من كل شهر). نرجو التسوية في أقرب وقت، جزاكم الله خيرًا.\n\n` +
+    `Assalamou alaykoum wa rahmatullah,\nNous vous rappelons que l'élève ${a.s.nameFr || a.s.name} a des frais de scolarité impayés${a.months.length ? " pour : " + a.months.map(frMonthName).join(", ") : ""}.\n` +
+    `Montant dû : ${plainNum(a.amount)} FCFA\n(Les frais sont exigibles avant le ${d} de chaque mois.) Merci de régulariser dès que possible. Qu'Allah vous récompense.\n\n` +
+    `${name}${state.settings.phone ? " • " + state.settings.phone : ""}`;
+}
+/** One printed slip: Arabic in the right column, French in the left column, aligned row by row. */
+function reminderSlip(a) {
+  const d = payDay(), c = state.settings.currency || "فرنك", contact = [state.settings.phone, state.settings.email].filter(Boolean).join("  •  ");
+  const row = (cls, ar, fr) => `<div class="slip-row ${cls}"><div class="ar">${ar}</div><div class="frc">${fr}</div></div>`;
+  return `<div class="slip"><div class="slip-head"><div class="ar"><b>${esc(state.settings.name || DEFAULT_NAME)}</b></div>
+      <img src="logo.png" alt=""><div class="frc">${CENTRE_FR}</div></div>
+    ${row("slip-title", "تذكير بدفع الرسوم الدراسية", "Rappel de paiement des frais de scolarité")}
+    ${row("slip-to", `<b>إلى وليّ أمر الطالب/ة: ${esc(a.s.name)}</b>${a.s.group ? ` — ${esc(a.s.group)}` : ""}`,
+      `<b>À l'attention du parent / tuteur de l'élève : ${esc(a.s.nameFr || a.s.name)}</b>`)}
+    ${a.months.length ? row("slip-months", `الأشهر غير المسدَّدة: ${a.months.map(monthName).join("، ")}`, `Mois impayés : ${a.months.map(frMonthName).join(", ")}`) : ""}
+    ${row("slip-amount", `المبلغ المتأخر: \u2066${plainNum(a.amount)}\u2069 ${esc(c)}`, `Montant dû : ${plainNum(a.amount)} FCFA`)}
+    ${row("slip-msg", `نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم ${d} من كل شهر. جزاكم الله خيرًا.`,
+      `Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le ${d} de chaque mois. Qu'Allah vous récompense.`)}
+    <div class="slip-foot"><span>الإدارة</span><span class="fr">${esc(contact)} • ${frDate(today())}</span><span class="fr">L'administration</span></div></div>`;
+}
+/** Print preview: several slips per A4 (2 / 4 / 6), plus a WhatsApp list to send them one by one. */
+function showReminders(list, label) {
+  if (!list.length) { toast("لا يوجد طلاب متأخرون 👍"); return; }
+  const box = document.createElement("div"); box.id = "cert"; box.dataset.slips = "4";
+  const draw = () => { box.querySelector(".slips").className = "slips per" + box.dataset.slips; };
+  box.innerHTML = `<div class="no-print cert-actions">
+      <div><b>تذكيرات أولياء الأمور — ${esc(label)} (${list.length})</b></div>
+      <div style="margin:8px 0">عدد التذكيرات في الورقة A4: ${[2, 4, 6].map((n) => `<button class="btn small ${n === 4 ? "" : "outline"}" data-n="${n}">${n}</button>`).join(" ")}</div>
+      <button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button>
+      <details class="wa-list"><summary>💬 إرسال عبر واتساب (${list.filter((a) => waNumber(a.s.phone)).length} لديهم رقم)</summary>
+        ${list.map((a) => { const l = waLink(a.s.phone, reminderMessage(a)); return `<div class="wa-row"><span>${esc(a.s.name)} <span class="muted">${esc(a.s.group || "")}</span></span>
+          ${l ? `<a class="wa" href="${l}" target="_blank" rel="noopener">💬 إرسال</a>` : '<span class="muted">لا رقم</span>'}</div>`; }).join("")}</details></div>
+    <div class="slips per4">${list.map(reminderSlip).join("")}</div>`;
+  document.body.appendChild(box); document.body.classList.add("cert-mode");
+  box.querySelectorAll("[data-n]").forEach((b) => b.onclick = () => { box.dataset.slips = b.dataset.n; box.querySelectorAll("[data-n]").forEach((x) => x.classList.toggle("outline", x !== b)); draw(); });
+  box.querySelector("#cprint").onclick = () => window.print();
+  box.querySelector("#cclose").onclick = () => { box.remove(); document.body.classList.remove("cert-mode"); };
+}
+
 // ---------------------------------------------------------------- monthly fees grid
 function viewFees() {
   const months = academicMonths(state.filters.year);
   const cm = currentMonth();
-  const dueMonths = months.filter((m) => m <= cm).length;
+  const isDue = (m) => isMonthDue(m);
+  const dueMonths = months.filter(isDue).length;
   const list = filterStudents(state.students).filter((s) => (s.status || ACTIVE) === ACTIVE || state.payments.some((p) => p.studentId === s.id));
   const pay = {}; state.payments.filter((p) => p.type === "monthly").forEach((p) => { pay[`${p.month}_${p.studentId}`] = p; });
   let totPaid = 0, totDue = 0, totLate = 0;  // arrears summed per student (advance payments don't offset others)
@@ -929,15 +1068,16 @@ function viewFees() {
     const fee = s.monthlyFee || 0;
     let paid = 0;
     const cells = months.map((m) => { const p = pay[`${m}_${s.id}`]; if (p) paid += p.amount || 0;
-      const cls = p ? "paid" : (m <= cm && fee > 0 ? "late" : (m > cm ? "future" : ""));
-      return `<td class="cell ${cls}" data-s="${s.id}" data-m="${m}" title="${monthName(m)}">${p ? num(p.amount) : (m <= cm && fee > 0 ? "—" : "")}</td>`; }).join("");
+      const cls = p ? "paid" : (isDue(m) && fee > 0 ? "late" : (m > cm ? "future" : ""));
+      return `<td class="cell ${cls}" data-s="${s.id}" data-m="${m}" title="${monthName(m)}">${p ? num(p.amount) : (isDue(m) && fee > 0 ? "—" : "")}</td>`; }).join("");
     const due = fee * dueMonths; const late = Math.max(0, due - paid);
     totPaid += paid; totDue += due; totLate += late;
-    const wa = late ? waLink(s.phone, `السلام عليكم ورحمة الله وبركاته،\nنذكّركم بأن على الطالب/ة ${s.name} رسومًا متأخرة قدرها ${num(late).replace(/[\u2066\u2069]/g, "")} ${state.settings.currency || "فرنك"} (العام الدراسي ${yearLabel(state.filters.year)}).\nجزاكم الله خيرًا.\n${state.settings.name || DEFAULT_NAME}`) : null;
+    const arr = late ? { s, months: months.filter((m) => isDue(m) && !pay[`${m}_${s.id}`]), amount: late } : null;
+    const wa = arr ? waLink(s.phone, reminderMessage(arr)) : null;
     return `<tr><td class="num">${i + 1}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:12px">${esc(s.group)}</div></td>
       <td class="num">${num(fee)}</td>${cells}<td class="num"><b>${num(paid)}</b></td><td class="num">${num(due)}</td>
       <td class="num" style="color:${late ? "var(--red)" : "inherit"}"><b>${num(late)}</b></td>
-      <td class="no-print">${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" title="تذكير ولي الأمر عبر واتساب">💬</a>` : ""}</td></tr>`;
+      <td class="no-print">${late ? `<button class="slipbtn" data-rem="${s.id}" title="طباعة تذكير">🖨️</button>` : ""}${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" title="تذكير ولي الأمر عبر واتساب (عربي وفرنسي)">💬</a>` : ""}</td></tr>`;
   }).join("");
   const colTotals = months.map((m) => list.reduce((a, s) => a + (pay[`${m}_${s.id}`]?.amount || 0), 0));
   return `<h1>الرسوم الشهرية</h1><div class="sub">العام الدراسي ${yearLabel(state.filters.year)} — اضغط على خانة الشهر لتسجيل الدفع أو إلغائه</div>
@@ -947,7 +1087,9 @@ function viewFees() {
   <div class="toolbar"><button class="btn outline small" id="py">◀ السنة السابقة</button><b>${yearLabel(state.filters.year)}</b>
     <button class="btn outline small" id="ny">السنة التالية ▶</button>
     <input id="fq" placeholder="🔍 بحث" value="${esc(state.filters.q)}">${groupSelect()}
-    <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button></div>
+    <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
+    <button class="btn gold no-print" id="remAll">🧾 تذكيرات أولياء الأمور</button></div>
+  <div class="muted" style="margin-bottom:6px">يبدأ احتساب التأخير من يوم ${dueDay()} من كل شهر، وآخر موعد للدفع المكتوب في التذكير: يوم ${payDay()}.</div>
   <div class="table-wrap grid"><table><thead><tr><th class="num">#</th><th>الطالب</th><th class="num">الرسم</th>
     ${months.map((m) => `<th class="num">${AR_MONTHS[+m.slice(5) - 1]}</th>`).join("")}
     <th class="num">المدفوع</th><th class="num">المستحق</th><th class="num">المتأخرات</th><th class="no-print">تذكير</th></tr></thead>
@@ -957,6 +1099,11 @@ function viewFees() {
 }
 bind.fees = () => {
   bindFilters();
+  const months = academicMonths(state.filters.year);
+  $("#remAll").onclick = () => showReminders(arrearsList(months, filterStudents(state.students)),
+    state.filters.group && state.filters.group !== "-" ? state.filters.group : "كل الحلقات");
+  document.querySelectorAll("[data-rem]").forEach((b) => b.onclick = () => {
+    const s = state.students.find((x) => x.id === b.dataset.rem); showReminders(arrearsList(months, [s]), s.name); });
   $("#py").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], -12); render(); };
   $("#ny").onclick = () => { state.filters.year = shiftMonth(academicMonths(state.filters.year)[0], 12); render(); };
   document.querySelectorAll("td.cell").forEach((td) => td.onclick = () => {

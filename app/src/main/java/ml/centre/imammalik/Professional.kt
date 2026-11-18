@@ -75,6 +75,8 @@ fun SettingsScreen(state: AppState, close: () -> Unit) {
     var address by remember(v) { mutableStateOf(Centre.address) }
     var year by remember(v) { mutableStateOf(Centre.academicYear) }
     var currency by remember(v) { mutableStateOf(Centre.currency) }
+    var dueDay by remember(v) { mutableStateOf(Centre.feeDueDay.toString()) }
+    var payDay by remember(v) { mutableStateOf(Centre.feePayDay.toString()) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("بيانات المركز", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Green)
         Text("تظهر هذه البيانات في البطاقات وكشوف النتائج والشهادات ورسائل واتساب.", fontSize = 13.sp, color = Color.Gray,
@@ -86,8 +88,10 @@ fun SettingsScreen(state: AppState, close: () -> Unit) {
         AppField(address, { address = it }, "العنوان (الحي، المدينة)")
         AppField(year, { year = it }, "العام الدراسي (مثال: 2026–2027)")
         AppField(currency, { currency = it }, "العملة (مثال: فرنك)")
+        AppField(dueDay, { v2 -> dueDay = v2.filter { it.isDigit() }.take(2) }, "يوم بدء احتساب التأخير في دفع الرسوم (مثال: 25)", KeyboardType.Number)
+        AppField(payDay, { v2 -> payDay = v2.filter { it.isDigit() }.take(2) }, "آخر موعد لدفع الرسوم، يُكتب في التذكيرات (مثال: 30)", KeyboardType.Number)
         Spacer(Modifier.height(8.dp))
-        Button(onClick = { state.saveSettings(name, director, phone, email, address, year, currency, close) },
+        Button(onClick = { state.saveSettings(name, director, phone, email, address, year, currency, dueDay.toIntOrNull() ?: DEFAULT_FEE_DUE_DAY, payDay.toIntOrNull() ?: DEFAULT_FEE_PAY_DAY, close) },
             modifier = Modifier.fillMaxWidth().height(50.dp)) {
             Icon(Icons.Default.Save, null); Spacer(Modifier.width(6.dp)); Text("حفظ الإعدادات")
         }
