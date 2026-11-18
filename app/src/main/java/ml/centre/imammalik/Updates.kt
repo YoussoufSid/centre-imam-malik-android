@@ -37,29 +37,62 @@ suspend fun fetchLatestVersion(): String? = withContext(Dispatchers.IO) {
     }.getOrNull()
 }
 
+/** Opens [link] following GitHub's redirect to its download host; null unless the final answer is 200. */
+private fun openFollowing(link: String): HttpURLConnection? {
+    var url = URL(link); var hops = 0
+    while (true) {
+        val c = url.openConnection() as HttpURLConnection
+        c.instanceFollowRedirects = false; c.connectTimeout = 15000; c.readTimeout = 30000
+        val code = c.responseCode
+        if (code in 300..399 && hops++ < 5) { url = URL(url, c.getHeaderField("Location")); c.disconnect(); continue }
+        if (code != 200) { c.disconnect(); return null }
+        return c
+    }
+}
+
+/** SHA-256 published next to the APK (64 hex characters), or null for releases that have none / when offline. */
+private fun fetchPublishedHash(): String? = runCatching {
+    openFollowing("$APK_DOWNLOAD_URL.sha256")?.let { c ->
+        try { c.inputStream.bufferedReader().readText().trim().lowercase().takeIf { Regex("[0-9a-f]{64}").matches(it) } } finally { c.disconnect() }
+    }
+}.getOrNull()
+
+private fun sha256Of(file: java.io.File): String {
+    val md = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input -> val buf = ByteArray(64 * 1024); while (true) { val n = input.read(buf); if (n < 0) break; md.update(buf, 0, n) } }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
+
+/** True on mobile data (or any metered network). */
+fun isMeteredNow(context: Context): Boolean = runCatching {
+    (context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
+}.getOrDefault(false)
+
+/** «Update automatically over Wi-Fi only» (default on, saved on the phone): mobile data is expensive. */
+object UpdatePref {
+    var wifiOnly by mutableStateOf(true)
+    fun load(context: Context) { wifiOnly = context.getSharedPreferences("ui", Context.MODE_PRIVATE).getBoolean("update_wifi_only", true) }
+    fun toggle(context: Context) {
+        wifiOnly = !wifiOnly
+        context.getSharedPreferences("ui", Context.MODE_PRIVATE).edit().putBoolean("update_wifi_only", wifiOnly).apply()
+    }
+}
+
 /**
- * Downloads the newest APK into the app cache, reporting progress 0..1.
+ * Downloads the newest APK into the app cache, reporting progress 0..1. The file is accepted only when it is complete
+ * (same size as announced) and, when the release publishes one, matches its SHA-256.
  * Returns the file, or null on failure (the caller then falls back to the browser).
  */
 suspend fun downloadUpdate(context: Context, onProgress: (Float) -> Unit): java.io.File? = withContext(Dispatchers.IO) {
     runCatching {
         val dir = java.io.File(context.cacheDir, "updates").apply { mkdirs() }
         val file = java.io.File(dir, "centre-imam-malik.apk")
-        var url = URL(APK_DOWNLOAD_URL)
-        var c: HttpURLConnection
-        var hops = 0
-        while (true) {  // follow GitHub's redirect to its download host
-            c = url.openConnection() as HttpURLConnection
-            c.instanceFollowRedirects = false; c.connectTimeout = 15000; c.readTimeout = 30000
-            val code = c.responseCode
-            if (code in 300..399 && hops++ < 5) { url = URL(url, c.getHeaderField("Location")); c.disconnect(); continue }
-            if (code != 200) { c.disconnect(); return@runCatching null }
-            break
-        }
+        val c = openFollowing(APK_DOWNLOAD_URL) ?: return@runCatching null
         val total = c.contentLengthLong
+        var done = 0L
         c.inputStream.use { input ->
             file.outputStream().use { out ->
-                val buf = ByteArray(64 * 1024); var done = 0L
+                val buf = ByteArray(64 * 1024)
                 while (true) {
                     val n = input.read(buf); if (n < 0) break
                     out.write(buf, 0, n); done += n
@@ -68,7 +101,10 @@ suspend fun downloadUpdate(context: Context, onProgress: (Float) -> Unit): java.
             }
         }
         c.disconnect()
-        file.takeIf { it.length() > 100_000 }
+        if (done < 100_000 || (total > 0 && done != total)) { file.delete(); return@runCatching null }   // truncated download
+        val expected = fetchPublishedHash()
+        if (expected != null && sha256Of(file) != expected) { file.delete(); return@runCatching null }      // corrupted / altered
+        file
     }.getOrNull()
 }
 

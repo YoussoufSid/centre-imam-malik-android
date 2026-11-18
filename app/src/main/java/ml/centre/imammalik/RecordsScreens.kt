@@ -196,7 +196,7 @@ fun UsersScreen(state: AppState) {
             fontSize = 13.sp, color = SubText)
         LazyColumn(contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.users, key = { it.uid }) { u ->
-                Card(Modifier.fillMaxWidth().clickable(enabled = !u.email.equals(ADMIN_EMAIL, true)) { editing = u },
+                Card(Modifier.fillMaxWidth().clickable(enabled = u.role != Roles.ADMIN) { editing = u },
                     colors = CardDefaults.cardColors(containerColor = CardBg)) {
                     ListItem(
                         headlineContent = { Text(u.name.ifBlank { "بدون اسم" }, fontWeight = FontWeight.Bold) },

@@ -78,6 +78,8 @@ fun SettingsScreen(state: AppState, close: () -> Unit) {
     var dueDay by remember(v) { mutableStateOf(Centre.feeDueDay.toString()) }
     var payDay by remember(v) { mutableStateOf(Centre.feePayDay.toString()) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Text(if (state.profile?.role == Roles.ADMIN) "🔒 حساب الإدارة مؤمَّن (الصلاحية محفوظة في حسابك)" else "⚠️ حساب الإدارة غير مؤمَّن بعد",
+            fontSize = 12.sp, color = Green, modifier = Modifier.padding(bottom = 6.dp))
         Text("بيانات المركز", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Green)
         Text("تظهر هذه البيانات في البطاقات وكشوف النتائج والشهادات ورسائل واتساب.", fontSize = 13.sp, color = Color.Gray,
             modifier = Modifier.padding(bottom = 12.dp))

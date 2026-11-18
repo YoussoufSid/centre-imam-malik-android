@@ -5,11 +5,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
-  getDocs, query, where
+  getDocs, query, where, limit
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=27";
+import { firebaseConfig } from "./firebase-config.js?v=28";
 
-const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const HADITH = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»";
 const DUA = "اللهم اجزِ مؤسِّس هذا المركز الحاج بانيما يارا خيرَ الجزاء، واجعل هذا العمل في ميزان حسناته، " +
@@ -82,7 +81,8 @@ const state = {
   memo: { period: "WEEK", anchor: today(), group: "", key: null, logs: null, loading: null },
   filters: { q: "", group: "", feeMonth: currentMonth(), expMonth: currentMonth(), year: currentMonth(), payMonth: currentMonth() }
 };
-const isAdmin = () => state.user?.email?.toLowerCase() === ADMIN_EMAIL || state.profile?.role === "admin";
+// The administration is whoever has role "admin" in their users document (no e-mail is written in the code).
+const isAdmin = () => state.profile?.role === "admin";
 const isStaff = () => isAdmin() || state.profile?.role === "teacher";
 const groups = () => [...new Set([...state.halaqat.map((h) => h.name), ...state.students.map((s) => s.group)].filter(Boolean))].sort();
 
@@ -114,12 +114,20 @@ function listen() {
   }
 }
 
+/** Self-heal for accounts created before roles were stored: if the server lets this account read the admin-only audit log,
+ *  it is the administration, so its role is saved in its users document. Others get "permission denied" and nothing changes. */
+let healTried = false;
+function healAdminRole(uid) {
+  if (healTried) return; healTried = true;
+  getDocs(query(collection(db, "auditLog"), limit(1))).then(() => setDoc(doc(db, "users", uid), { role: "admin" }, { merge: true })).catch(() => {});
+}
 onAuthStateChanged(auth, (u) => {
   state.user = u; state.profile = null;
   if (!u) { state.unsub.forEach((x) => x()); renderLogin(); return; }
   onSnapshot(doc(db, "users", u.uid), (s) => {
     const first = state.profile === null;
     state.profile = s.exists() ? s.data() : { role: "student" };
+    if (!isStaff()) healAdminRole(u.uid);
     if (!isStaff()) { $("#app").innerHTML = `<div class="center"><h2>هذه اللوحة للإدارة والمعلمين</h2>
       <p class="muted">حسابك (${esc(u.email)}) لا يملك صلاحية الدخول. يمكنك استخدام تطبيق الهاتف.</p>
       <button class="btn" id="lo">تسجيل الخروج</button></div>`; $("#lo").onclick = () => signOut(auth); return; }
@@ -684,6 +692,7 @@ function viewSettings() {
   const s = state.settings;
   const f = (id, label, v, extra = "") => `<label>${label}</label><input id="${id}" value="${esc(v || "")}" ${extra}>`;
   return `<h1>إعدادات المركز</h1><div class="sub">تظهر في البطاقات والتقارير والشهادات، وفي الهاتف والحاسوب معًا</div>
+  <div class="ev-banner" style="max-width:640px">🔒 حساب الإدارة مؤمَّن: الصلاحية محفوظة في حسابك (لا يوجد بريد مكتوب في الكود).</div>
   <div class="panel" style="max-width:640px">
     ${f("sn", "اسم المركز الكامل", s.name)}${f("sd", "اسم مدير المركز", s.director)}
     <div class="row2"><div>${f("sp", "📞 هاتف المركز", s.phone, 'dir="ltr" type="tel" placeholder="+223 …"')}</div>
