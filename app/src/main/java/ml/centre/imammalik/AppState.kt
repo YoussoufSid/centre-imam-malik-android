@@ -195,6 +195,7 @@ class AppState {
                 Centre.director = snap.getString("director") ?: ""
                 Centre.phone = snap.getString("phone")?.ifBlank { null } ?: DEFAULT_CENTRE_PHONE
                 Centre.email = snap.getString("email") ?: ""
+                Centre.feeDueDay = (snap.getLong("feeDueDay")?.toInt() ?: DEFAULT_FEE_DUE_DAY).coerceIn(1, 31)
                 Centre.address = snap.getString("address") ?: ""
                 Centre.academicYear = snap.getString("academicYear") ?: ""
                 Centre.currency = snap.getString("currency")?.ifBlank { null } ?: "فرنك"
@@ -897,13 +898,14 @@ class AppState {
 
     // ---------- Centre settings (admin) ----------
 
-    fun saveSettings(name: String, director: String, phone: String, email: String, address: String, year: String, currency: String, done: () -> Unit) {
+    fun saveSettings(name: String, director: String, phone: String, email: String, address: String, year: String, currency: String,
+                     feeDueDay: Int = Centre.feeDueDay, done: () -> Unit) {
         if (name.isBlank()) { message = "اسم المركز مطلوب"; return }
         done(); message = "تم حفظ إعدادات المركز"
         db.collection("settings").document("centre").set(mapOf(
             "name" to name.trim(), "director" to director.trim(), "phone" to phone.trim(), "email" to email.trim(),
             "address" to address.trim(), "academicYear" to year.trim(), "currency" to currency.trim().ifBlank { "فرنك" },
-            "updatedAt" to Date()
+            "feeDueDay" to feeDueDay.coerceIn(1, 31), "updatedAt" to Date()
         ), SetOptions.merge()).addOnFailureListener { message = arabicError(it.message) }
         audit("تعديل إعدادات المركز", name.trim())
     }

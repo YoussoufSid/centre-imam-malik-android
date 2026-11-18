@@ -33,7 +33,7 @@ private val Red = Color(0xFFC53030)
 @Composable
 fun FinanceScreen(state: AppState, openProfile: (String) -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("الشهرية", "التسجيل", "المصروفات", "العُهَد", "الملخص")
+    val tabs = listOf("الشهرية", "التذكيرات", "التسجيل", "المصروفات", "العُهَد", "الملخص")
     Column(Modifier.fillMaxSize()) {
         ScrollableTabRow(selectedTabIndex = tab, containerColor = CardBg, contentColor = Green, edgePadding = 8.dp) {
             tabs.forEachIndexed { i, t ->
@@ -43,9 +43,10 @@ fun FinanceScreen(state: AppState, openProfile: (String) -> Unit) {
         Box(Modifier.weight(1f)) {
             when (tab) {
                 0 -> FeesScreen(state, openProfile)
-                1 -> RegistrationTab(state, openProfile)
-                2 -> ExpensesTab(state)
-                3 -> AdvancesTab(state)
+                1 -> RemindersTab(state, openProfile)
+                2 -> RegistrationTab(state, openProfile)
+                3 -> ExpensesTab(state)
+                4 -> AdvancesTab(state)
                 else -> SummaryTab(state)
             }
         }
@@ -341,5 +342,63 @@ private fun StatementLine(label: String, value: String, color: Color, bold: Bool
     Row(Modifier.fillMaxWidth()) {
         Text(label, Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
         Text(value, color = color, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, fontSize = 14.sp)
+    }
+}
+
+
+/** Fee arrears (a month is overdue from the due day, 25th by default) and parent reminders: print or WhatsApp. */
+@Composable
+private fun RemindersTab(state: AppState, openProfile: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val now = today(); val months = academicYearMonths(now)
+    var payments by remember { mutableStateOf<List<Payment>?>(null) }
+    LaunchedEffect(state.monthPayments, state.registrationPayments) { state.loadMonths(months.first(), months.last()) { p, _ -> payments = p } }
+    var group by rememberSaveable { mutableStateOf("") }
+    var perPage by rememberSaveable { mutableIntStateOf(6) }
+    val groups = state.students.filter { it.status == "نشط" }.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
+    val all = studentsWithArrears(state.students, months, payments.orEmpty(), now, Centre.feeDueDay)
+    val list = all.filter { group == "" || it.student.group == group }
+    val dueDay = Centre.feeDueDay
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
+        if (payments == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        item { Text("يبدأ احتساب التأخير من يوم $dueDay من كل شهر. الطلاب المتأخرون: ${list.size} • المتأخرات: ${money(list.sumOf { it.amount })}",
+            fontSize = 13.sp, color = SubText) }
+        item {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(group == "", { group = "" }, { Text("كل الحلقات") })
+                groups.forEach { g -> FilterChip(group == g, { group = g }, { Text(g, maxLines = 1) }) }
+            }
+        }
+        item {
+            Text("عدد التذكيرات في ورقة A4:", fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(2, 4, 6).forEach { n -> FilterChip(perPage == n, { perPage = n }, { Text("$n") }) }
+            }
+        }
+        item {
+            Button(onClick = { shareFeeReminders(context, list, perPage, dueDay) }, Modifier.fillMaxWidth(), enabled = list.isNotEmpty()) {
+                Icon(Icons.Default.Print, null); Spacer(Modifier.width(6.dp)); Text("طباعة تذكيرات الجميع (${list.size}) — عربي وفرنسي")
+            }
+        }
+        items(list, key = { it.student.id }) { a ->
+            Card(Modifier.fillMaxWidth().clickable { openProfile(a.student.id) }, colors = CardDefaults.cardColors(containerColor = CardBg)) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(a.student.name, fontWeight = FontWeight.Bold)
+                        Text(a.student.group.ifBlank { "بدون حلقة" } + " • " + money(a.amount), fontSize = 13.sp, color = Red)
+                        if (a.months.isNotEmpty()) Text(a.months.joinToString("، ") { monthName(it) }, fontSize = 12.sp, color = SubText)
+                    }
+                    IconButton(onClick = { shareFeeReminders(context, listOf(a), 2, dueDay) }) { Icon(Icons.Default.Print, "طباعة تذكير", tint = Green) }
+                    whatsappNumber(a.student.phone)?.let { wa ->
+                        IconButton(onClick = {
+                            val msg = reminderMessage(a, Centre.name, Centre.phone, dueDay)
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://wa.me/$wa?text=" + android.net.Uri.encode(msg)))) }
+                        }) { Icon(Icons.Default.Chat, "واتساب", tint = Color(0xFF25D366)) }
+                    }
+                }
+            }
+        }
+        if (payments != null && list.isEmpty()) item { Text("لا يوجد طلاب متأخرون 👍", Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = Color.Gray) }
     }
 }

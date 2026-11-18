@@ -637,3 +637,84 @@ fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, gro
     doc.finishPage(page)
     sharePdf(context, doc, "hifz-${period.name.lowercase()}-${range.from}.pdf")
 }
+
+/** Left-to-right text (French) in a box; same as [rtlText] but LTR paragraphs. */
+private fun Canvas.ltrText(text: String, left: Float, top: Float, width: Float, size: Float, color: Int = 0xFF222222.toInt(),
+                           bold: Boolean = false, align: Layout.Alignment = Layout.Alignment.ALIGN_NORMAL): Float {
+    val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = size; this.color = color
+        typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT }
+    val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width.toInt())
+        .setAlignment(align).setTextDirection(TextDirectionHeuristics.LTR).build()
+    save(); translate(left, top); layout.draw(this); restore()
+    return layout.height.toFloat()
+}
+
+/**
+ * Parent reminders about unpaid fees, Arabic + French, [perPage] slips per A4 page (2, 4 or 6), cut along the dotted lines.
+ * One slip per student, or one sheet with all students of a halaqa / the whole centre.
+ */
+fun shareFeeReminders(context: Context, items: List<FeeArrears>, perPage: Int, dueDay: Int) {
+    val W = 595f; val H = 842f; val M = 18f
+    val cols = if (perPage == 2) 1 else 2
+    val rows = perPage / cols
+    val cw = (W - 2 * M) / cols; val ch = (H - 2 * M) / rows
+    val doc = PdfDocument()
+    var pageNo = 0
+    var page: PdfDocument.Page? = null
+    var c: Canvas? = null
+    val frCentre = CENTRE_FR
+    items.forEachIndexed { idx, a ->
+        val slot = idx % perPage
+        if (slot == 0) {
+            page?.let { doc.finishPage(it) }
+            pageNo++
+            page = doc.startPage(PdfDocument.PageInfo.Builder(W.toInt(), H.toInt(), pageNo).create()); c = page!!.canvas
+            // cutting guides
+            val guide = Paint().apply { color = 0xFFBBBBBB.toInt(); strokeWidth = .8f; pathEffect = android.graphics.DashPathEffect(floatArrayOf(4f, 4f), 0f) }
+            for (r in 1 until rows) c!!.drawLine(M, M + r * ch, W - M, M + r * ch, guide)
+            for (k in 1 until cols) c!!.drawLine(M + k * cw, M, M + k * cw, H - M, guide)
+        }
+        val cv = c!!
+        val left = M + (slot % cols) * cw; val top = M + (slot / cols) * ch
+        val pad = 10f; val iw = cw - 2 * pad; val right = left + cw - pad
+        val s = if (perPage == 6) .85f else 1f           // text scale
+        var y = top + pad
+        // header
+        cv.drawRect(left + pad, y, left + cw - pad, y + 30f * s, Paint().apply { color = GREEN })
+        cv.logo(context, left + cw - pad - 26f * s, y + 2f, 26f * s)
+        cv.rtlText(Centre.name, right - 30f * s, y + 4f, iw - 34f * s, 9.5f * s, 0xFFFFFFFF.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
+        cv.ltrText(frCentre, left + pad + 2f, y + 17f * s, iw - 34f * s, 6f * s, 0xFFE8F1EC.toInt(), align = Layout.Alignment.ALIGN_CENTER)
+        y += 36f * s
+        cv.rtlText("تذكير بدفع الرسوم الدراسية", right, y, iw, 12f * s, GOLD, bold = true, align = Layout.Alignment.ALIGN_CENTER); y += 16f * s
+        cv.ltrText("Rappel de paiement des frais de scolarité", left + pad, y, iw, 9f * s, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER); y += 15f * s
+        y += cv.rtlText("إلى وليّ أمر الطالب/ة: ${a.student.name}" + (if (a.student.group.isNotBlank()) " — ${a.student.group}" else ""),
+            right, y, iw, 10.5f * s, GREEN, bold = true) + 2f
+        y += cv.ltrText("À l'attention du parent / tuteur de l'élève : ${a.student.name}", left + pad, y, iw, 8f * s, GREY) + 4f
+        // unpaid months
+        val monthsAr = a.months.joinToString("، ") { monthName(it) }
+        val monthsFr = a.months.joinToString(", ") { frenchMonthName(it) }
+        if (a.months.isNotEmpty()) {
+            y += cv.rtlText("الأشهر غير المسدَّدة: $monthsAr", right, y, iw, 9f * s) + 1f
+            y += cv.ltrText("Mois impayés : $monthsFr", left + pad, y, iw, 8f * s, GREY) + 5f
+        }
+        // amount box
+        cv.drawRect(left + pad, y, left + cw - pad, y + 28f * s, Paint().apply { color = 0xFFFFF4D6.toInt() })
+        cv.rtlText("المبلغ المتأخر: ${plainAmount(a.amount)} ${Centre.currency}", right - 4f, y + 3f, iw - 8f, 11f * s, 0xFFB7791F.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
+        cv.ltrText("Montant dû : ${plainAmount(a.amount)} FCFA", left + pad + 4f, y + 17f * s, iw - 8f, 8.5f * s, 0xFFB7791F.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
+        y += 34f * s
+        // message
+        y += cv.rtlText("نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم $dueDay من كل شهر. جزاكم الله خيرًا.", right, y, iw, 8.5f * s) + 2f
+        y += cv.ltrText("Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le $dueDay de chaque mois. Qu'Allah vous récompense.",
+            left + pad, y, iw, 7.5f * s, GREY) + 4f
+        // footer: contact + signature
+        val fy = top + ch - 34f * s - pad
+        cv.line(left + pad, fy, left + cw - pad, 0xFFDDDDDD.toInt())
+        cv.rtlText("الإدارة / L'administration", right, fy + 4f, iw / 2, 8f * s, GREY, bold = true)
+        val contact = listOf(Centre.phone, Centre.email).filter { it.isNotBlank() }.joinToString("  •  ")
+        if (contact.isNotBlank()) cv.ltrText(contact, left + pad, fy + 4f, iw / 2, 7.5f * s, GREY)
+        cv.ltrText(frDate(today()), left + pad, fy + 16f * s, iw / 2, 7.5f * s, GREY)
+    }
+    page?.let { doc.finishPage(it) }
+    if (pageNo == 0) { doc.close(); return }
+    sharePdf(context, doc, "rappels-${today()}.pdf")
+}

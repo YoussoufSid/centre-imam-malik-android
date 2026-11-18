@@ -375,4 +375,34 @@ class LogicTest {
         assertEquals(4, schoolDays("2026-11-07", "2026-11-13", DEFAULT_OFF_DAYS, holiday))
         assertFalse(isSchoolDay("2026-11-11", DEFAULT_OFF_DAYS, holiday))
     }
+
+    @Test
+    fun feeDueFromThe25th() {
+        // a month's fee is overdue only from the 25th of that month
+        assertFalse(isMonthDue("2026-11", "2026-11-24"))
+        assertTrue(isMonthDue("2026-11", "2026-11-25"))
+        assertTrue(isMonthDue("2026-10", "2026-11-01"))
+        assertFalse(isMonthDue("2026-12", "2026-11-30"))
+        assertTrue(isMonthDue("2026-11", "2026-11-10", dueDay = 10))
+    }
+
+    @Test
+    fun feeArrearsAndReminder() {
+        val months = academicYearMonths("2026-11")
+        val s = Student(id = "s1", name = "آدم", group = "ح1", monthlyFee = 20000, status = "نشط")
+        val pays = listOf(Payment(studentId = "s1", month = "2026-09", amount = 20000, type = PaymentType.MONTHLY))
+        // 26 Nov: Sep (paid), Oct (unpaid), Nov (due since the 25th, unpaid)
+        val a = feeArrears(s, months, pays, "2026-11-26")
+        assertEquals(listOf("2026-10", "2026-11"), a.months); assertEquals(40000, a.amount)
+        // 20 Nov: November is not overdue yet
+        val b = feeArrears(s, months, pays, "2026-11-20")
+        assertEquals(listOf("2026-10"), b.months); assertEquals(20000, b.amount)
+        // fully paid ahead → nothing owed
+        val paidAll = months.map { Payment(studentId = "s1", month = it, amount = 20000, type = PaymentType.MONTHLY) }
+        assertEquals(0, feeArrears(s, months, paidAll, "2026-11-26").amount)
+        assertEquals(listOf("s1"), studentsWithArrears(listOf(s, s.copy(id = "s2", monthlyFee = 0)), months, pays, "2026-11-26", 25).map { it.student.id })
+        val msg = reminderMessage(a, "المركز", "+223 77 19 53 53")
+        assertTrue(msg.contains("آدم") && msg.contains("40 000") && msg.contains("Novembre 2026") && msg.contains("Montant dû"))
+        assertEquals("Octobre 2026", frenchMonthName("2026-10"))
+    }
 }

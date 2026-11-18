@@ -56,6 +56,8 @@ object Centre {
     var director = ""
     var phone = DEFAULT_CENTRE_PHONE
     var email = ""
+    /** Day of the month from which a month's fee counts as overdue. */
+    var feeDueDay = DEFAULT_FEE_DUE_DAY
     var address = ""
     var academicYear = ""
     var currency = "فرنك"
