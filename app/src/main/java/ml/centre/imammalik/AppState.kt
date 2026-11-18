@@ -276,7 +276,7 @@ class AppState {
             "phone" to student.phone.trim(), "address" to student.address.trim(),
             "enrollmentDate" to student.enrollmentDate.trim(), "status" to student.status,
             "monthlyFee" to student.monthlyFee, "registrationFee" to student.registrationFee,
-            "photo" to student.photo, "updatedAt" to Date()
+            "photo" to student.photo, "nameFr" to student.nameFr.trim(), "updatedAt" to Date()
         )
         // merge keeps fields edited elsewhere (e.g. hizb progress).
         val task = if (student.id.isBlank()) db.collection("students").document().set(data)
@@ -1040,7 +1040,8 @@ class AppState {
         hizbs = d.getLong("hizbs")?.toInt() ?: 0,
         monthlyFee = d.getLong("monthlyFee")?.toInt() ?: 0,
         registrationFee = d.getLong("registrationFee")?.toInt() ?: 0,
-        photo = d.getString("photo") ?: ""
+        photo = d.getString("photo") ?: "",
+        nameFr = d.getString("nameFr") ?: ""
     )
 
     private fun toAnnouncement(d: DocumentSnapshot) = Announcement(

@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=25";
+import { firebaseConfig } from "./firebase-config.js?v=26";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -278,7 +278,7 @@ function render() {
 }
 const bind = {};
 const filterStudents = (list) => list.filter((s) =>
-  (!state.filters.q || (s.name || "").includes(state.filters.q.trim()) || (s.phone || "").includes(state.filters.q.trim())) &&
+  (!state.filters.q || (s.name || "").includes(state.filters.q.trim()) || (s.nameFr || "").toLowerCase().includes(state.filters.q.trim().toLowerCase()) || (s.phone || "").includes(state.filters.q.trim())) &&
   (!state.filters.group || (state.filters.group === "-" ? !s.group : s.group === state.filters.group)));
 const groupSelect = (id = "fgroup") => `<select id="${id}"><option value="">كل الحلقات</option>${groups().map((g) =>
   `<option ${state.filters.group === g ? "selected" : ""}>${esc(g)}</option>`).join("")}<option value="-" ${state.filters.group === "-" ? "selected" : ""}>بدون حلقة</option></select>`;
@@ -345,19 +345,19 @@ function qrSvg(text) {
 }
 /** Bilingual (Arabic / French) ID card. French text uses a Latin font (class "fr"). */
 const fr = (t) => `<span class="fr">${esc(t)}</span>`;
-function idCardHtml({ kindAr, kindFr, name, number, photo, qr, rows }) {
+function idCardHtml({ kindAr, kindFr, name, nameFr = "", number, photo, qr, rows }) {
   const year = yearLabel(currentMonth());
   const row = ([ar, frLabel, v]) => v ? `<div class="idc-row"><span class="lbl">${ar} <span class="fr">${frLabel}</span></span><span class="val">${v}</span></div>` : "";
   return `<div class="idcard"><div class="idc-head"><img src="logo.png" alt=""><div class="idc-titles"><b>${esc(state.settings.name || DEFAULT_NAME)}</b>
       <em class="fr">${CENTRE_FR}</em><span class="idc-kind">${kindAr} <i class="fr">${kindFr}</i> • ${fr(year)}</span></div></div>
-    <div class="idc-body"><div class="idc-info">${qrSvg(qr)}<div class="idc-name">${esc(name)}</div>${rows.map(row).join("")}</div>
+    <div class="idc-body"><div class="idc-info">${qrSvg(qr)}<div class="idc-name">${esc(name)}</div>${nameFr ? `<div class="idc-name-fr fr">${esc(nameFr)}</div>` : ""}${rows.map(row).join("")}</div>
       <div class="idc-side"><div class="idc-photo">${photo ? `<img src="${photo}" alt="">` : `<span>الصورة</span>${fr("Photo")}`}</div>
         <div class="idc-no">${fr("N° " + number)}</div></div></div>
     <div class="idc-foot"><div>📍 ${esc(state.settings.address || "داودابوغو، باماكو")} — ${fr("Daoudabougou, Bamako")}</div>
       <div>${[state.settings.phone && fr("☎ " + state.settings.phone), state.settings.email && fr("✉ " + state.settings.email)].filter(Boolean).join(" • ")
         || `العام الدراسي ${fr(year)} • ${fr("Année scolaire " + year)}`}</div></div></div>`;
 }
-const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Carte d'élève", name: s.name, number: studentNumber(s.id), photo: s.photo,
+const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Carte d'élève", name: s.name, nameFr: s.nameFr, number: studentNumber(s.id), photo: s.photo,
   qr: qrText(s), rows: [["الحلقة", "Groupe", esc(s.group || "")], ["المعلم", "Enseignant", esc(s.teacher || "")],
     ["الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : ""], ["هاتف ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : '<span class="blank-fill"></span>'],
     ["التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : ""]] });
@@ -839,7 +839,7 @@ function viewStudents() {
     <span class="muted">${list.length} نتيجة</span></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
-  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b></td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
+  ${list.map((s, i) => `<tr><td class="num">${i + 1}</td><td><span class="avatar">${s.photo ? `<img src="${s.photo}" alt="">` : ""}</span><b>${esc(s.name)}</b>${s.nameFr ? `<div class="fr muted" style="font-size:12px">${esc(s.nameFr)}</div>` : ""}</td><td>${esc(s.gender)}</td><td>${esc(s.group)}</td>
     <td>${esc(s.teacher)}</td><td>${guardianPhone(s)}</td><td class="num">${s.hizbs || 0}/60</td>
     ${isAdmin() ? `<td class="num">${num(s.monthlyFee)}</td>` : ""}
     <td><span class="chip ${(s.status || ACTIVE) === ACTIVE ? "ok" : "gray"}">${esc(s.status || ACTIVE)}</span></td>
@@ -896,7 +896,8 @@ function studentForm(s) {
   const opts = groups().map((g) => `<option ${s.group === g ? "selected" : ""}>${esc(g)}</option>`).join("");
   openModal(`<h3>${s.id ? "تعديل ملف الطالب" : "إضافة طالب"}</h3>
     ${photoPickerHtml(s.photo)}
-    <label>الاسم الكامل</label><input id="n" value="${esc(s.name)}">
+    <label>الاسم الكامل بالعربية</label><input id="n" value="${esc(s.name)}">
+    <label>Nom complet en français (الاسم بالفرنسية)</label><input id="nfr" dir="ltr" style="text-align:left" value="${esc(s.nameFr)}" placeholder="Ex. Adama Diallo">
     <div class="row2"><div><label>الجنس</label><select id="g"><option></option><option ${s.gender === "ذكر" ? "selected" : ""}>ذكر</option><option ${s.gender === "أنثى" ? "selected" : ""}>أنثى</option></select></div>
     <div><label>الحلقة</label><select id="gr"><option value="">بدون حلقة</option>${opts}</select></div></div>
     <div class="row2"><div><label>تاريخ الميلاد</label><input id="bd" type="date" value="${esc(s.birthDate)}"></div>
@@ -914,7 +915,7 @@ function studentForm(s) {
     b.querySelector("#save").onclick = () => {
       const v = (id) => b.querySelector("#" + id)?.value?.trim() ?? "";
       if (!v("n")) { toast("اسم الطالب مطلوب"); return; }
-      const data = { name: v("n"), gender: v("g"), group: v("gr"), birthDate: v("bd"), enrollmentDate: v("ed"), phone: v("ph"),
+      const data = { name: v("n"), nameFr: v("nfr"), gender: v("g"), group: v("gr"), birthDate: v("bd"), enrollmentDate: v("ed"), phone: v("ph"),
         teacher: v("t"), level: v("lv"), address: v("ad"), status: v("st"), updatedAt: new Date() };
       if (isAdmin()) { data.monthlyFee = +v("mf") || 0; data.registrationFee = +v("rf") || 0; }
       const ref = s.id ? doc(db, "students", s.id) : doc(collection(db, "students"));
@@ -1016,7 +1017,7 @@ function reminderMessage(a) {
   const c = state.settings.currency || "فرنك", d = payDay(), name = state.settings.name || DEFAULT_NAME;
   return `السلام عليكم ورحمة الله وبركاته،\nنُذكّركم بأن على الطالب/ة ${a.s.name} رسومًا دراسية متأخرة${a.months.length ? " عن: " + a.months.map(monthName).join("، ") : ""}.\n` +
     `المبلغ المتأخر: ${plainNum(a.amount)} ${c}\n(تُستحق الرسوم قبل يوم ${d} من كل شهر). نرجو التسوية في أقرب وقت، جزاكم الله خيرًا.\n\n` +
-    `Assalamou alaykoum wa rahmatullah,\nNous vous rappelons que l'élève ${a.s.name} a des frais de scolarité impayés${a.months.length ? " pour : " + a.months.map(frMonthName).join(", ") : ""}.\n` +
+    `Assalamou alaykoum wa rahmatullah,\nNous vous rappelons que l'élève ${a.s.nameFr || a.s.name} a des frais de scolarité impayés${a.months.length ? " pour : " + a.months.map(frMonthName).join(", ") : ""}.\n` +
     `Montant dû : ${plainNum(a.amount)} FCFA\n(Les frais sont exigibles avant le ${d} de chaque mois.) Merci de régulariser dès que possible. Qu'Allah vous récompense.\n\n` +
     `${name}${state.settings.phone ? " • " + state.settings.phone : ""}`;
 }
@@ -1028,7 +1029,7 @@ function reminderSlip(a) {
       <img src="logo.png" alt=""><div class="frc">${CENTRE_FR}</div></div>
     ${row("slip-title", "تذكير بدفع الرسوم الدراسية", "Rappel de paiement des frais de scolarité")}
     ${row("slip-to", `<b>إلى وليّ أمر الطالب/ة: ${esc(a.s.name)}</b>${a.s.group ? ` — ${esc(a.s.group)}` : ""}`,
-      `<b>À l'attention du parent / tuteur de l'élève : ${esc(a.s.name)}</b>`)}
+      `<b>À l'attention du parent / tuteur de l'élève : ${esc(a.s.nameFr || a.s.name)}</b>`)}
     ${a.months.length ? row("slip-months", `الأشهر غير المسدَّدة: ${a.months.map(monthName).join("، ")}`, `Mois impayés : ${a.months.map(frMonthName).join(", ")}`) : ""}
     ${row("slip-amount", `المبلغ المتأخر: \u2066${plainNum(a.amount)}\u2069 ${esc(c)}`, `Montant dû : ${plainNum(a.amount)} FCFA`)}
     ${row("slip-msg", `نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم ${d} من كل شهر. جزاكم الله خيرًا.`,

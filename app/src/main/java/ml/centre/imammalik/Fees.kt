@@ -59,7 +59,7 @@ fun reminderMessage(a: FeeArrears, centreName: String, phone: String, payDay: In
     appendLine("(تُستحق الرسوم قبل يوم $payDay من كل شهر). نرجو التسوية في أقرب وقت، جزاكم الله خيرًا.")
     appendLine()
     appendLine("Assalamou alaykoum wa rahmatullah,")
-    appendLine("Nous vous rappelons que l'élève ${a.student.name} a des frais de scolarité impayés" +
+    appendLine("Nous vous rappelons que l'élève ${a.student.frenchName} a des frais de scolarité impayés" +
         (if (a.months.isNotEmpty()) " pour : ${a.months.joinToString(", ") { frenchMonthName(it) }}" else "") + ".")
     appendLine("Montant dû : ${plainAmount(a.amount)} FCFA")
     appendLine("(Les frais sont exigibles avant le $payDay de chaque mois.) Merci de régulariser dès que possible. Qu'Allah vous récompense.")

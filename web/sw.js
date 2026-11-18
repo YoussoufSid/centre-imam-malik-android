@@ -1,7 +1,7 @@
 // Service worker: lets the dashboard be installed as a desktop app and open without network.
 // Network-first for our own files (always the latest version when online), cache as fallback.
-const CACHE = "imam-malik-v25";
-const SHELL = ["./", "./index.html", "./styles.css?v=25", "./app.js?v=25", "./firebase-config.js?v=25", "./logo.png", "./building.jpg",
+const CACHE = "imam-malik-v26";
+const SHELL = ["./", "./index.html", "./styles.css?v=26", "./app.js?v=26", "./firebase-config.js?v=26", "./logo.png", "./building.jpg",
   "./icon-192.png", "./icon-512.png", "./manifest.webmanifest", "./vendor/qrcode.js"];
 
 // Firebase libraries and fonts come from Google's servers: keep a copy so the dashboard also opens offline.

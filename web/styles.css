@@ -542,3 +542,5 @@ button.slipbtn { border: 0; background: #eef3f0; border-radius: 8px; padding: 3p
   body.cert-mode .slips.per6 { grid-auto-rows: 95mm; } body.cert-mode .slips.per4, body.cert-mode .slips.per2 { grid-auto-rows: 143mm; }
 }
 .slip-head em.fr { color: #e8f1ec; font-size: .72em; }
+
+.idc-name-fr { font-size: 7.5pt; color: #555; font-weight: 700; margin: -.3mm 0 .8mm; direction: ltr; text-align: left; }

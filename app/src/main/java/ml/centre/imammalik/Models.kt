@@ -118,8 +118,13 @@ data class Student(
     /** One-time registration fee in FCFA (0 = none). */
     val registrationFee: Int = 0,
     /** Small JPEG data URL for the ID card ("" = no photo). */
-    val photo: String = ""
-)
+    val photo: String = "",
+    /** Name in French (ID card, reminders). Blank = the Arabic name is used. */
+    val nameFr: String = ""
+) {
+    /** Name for French text. */
+    val frenchName get() = nameFr.ifBlank { name }
+}
 
 // ---------- Teachers ----------
 

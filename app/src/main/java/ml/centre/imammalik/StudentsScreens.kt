@@ -131,6 +131,7 @@ fun StudentProfileScreen(state: AppState, me: AppUser, student: Student) {
                         StudentAvatar(student, 64.dp); Spacer(Modifier.width(12.dp))
                         Text(student.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Green)
                     }
+                    if (student.nameFr.isNotBlank()) Text(student.nameFr, fontSize = 14.sp, color = SubText)
                     InfoLine("الحالة", student.status)
                     InfoLine("الجنس", student.gender)
                     InfoLine("تاريخ الميلاد", student.birthDate)
@@ -269,8 +270,9 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
     var regFee by remember { mutableStateOf(existing?.registrationFee?.takeIf { it > 0 }?.toString() ?: "") }
     var confirmDelete by remember { mutableStateOf(false) }
     var photo by remember { mutableStateOf(existing?.photo ?: "") }
+    var nameFr by remember { mutableStateOf(existing?.nameFr ?: "") }
     val student = Student(existing?.id ?: "", name, gender, birthDate, level, group, teacher, phone, address, enrollmentDate, status,
-        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0, registrationFee = regFee.toIntOrNull() ?: 0, photo = photo)
+        hizbs = existing?.hizbs ?: 0, monthlyFee = fee.toIntOrNull() ?: 0, registrationFee = regFee.toIntOrNull() ?: 0, photo = photo, nameFr = nameFr)
 
     AlertDialog(
         onDismissRequest = close,
@@ -278,7 +280,8 @@ fun StudentDialog(state: AppState, existing: Student?, onDeleted: () -> Unit = {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 PhotoPicker(photo) { photo = it }
-                AppField(name, { name = it }, "الاسم الكامل")
+                AppField(name, { name = it }, "الاسم الكامل بالعربية")
+                AppField(nameFr, { nameFr = it }, "Nom complet en français (الاسم بالفرنسية)")
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("الجنس:", fontWeight = FontWeight.Bold)
                     listOf("ذكر", "أنثى").forEach { g ->

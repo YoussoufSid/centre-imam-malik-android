@@ -182,7 +182,7 @@ fun shareStudentCard(context: Context, student: Student) {
             Triple("تاريخ الميلاد", "Né(e) le", date(student.birthDate)),
             Triple("هاتف ولي الأمر", "Tuteur", student.phone.takeIf { it.isNotBlank() }?.let { ltr(it) } ?: "………………………"),
             Triple("التسجيل", "Inscription", date(student.enrollmentDate))),
-        "card-${safeName(student.name)}.pdf")
+        "card-${safeName(student.name)}.pdf", student.nameFr)
 }
 
 /** Staff ID card (teachers, administration, supervisors, workers). */
@@ -197,7 +197,7 @@ fun shareStaffCard(context: Context, t: Teacher) {
 
 /** Bilingual ID card drawn at 2× and scaled for crisp printing: header, photo, number, fields, QR, footer. */
 private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: String, number: String, photoUrl: String,
-                        qr: String, fields: List<Triple<String, String, String>>, fileName: String) {
+                        qr: String, fields: List<Triple<String, String, String>>, fileName: String, nameFr: String = "") {
     val doc = PdfDocument()
     val page = doc.startPage(PdfDocument.PageInfo.Builder(243, 153, 1).create())
     val c = page.canvas
@@ -221,9 +221,11 @@ private fun shareIdCard(context: Context, kindAr: String, kindFr: String, name: 
     c.rtlText(ltr("N° $number"), 126f, 212f, 120f, 12.5f, GREEN, bold = true, align = Layout.Alignment.ALIGN_CENTER)
     // details
     val right = W - 20f; val w = 330f
-    c.rtlText(name, right, 88f, w, 20f, GREEN, bold = true)
-    c.line(W - 20f - w, 114f, W - 20f, 0xFFEADFB8.toInt(), 1.2f)
-    var y = 120f
+    c.rtlText(name, right, 86f, w, 19f, GREEN, bold = true)
+    val extra = if (nameFr.isNotBlank()) 15f else 0f
+    if (nameFr.isNotBlank()) c.ltrText(nameFr, W - 20f - w, 109f, w, 11f, GREY, bold = true, align = Layout.Alignment.ALIGN_OPPOSITE)
+    c.line(W - 20f - w, 114f + extra, W - 20f, 0xFFEADFB8.toInt(), 1.2f)
+    var y = 120f + extra
     for ((ar, fr, value) in fields) {
         if (value.isBlank()) continue
         // label column (Arabic + French in capitals), then the value in bold
@@ -707,7 +709,7 @@ fun shareFeeReminders(context: Context, items: List<FeeArrears>, perPage: Int, p
         y += nameH + 14f
         y += row("تذكير بدفع الرسوم الدراسية", 11f, GOLD, true, "Rappel de paiement des frais de scolarité", 9.5f, GOLD, true) + 7f
         y += row("إلى وليّ أمر الطالب/ة: ${a.student.name}" + (if (a.student.group.isNotBlank()) " — ${a.student.group}" else ""), 9.5f, GREEN, true,
-            "À l'attention du parent / tuteur de l'élève : ${a.student.name}", 8.5f, GREEN, true) + 6f
+            "À l'attention du parent / tuteur de l'élève : ${a.student.frenchName}", 8.5f, GREEN, true) + 6f
         if (a.months.isNotEmpty()) y += row("الأشهر غير المسدَّدة: ${a.months.joinToString("، ") { monthName(it) }}", 9f, 0xFF222222.toInt(), false,
             "Mois impayés : ${a.months.joinToString(", ") { frenchMonthName(it) }}", 8.5f, GREY, false) + 6f
         y += row("المبلغ المتأخر: ${plainAmount(a.amount)} ${Centre.currency}", 11f, 0xFFB7791F.toInt(), true,

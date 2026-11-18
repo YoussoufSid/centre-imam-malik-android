@@ -401,6 +401,9 @@ class LogicTest {
         val paidAll = months.map { Payment(studentId = "s1", month = it, amount = 20000, type = PaymentType.MONTHLY) }
         assertEquals(0, feeArrears(s, months, paidAll, "2026-11-26").amount)
         assertEquals(listOf("s1"), studentsWithArrears(listOf(s, s.copy(id = "s2", monthlyFee = 0)), months, pays, "2026-11-26", 25).map { it.student.id })
+        // French text uses the French name when there is one
+        assertEquals("آدم", s.frenchName); assertEquals("Adam Diallo", s.copy(nameFr = "Adam Diallo").frenchName)
+        assertTrue(reminderMessage(feeArrears(s.copy(nameFr = "Adam Diallo"), months, pays, "2026-11-26"), "المركز", "").contains("l'élève Adam Diallo"))
         val msg = reminderMessage(a, "المركز", "+223 77 19 53 53")
         assertTrue(msg.contains("آدم") && msg.contains("40 000") && msg.contains("Novembre 2026") && msg.contains("Montant dû"))
         // the reminder says «before the 30th» (arrears themselves start counting from the 25th)
