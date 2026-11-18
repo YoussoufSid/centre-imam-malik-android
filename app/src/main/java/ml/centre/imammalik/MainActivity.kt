@@ -274,7 +274,24 @@ private fun Dashboard(state: AppState, me: AppUser) {
     // Automatic update: the dialog opens by itself once per launch when a newer version is published.
     var updateDialog by rememberSaveable { mutableStateOf(false) }
     var updateOffered by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(updateAvailable) { if (updateAvailable && !updateOffered) { updateOffered = true; updateDialog = true } }
+    // Fully automatic: right after the app is opened (nobody is typing yet) a newer version downloads and installs
+    // by itself. Later in the session only the banner is shown, so work in progress is never interrupted.
+    val openedAt = remember { android.os.SystemClock.elapsedRealtime() }
+    LaunchedEffect(updateAvailable) {
+        if (updateAvailable && !updateOffered) {
+            updateOffered = true
+            if (android.os.SystemClock.elapsedRealtime() - openedAt < 90_000) runUpdate(context, manual = false)
+        }
+    }
+    // Coming back to the app after a while: look for a new version again (the banner appears if there is one).
+    DisposableEffect(context) {
+        val lifecycle = (context as? androidx.activity.ComponentActivity)?.lifecycle
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) scope.launch { fetchLatestVersion()?.let { latestVersion = it } }
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
     if (updateDialog && latestVersion != null) AutoUpdateDialog(latestVersion!!) { updateDialog = false }
 
     val profileStudent = profileId?.let { id -> state.students.firstOrNull { it.id == id } }
@@ -388,6 +405,7 @@ private fun Dashboard(state: AppState, me: AppUser) {
                 "الحفظ" -> QuranScreen(state) { profileId = it }
                 "المالية" -> FinanceScreen(state) { profileId = it }
             }
+            UpdateStatusCard(Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = 6.dp))
             // Offline / waiting-to-send notice: the app keeps working with the data saved on the phone
             if (me.isStaff && (state.isOffline || state.hasPendingWrites)) {
                 Card(Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = 6.dp),
