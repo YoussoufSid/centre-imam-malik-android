@@ -402,3 +402,23 @@ private fun RemindersTab(state: AppState, openProfile: (String) -> Unit) {
         if (payments != null && list.isEmpty()) item { Text("لا يوجد طلاب متأخرون 👍", Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = Color.Gray) }
     }
 }
+
+
+/** Home «تنبيهات» card (admin): students in arrears, with a button to open the reminders. */
+@Composable
+fun ArrearsAlertCard(state: AppState, openReminders: () -> Unit) {
+    val now = today(); val months = academicYearMonths(now)
+    var payments by remember { mutableStateOf<List<Payment>?>(null) }
+    LaunchedEffect(state.monthPayments, state.students.size) { state.loadMonths(months.first(), months.last()) { p, _ -> payments = p } }
+    val late = studentsWithArrears(state.students, months, payments.orEmpty(), now, Centre.feeDueDay)
+    if (payments == null || late.isEmpty()) return
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBg)) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("تنبيهات", fontWeight = FontWeight.Bold, color = Green)
+                Text("${late.size} طالبًا متأخرون عن الدفع — ${money(late.sumOf { it.amount })} للتحصيل", color = Red)
+            }
+            FilledTonalButton(onClick = openReminders) { Text("عرض") }
+        }
+    }
+}
