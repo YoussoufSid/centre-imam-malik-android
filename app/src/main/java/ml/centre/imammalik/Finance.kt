@@ -354,7 +354,7 @@ private fun RemindersTab(state: AppState, openProfile: (String) -> Unit) {
     var payments by remember { mutableStateOf<List<Payment>?>(null) }
     LaunchedEffect(state.monthPayments, state.registrationPayments) { state.loadMonths(months.first(), months.last()) { p, _ -> payments = p } }
     var group by rememberSaveable { mutableStateOf("") }
-    var perPage by rememberSaveable { mutableIntStateOf(6) }
+    var perPage by rememberSaveable { mutableIntStateOf(4) }
     val groups = state.students.filter { it.status == "نشط" }.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()
     val all = studentsWithArrears(state.students, months, payments.orEmpty(), now, Centre.feeDueDay)
     val list = all.filter { group == "" || it.student.group == group }

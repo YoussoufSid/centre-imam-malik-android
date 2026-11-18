@@ -638,6 +638,13 @@ fun shareMemoReport(context: Context, period: LogPeriod, range: PeriodRange, gro
     sharePdf(context, doc, "hifz-${period.name.lowercase()}-${range.from}.pdf")
 }
 
+/** Height of [text] laid out in [width] (for aligned two-column rows). */
+private fun measureText(text: String, width: Float, size: Float, bold: Boolean, ltr: Boolean): Float {
+    val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = size; typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT }
+    return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.toInt())
+        .setTextDirection(if (ltr) TextDirectionHeuristics.LTR else TextDirectionHeuristics.RTL).build().height.toFloat()
+}
+
 /** Left-to-right text (French) in a box; same as [rtlText] but LTR paragraphs. */
 private fun Canvas.ltrText(text: String, left: Float, top: Float, width: Float, size: Float, color: Int = 0xFF222222.toInt(),
                            bold: Boolean = false, align: Layout.Alignment = Layout.Alignment.ALIGN_NORMAL): Float {
@@ -676,43 +683,45 @@ fun shareFeeReminders(context: Context, items: List<FeeArrears>, perPage: Int, p
         }
         val cv = c!!
         val left = M + (slot % cols) * cw; val top = M + (slot / cols) * ch
-        val pad = 10f; val iw = cw - 2 * pad; val right = left + cw - pad
-        val s = if (perPage == 6) .85f else 1f           // text scale
+        val pad = 10f; val iw = cw - 2 * pad
+        val s = when (perPage) { 6 -> .78f; 4 -> 1f; else -> 1.15f }          // text scale
+        val gap = 8f; val colW = (iw - gap) / 2
+        val arRight = left + cw - pad                // Arabic column: right half
+        val frLeft = left + pad                      // French column: left half
         var y = top + pad
-        // header
-        cv.drawRect(left + pad, y, left + cw - pad, y + 30f * s, Paint().apply { color = GREEN })
-        cv.logo(context, left + cw - pad - 26f * s, y + 2f, 26f * s)
-        cv.rtlText(Centre.name, right - 30f * s, y + 4f, iw - 34f * s, 9.5f * s, 0xFFFFFFFF.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
-        cv.ltrText(frCentre, left + pad + 2f, y + 17f * s, iw - 34f * s, 6f * s, 0xFFE8F1EC.toInt(), align = Layout.Alignment.ALIGN_CENTER)
-        y += 36f * s
-        cv.rtlText("تذكير بدفع الرسوم الدراسية", right, y, iw, 12f * s, GOLD, bold = true, align = Layout.Alignment.ALIGN_CENTER); y += 16f * s
-        cv.ltrText("Rappel de paiement des frais de scolarité", left + pad, y, iw, 9f * s, GREY, bold = true, align = Layout.Alignment.ALIGN_CENTER); y += 15f * s
-        y += cv.rtlText("إلى وليّ أمر الطالب/ة: ${a.student.name}" + (if (a.student.group.isNotBlank()) " — ${a.student.group}" else ""),
-            right, y, iw, 10.5f * s, GREEN, bold = true) + 2f
-        y += cv.ltrText("À l'attention du parent / tuteur de l'élève : ${a.student.name}", left + pad, y, iw, 8f * s, GREY) + 4f
-        // unpaid months
-        val monthsAr = a.months.joinToString("، ") { monthName(it) }
-        val monthsFr = a.months.joinToString(", ") { frenchMonthName(it) }
-        if (a.months.isNotEmpty()) {
-            y += cv.rtlText("الأشهر غير المسدَّدة: $monthsAr", right, y, iw, 9f * s) + 1f
-            y += cv.ltrText("Mois impayés : $monthsFr", left + pad, y, iw, 8f * s, GREY) + 5f
+        /** One aligned row: Arabic on the right, French on the left; returns the row height. */
+        fun row(ar: String, arSize: Float, arColor: Int, arBold: Boolean, fr: String, frSize: Float, frColor: Int, frBold: Boolean,
+                fill: Int? = null, pre: Float = 0f): Float {
+            val h = maxOf(measureText(ar, colW, arSize * s, arBold, false), measureText(fr, colW, frSize * s, frBold, true)) + 2 * pre
+            if (fill != null) cv.drawRect(left + pad, y, left + cw - pad, y + h, Paint().apply { color = fill })
+            cv.rtlText(ar, arRight - pre, y + pre, colW - pre, arSize * s, arColor, arBold)
+            cv.ltrText(fr, frLeft + pre, y + pre, colW - pre, frSize * s, frColor, frBold)
+            return h
         }
-        // amount box
-        cv.drawRect(left + pad, y, left + cw - pad, y + 28f * s, Paint().apply { color = 0xFFFFF4D6.toInt() })
-        cv.rtlText("المبلغ المتأخر: ${plainAmount(a.amount)} ${Centre.currency}", right - 4f, y + 3f, iw - 8f, 11f * s, 0xFFB7791F.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
-        cv.ltrText("Montant dû : ${plainAmount(a.amount)} FCFA", left + pad + 4f, y + 17f * s, iw - 8f, 8.5f * s, 0xFFB7791F.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
-        y += 34f * s
-        // message
-        y += cv.rtlText("نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم $payDay من كل شهر. جزاكم الله خيرًا.", right, y, iw, 8.5f * s) + 2f
-        y += cv.ltrText("Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le $payDay de chaque mois. Qu'Allah vous récompense.",
-            left + pad, y, iw, 7.5f * s, GREY) + 4f
-        // footer: contact + signature
-        val fy = top + ch - 34f * s - pad
+        // header: Arabic name (right) · logo (centre) · French name (left)
+        val nameH = maxOf(measureText(Centre.name, colW - 14f, 9f * s, true, false), measureText(frCentre, colW - 14f, 6.2f * s, false, true), 26f * s)
+        cv.drawRect(left + pad, y, left + cw - pad, y + nameH + 8f, Paint().apply { color = GREEN })
+        cv.logo(context, left + pad + iw / 2 - 13f * s, y + 4f, 26f * s)
+        cv.rtlText(Centre.name, arRight - 6f, y + 4f, colW - 14f, 9f * s, 0xFFFFFFFF.toInt(), bold = true)
+        cv.ltrText(frCentre, frLeft + 6f, y + 4f, colW - 14f, 6.2f * s, 0xFFE8F1EC.toInt())
+        y += nameH + 14f
+        y += row("تذكير بدفع الرسوم الدراسية", 11f, GOLD, true, "Rappel de paiement des frais de scolarité", 9.5f, GOLD, true) + 7f
+        y += row("إلى وليّ أمر الطالب/ة: ${a.student.name}" + (if (a.student.group.isNotBlank()) " — ${a.student.group}" else ""), 9.5f, GREEN, true,
+            "À l'attention du parent / tuteur de l'élève : ${a.student.name}", 8.5f, GREEN, true) + 6f
+        if (a.months.isNotEmpty()) y += row("الأشهر غير المسدَّدة: ${a.months.joinToString("، ") { monthName(it) }}", 9f, 0xFF222222.toInt(), false,
+            "Mois impayés : ${a.months.joinToString(", ") { frenchMonthName(it) }}", 8.5f, GREY, false) + 6f
+        y += row("المبلغ المتأخر: ${plainAmount(a.amount)} ${Centre.currency}", 11f, 0xFFB7791F.toInt(), true,
+            "Montant dû : ${plainAmount(a.amount)} FCFA", 9.5f, 0xFFB7791F.toInt(), true, fill = 0xFFFFF4D6.toInt(), pre = 5f) + 7f
+        y += row("نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم $payDay من كل شهر. جزاكم الله خيرًا.", 8.5f, 0xFF222222.toInt(), false,
+            "Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le $payDay de chaque mois. Qu'Allah vous récompense.",
+            7.8f, GREY, false)
+        // footer: Arabic (right) · contact and date · French (left)
+        val fy = top + ch - 22f * s - pad
         cv.line(left + pad, fy, left + cw - pad, 0xFFDDDDDD.toInt())
-        cv.rtlText("الإدارة / L'administration", right, fy + 4f, iw / 2, 8f * s, GREY, bold = true)
-        val contact = listOf(Centre.phone, Centre.email).filter { it.isNotBlank() }.joinToString("  •  ")
-        if (contact.isNotBlank()) cv.ltrText(contact, left + pad, fy + 4f, iw / 2, 7.5f * s, GREY)
-        cv.ltrText(frDate(today()), left + pad, fy + 16f * s, iw / 2, 7.5f * s, GREY)
+        cv.rtlText("الإدارة", arRight, fy + 5f, colW / 2, 8f * s, GREY, bold = true)
+        cv.ltrText("L'administration", frLeft, fy + 5f, colW / 2, 8f * s, GREY, bold = true)
+        val contact = (listOf(Centre.phone, Centre.email).filter { it.isNotBlank() } + frDate(today())).joinToString("  •  ")
+        cv.ltrText(contact, left + pad, fy + 5f + 11f * s, iw, 7.5f * s, GREY, align = Layout.Alignment.ALIGN_CENTER)
     }
     page?.let { doc.finishPage(it) }
     if (pageNo == 0) { doc.close(); return }

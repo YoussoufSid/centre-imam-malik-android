@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=24";
+import { firebaseConfig } from "./firebase-config.js?v=25";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -1020,32 +1020,34 @@ function reminderMessage(a) {
     `Montant dû : ${plainNum(a.amount)} FCFA\n(Les frais sont exigibles avant le ${d} de chaque mois.) Merci de régulariser dès que possible. Qu'Allah vous récompense.\n\n` +
     `${name}${state.settings.phone ? " • " + state.settings.phone : ""}`;
 }
-/** One printed slip (Arabic + French). */
+/** One printed slip: Arabic in the right column, French in the left column, aligned row by row. */
 function reminderSlip(a) {
   const d = payDay(), c = state.settings.currency || "فرنك", contact = [state.settings.phone, state.settings.email].filter(Boolean).join("  •  ");
-  return `<div class="slip"><div class="slip-head"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b><em class="fr">${CENTRE_FR}</em></div></div>
-    <div class="slip-title">تذكير بدفع الرسوم الدراسية<div class="fr">Rappel de paiement des frais de scolarité</div></div>
-    <div class="slip-to"><b>إلى وليّ أمر الطالب/ة: ${esc(a.s.name)}</b>${a.s.group ? ` — ${esc(a.s.group)}` : ""}
-      <div class="fr">À l'attention du parent / tuteur de l'élève : ${esc(a.s.name)}</div></div>
-    ${a.months.length ? `<div class="slip-months">الأشهر غير المسدَّدة: ${a.months.map(monthName).join("، ")}<div class="fr">Mois impayés : ${a.months.map(frMonthName).join(", ")}</div></div>` : ""}
-    <div class="slip-amount">المبلغ المتأخر: \u2066${plainNum(a.amount)}\u2069 ${esc(c)}<div class="fr">Montant dû : ${plainNum(a.amount)} FCFA</div></div>
-    <div class="slip-msg">نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم ${d} من كل شهر. جزاكم الله خيرًا.
-      <div class="fr">Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le ${d} de chaque mois. Qu'Allah vous récompense.</div></div>
-    <div class="slip-foot"><span>الإدارة / L'administration</span><span class="fr">${esc(contact)}</span><span class="fr">${frDate(today())}</span></div></div>`;
+  const row = (cls, ar, fr) => `<div class="slip-row ${cls}"><div class="ar">${ar}</div><div class="frc">${fr}</div></div>`;
+  return `<div class="slip"><div class="slip-head"><div class="ar"><b>${esc(state.settings.name || DEFAULT_NAME)}</b></div>
+      <img src="logo.png" alt=""><div class="frc">${CENTRE_FR}</div></div>
+    ${row("slip-title", "تذكير بدفع الرسوم الدراسية", "Rappel de paiement des frais de scolarité")}
+    ${row("slip-to", `<b>إلى وليّ أمر الطالب/ة: ${esc(a.s.name)}</b>${a.s.group ? ` — ${esc(a.s.group)}` : ""}`,
+      `<b>À l'attention du parent / tuteur de l'élève : ${esc(a.s.name)}</b>`)}
+    ${a.months.length ? row("slip-months", `الأشهر غير المسدَّدة: ${a.months.map(monthName).join("، ")}`, `Mois impayés : ${a.months.map(frMonthName).join(", ")}`) : ""}
+    ${row("slip-amount", `المبلغ المتأخر: \u2066${plainNum(a.amount)}\u2069 ${esc(c)}`, `Montant dû : ${plainNum(a.amount)} FCFA`)}
+    ${row("slip-msg", `نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم ${d} من كل شهر. جزاكم الله خيرًا.`,
+      `Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le ${d} de chaque mois. Qu'Allah vous récompense.`)}
+    <div class="slip-foot"><span>الإدارة</span><span class="fr">${esc(contact)} • ${frDate(today())}</span><span class="fr">L'administration</span></div></div>`;
 }
 /** Print preview: several slips per A4 (2 / 4 / 6), plus a WhatsApp list to send them one by one. */
 function showReminders(list, label) {
   if (!list.length) { toast("لا يوجد طلاب متأخرون 👍"); return; }
-  const box = document.createElement("div"); box.id = "cert"; box.dataset.slips = "6";
+  const box = document.createElement("div"); box.id = "cert"; box.dataset.slips = "4";
   const draw = () => { box.querySelector(".slips").className = "slips per" + box.dataset.slips; };
   box.innerHTML = `<div class="no-print cert-actions">
       <div><b>تذكيرات أولياء الأمور — ${esc(label)} (${list.length})</b></div>
-      <div style="margin:8px 0">عدد التذكيرات في الورقة A4: ${[2, 4, 6].map((n) => `<button class="btn small ${n === 6 ? "" : "outline"}" data-n="${n}">${n}</button>`).join(" ")}</div>
+      <div style="margin:8px 0">عدد التذكيرات في الورقة A4: ${[2, 4, 6].map((n) => `<button class="btn small ${n === 4 ? "" : "outline"}" data-n="${n}">${n}</button>`).join(" ")}</div>
       <button class="btn" id="cprint">🖨️ طباعة</button> <button class="btn outline" id="cclose">إغلاق</button>
       <details class="wa-list"><summary>💬 إرسال عبر واتساب (${list.filter((a) => waNumber(a.s.phone)).length} لديهم رقم)</summary>
         ${list.map((a) => { const l = waLink(a.s.phone, reminderMessage(a)); return `<div class="wa-row"><span>${esc(a.s.name)} <span class="muted">${esc(a.s.group || "")}</span></span>
           ${l ? `<a class="wa" href="${l}" target="_blank" rel="noopener">💬 إرسال</a>` : '<span class="muted">لا رقم</span>'}</div>`; }).join("")}</details></div>
-    <div class="slips per6">${list.map(reminderSlip).join("")}</div>`;
+    <div class="slips per4">${list.map(reminderSlip).join("")}</div>`;
   document.body.appendChild(box); document.body.classList.add("cert-mode");
   box.querySelectorAll("[data-n]").forEach((b) => b.onclick = () => { box.dataset.slips = b.dataset.n; box.querySelectorAll("[data-n]").forEach((x) => x.classList.toggle("outline", x !== b)); draw(); });
   box.querySelector("#cprint").onclick = () => window.print();
