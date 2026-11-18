@@ -1,4 +1,5 @@
 // Centre Imam Malik — web admin dashboard (same Firestore data as the Android app).
+import { LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, periodRange as _periodRange, shiftPeriod as _shiftPeriod, isMonthDue as _isMonthDue, feeArrears as _feeArrears } from "./logic.js?v=29";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
@@ -7,7 +8,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where, limit
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=28";
+import { firebaseConfig } from "./firebase-config.js?v=29";
 
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const HADITH = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»";
@@ -15,7 +16,6 @@ const DUA = "اللهم اجزِ مؤسِّس هذا المركز الحاج ب�
   "واغفر له ولوالديه، ولجميع المسلمين والمسلمات، الأحياء منهم والأموات. آمين";
 const DEFAULT_PHONE = "+223 77 19 53 53";
 const DEFAULT_NAME = "مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
-const AR_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const EXPENSE_CATEGORIES = ["رواتب المعلمين", "الإيجار", "الكهرباء والماء", "المصاحف والكتب", "الأدوات واللوازم", "الصيانة", "النقل", "مصروفات يومية", "أخرى"];
 
 // ---------------------------------------------------------------- helpers
@@ -24,10 +24,6 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const pad = (n) => String(n).padStart(2, "0");
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const currentMonth = () => today().slice(0, 7);
-const monthName = (m) => { const [y, mm] = m.split("-"); return `${AR_MONTHS[+mm - 1] ?? m} ${y}`; };
-const shiftMonth = (m, d) => { const [y, mm] = m.split("-").map(Number); const t = new Date(y, mm - 1 + d, 1); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}`; };
-const academicMonths = (m) => { const [y, mm] = m.split("-").map(Number); const s = mm >= 9 ? y : y - 1; return Array.from({ length: 12 }, (_, i) => shiftMonth(`${s}-09`, i)); };
-const yearLabel = (m) => { const a = academicMonths(m); return `${a[0].slice(0, 4)} / ${a[11].slice(0, 4)}`; };
 // Left-to-right isolate so "1 520 000" is not shown as "000 520 1" inside Arabic text.
 const num = (n) => "\u2066" + Number(n || 0).toLocaleString("en-US").replace(/,/g, " ") + "\u2069";
 // "+30 000" / "−20 000": sign kept on the left of the number inside Arabic text.
@@ -336,7 +332,6 @@ function printCertificate(s) {
 
 // ---------------------------------------------------------------- student ID cards
 /** "s001" → "S001"; generated ids → last 6 characters. Same rule as the phone app. */
-const studentNumber = (id) => (/^[sS]\d+$/.test(id) ? id : String(id).slice(-6)).toUpperCase();
 const ltrText = (t) => `\u2066${esc(t)}\u2069`;
 const CENTRE_FR = "Centre Imam Malik pour la mémorisation du Saint Coran et les études islamiques";
 const frDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : (d || "");
@@ -372,7 +367,6 @@ const cardHtml = (s) => idCardHtml({ kindAr: "بطاقة طالب", kindFr: "Car
     ["الميلاد", "Né(e) le", s.birthDate ? fr(frDate(s.birthDate)) : ""], ["هاتف ولي الأمر", "Tuteur", s.phone ? fr(s.phone) : '<span class="blank-fill"></span>'],
     ["التسجيل", "Inscription", s.enrollmentDate ? fr(frDate(s.enrollmentDate)) : ""]] });
 /** Staff card number: "staff_1" → "E001"; generated ids → last 6 characters (same rule as the app). */
-const staffNumber = (id) => { const m = /^staff_(\d+)$/.exec(id); return m ? "E" + String(+m[1]).padStart(3, "0") : String(id).slice(-6).toUpperCase(); };
 const STAFF_FR = { "مدرس": "Enseignant", "إداري": "Administration", "مراقب": "Surveillant", "عامل": "Agent" };
 const staffCardHtml = (t) => idCardHtml({ kindAr: "بطاقة موظف", kindFr: "Carte professionnelle", name: t.name, number: staffNumber(t.id), photo: t.photo,
   qr: `Centre Imam Malik\nN° ${staffNumber(t.id)}\n${t.name}`,
@@ -451,73 +445,14 @@ const honorList = (top) => `<div class="honor">${top.map((s, i) => `<div class="
 
 // ---------------------------------------------------------------- memorization & review follow-up
 // Same rules as the phone app (MemoLog.kt): periods, per-student summary, suggested next position.
-const SURAHS = [["الفاتحة", 7], ["البقرة", 286], ["آل عمران", 200], ["النساء", 176], ["المائدة", 120], ["الأنعام", 165], ["الأعراف", 206], ["الأنفال", 75], ["التوبة", 129], ["يونس", 109], ["هود", 123], ["يوسف", 111], ["الرعد", 43], ["إبراهيم", 52], ["الحجر", 99], ["النحل", 128], ["الإسراء", 111], ["الكهف", 110], ["مريم", 98], ["طه", 135], ["الأنبياء", 112], ["الحج", 78], ["المؤمنون", 118], ["النور", 64], ["الفرقان", 77], ["الشعراء", 227], ["النمل", 93], ["القصص", 88], ["العنكبوت", 69], ["الروم", 60], ["لقمان", 34], ["السجدة", 30], ["الأحزاب", 73], ["سبأ", 54], ["فاطر", 45], ["يس", 83], ["الصافات", 182], ["ص", 88], ["الزمر", 75], ["غافر", 85], ["فصلت", 54], ["الشورى", 53], ["الزخرف", 89], ["الدخان", 59], ["الجاثية", 37], ["الأحقاف", 35], ["محمد", 38], ["الفتح", 29], ["الحجرات", 18], ["ق", 45], ["الذاريات", 60], ["الطور", 49], ["النجم", 62], ["القمر", 55], ["الرحمن", 78], ["الواقعة", 96], ["الحديد", 29], ["المجادلة", 22], ["الحشر", 24], ["الممتحنة", 13], ["الصف", 14], ["الجمعة", 11], ["المنافقون", 11], ["التغابن", 18], ["الطلاق", 12], ["التحريم", 12], ["الملك", 30], ["القلم", 52], ["الحاقة", 52], ["المعارج", 44], ["نوح", 28], ["الجن", 28], ["المزمل", 20], ["المدثر", 56], ["القيامة", 40], ["الإنسان", 31], ["المرسلات", 50], ["النبأ", 40], ["النازعات", 46], ["عبس", 42], ["التكوير", 29], ["الانفطار", 19], ["المطففين", 36], ["الانشقاق", 25], ["البروج", 22], ["الطارق", 17], ["الأعلى", 19], ["الغاشية", 26], ["الفجر", 30], ["البلد", 20], ["الشمس", 15], ["الليل", 21], ["الضحى", 11], ["الشرح", 8], ["التين", 8], ["العلق", 19], ["القدر", 5], ["البينة", 8], ["الزلزلة", 8], ["العاديات", 11], ["القارعة", 11], ["التكاثر", 8], ["العصر", 3], ["الهمزة", 9], ["الفيل", 5], ["قريش", 4], ["الماعون", 7], ["الكوثر", 3], ["الكافرون", 6], ["النصر", 3], ["المسد", 5], ["الإخلاص", 4], ["الفلق", 5], ["الناس", 6]];
-const LOG_NEW = "حفظ جديد", LOG_REV = "مراجعة";
-const GRADES = ["ممتاز", "جيد جدًا", "جيد", "مقبول", "يحتاج إعادة"];
 const PERIODS = [["DAY", "يومي"], ["WEEK", "أسبوعي"], ["MONTH", "شهري"], ["TERM", "فصلي"], ["YEAR", "سنوي"]];
-const dParse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
-const dKey = (d) => d.toISOString().slice(0, 10);
-const dAdd = (s, n) => { const d = dParse(s); d.setUTCDate(d.getUTCDate() + n); return dKey(d); };
-const dm = (s) => `${s.slice(8, 10)}/${s.slice(5, 7)}`;
-const TERM_NAMES = ["الفصل الأول", "الفصل الثاني", "الفصل الثالث", "الفصل الرابع"];
-const academicStart = (d) => (+d.slice(5, 7) >= 9 ? +d.slice(0, 4) : +d.slice(0, 4) - 1);
-const defaultTerms = (st) => [[`${st}-09-01`, `${st}-11-30`], [`${st}-12-01`, `${st + 1}-02-28`], [`${st + 1}-03-01`, `${st + 1}-05-31`], [`${st + 1}-06-01`, `${st + 1}-08-31`]]
-  .map(([from, to], i) => ({ name: TERM_NAMES[i], from, to }));
 /** Terms of an academic year: the administration's dates, else the four default terms (same rule as the app). */
 const termsFor = (st) => { const t = state.calendars[st]?.terms; return t && t.length === 4 ? t : defaultTerms(st); };
 const eventsFor = (st) => state.calendars[st]?.events || [];
 /** Weekly days off (ISO 1 = Monday … 7 = Sunday); default Friday and Sunday. */
-const DEFAULT_OFF = [5, 7];
-const WEEKDAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
 const offDaysFor = (st) => state.calendars[st]?.offDays || DEFAULT_OFF;
-const isoDow = (d) => (dParse(d).getUTCDay() + 6) % 7 + 1;
-const isSchoolDay = (d, off, ev) => !off.includes(isoDow(d)) && !eventsOn(ev, d).some((e) => e.type === "عطلة");
-const schoolDays = (from, to, off, ev) => { let n = 0; for (let d = from; d <= to; d = dAdd(d, 1)) if (isSchoolDay(d, off, ev)) n++; return n; };
-const termIndexAt = (terms, d) => { const i = terms.findIndex((t) => d >= t.from && d <= t.to); if (i >= 0) return i;
-  let k = -1; terms.forEach((t, j) => { if (t.from <= d) k = j; }); return k >= 0 ? k : 0; };
-const eventsOn = (ev, d) => ev.filter((e) => d >= e.from && d <= (e.to || e.from));
-const upcomingEvents = (ev, d, days = 30) => { const lim = dAdd(d, days); return ev.filter((e) => (e.to || e.from) >= d && e.from <= lim).sort((a, b) => a.from.localeCompare(b.from)); };
 const EVENT_TYPES = [["مراجعة", "🔁"], ["اختبارات", "📝"], ["عطلة", "🌴"], ["مناسبة", "📌"]];
 const evIcon = (t) => (EVENT_TYPES.find((x) => x[0] === t) || ["", "📌"])[1];
-function periodRange(p, anchor) {
-  const y = +anchor.slice(0, 4), mo = +anchor.slice(5, 7), start = mo >= 9 ? y : y - 1, yl = `\u2066${start} / ${start + 1}\u2069`;
-  if (p === "DAY") return { from: anchor, to: anchor, label: `\u2066${anchor}\u2069` };
-  if (p === "WEEK") { /* week: Saturday–Friday */ const back = (dParse(anchor).getUTCDay() + 1) % 7; const from = dAdd(anchor, -back), to = dAdd(from, 6);
-    return { from, to, label: `أسبوع \u2066${dm(from)} – ${dm(to)}\u2069` }; }
-  if (p === "MONTH") return { from: anchor.slice(0, 7) + "-01", to: anchor.slice(0, 7) + "-31", label: monthName(anchor.slice(0, 7)) };
-  if (p === "TERM") { const ts = termsFor(start), t = ts[termIndexAt(ts, anchor)]; return { from: t.from, to: t.to, label: `${t.name} ${yl}` }; }
-  return { from: `${start}-09-01`, to: `${start + 1}-08-31`, label: `العام الدراسي ${yl}` };
-}
-function shiftPeriod(p, anchor, delta) {
-  if (p === "DAY") return dAdd(anchor, delta);
-  if (p === "WEEK") return dAdd(anchor, 7 * delta);
-  if (p === "MONTH") return shiftMonth(anchor.slice(0, 7), delta) + "-01";
-  if (p === "TERM") { const st = academicStart(anchor), ts = termsFor(st), k = termIndexAt(ts, anchor) + delta;
-    return k < 0 ? termsFor(st - 1)[3].from : k >= ts.length ? termsFor(st + 1)[0].from : ts[k].from; }
-  return (+anchor.slice(0, 4) + delta) + anchor.slice(4);
-}
-const ayat = (l) => (l.fromAyah > 0 && l.toAyah >= l.fromAyah ? l.toAyah - l.fromAyah + 1 : 0);
-const gradeScore = (g) => { const i = GRADES.indexOf(g); return i < 0 ? null : 5 - i; };
-const gradeFromScore = (a) => GRADES[Math.min(GRADES.length - 1, Math.max(0, 5 - Math.round(a)))];
-const logOrder = (a, b) => (a.date || "").localeCompare(b.date || "") || ((a.createdAt?.seconds ?? a.createdAt ?? 0) - (b.createdAt?.seconds ?? b.createdAt ?? 0));
-function summarizeMemo(students, logs) {
-  const by = {}; logs.forEach((l) => (by[l.studentId] = by[l.studentId] || []).push(l));
-  return students.map((s) => {
-    const l = (by[s.id] || []).slice().sort(logOrder), nw = l.filter((x) => x.type === LOG_NEW), rv = l.filter((x) => x.type === LOG_REV);
-    const sc = l.map((x) => gradeScore(x.grade)).filter((x) => x != null);
-    return { s, logs: l, newS: nw.length, revS: rv.length, newA: nw.reduce((a, x) => a + ayat(x), 0), revA: rv.reduce((a, x) => a + ayat(x), 0),
-      surahs: [...new Set(nw.map((x) => x.surah).filter(Boolean))], avg: sc.length ? sc.reduce((a, b) => a + b, 0) / sc.length : null,
-      days: new Set(l.map((x) => x.date)).size };
-  });
-}
-function nextPosition(last) {
-  if (!last || !last.surah) return null;
-  const i = SURAHS.findIndex((x) => x[0] === last.surah); if (i < 0) return { surah: last.surah, from: 0, to: 0 };
-  const max = SURAHS[i][1], size = Math.max(1, ayat(last));
-  if (last.toAyah >= 1 && last.toAyah < max) { const f = last.toAyah + 1; return { surah: last.surah, from: f, to: Math.min(max, f + size - 1) }; }
-  if (last.toAyah <= 0) return { surah: last.surah, from: 0, to: 0 };
-  const prev = SURAHS[i > 0 ? i - 1 : i]; return { surah: prev[0], from: 1, to: Math.min(prev[1], size) };
-}
 const logText = (l) => `${l.type}: سورة ${esc(l.surah)}${l.fromAyah > 0 ? ` \u2066${l.fromAyah}–${l.toAyah}\u2069` : ""}${l.grade ? " — " + esc(l.grade) : ""}`;
 
 function loadMemo(r) {
@@ -701,9 +636,15 @@ function viewSettings() {
     <div class="row2"><div>${f("sy", "العام الدراسي", s.academicYear, 'placeholder="2026 / 2027"')}</div><div>${f("sc", "العملة", s.currency)}</div></div>
     <div class="row2"><div>${f("sdue", "يوم بدء احتساب التأخير (من كل شهر)", s.feeDueDay || 25, 'type="number" min="1" max="31"')}</div>
       <div>${f("spay", "آخر موعد لدفع الرسوم — يُكتب في التذكيرات", s.feePayDay || 30, 'type="number" min="1" max="31"')}</div></div>
-    <div class="modal-actions"><button class="btn" id="ssave">💾 حفظ</button></div></div>`;
+    <div class="modal-actions"><button class="btn" id="ssave">💾 حفظ</button></div></div>
+  <div class="panel" style="max-width:640px"><h3>النسخ الاحتياطي</h3>
+    <p class="muted">ملف واحد فيه كل البيانات (الطلاب، الرسوم، المصروفات، الموظفون، الحفظ، الحضور…). احتفظ به في مكان آمن، ولا تشاركه: فيه بيانات شخصية.</p>
+    <button class="btn outline" id="bk">💾 تنزيل نسخة احتياطية</button>
+    <label class="btn outline" style="display:inline-block;margin:0 8px">♻️ استرجاع من ملف<input type="file" id="rsfile" accept=".json,application/json" hidden></label></div>`;
 }
 bind.settings = () => {
+  $("#bk").onclick = downloadBackup;
+  $("#rsfile").onchange = (e) => { const f = e.target.files[0]; if (f) restoreBackup(f); e.target.value = ""; };
   $("#ssave").onclick = () => {
     const v = (id) => $("#" + id).value.trim();
     if (!v("sn")) { toast("اسم المركز مطلوب"); return; }
@@ -761,17 +702,48 @@ function showWelcome() {
   box.querySelector("#wl1").onclick = () => { box.innerHTML = step2; box.querySelector("#wl2").onclick = done; };
 }
 
-// ---------------------------------------------------------------- backup (download all data as one file)
+// ---------------------------------------------------------------- backup & restore (all data in one file)
+const BACKUP_COLLECTIONS = ["students", "halaqat", "payments", "expenses", "teachers", "payroll", "settings", "quranLogs", "attendance", "grades",
+  "cashAdvances", "teacherAttendance", "announcements", "users", "auditLog"];
+const NO_RESTORE = ["users", "auditLog"];   // kept in the file for reference; never written back (accounts and the audit trail are protected)
+/** Firestore timestamps are stored as {__ts: milliseconds} so they come back as real dates. */
+const serialize = (v) => (v && typeof v.toDate === "function" ? { __ts: v.toDate().getTime() } : Array.isArray(v) ? v.map(serialize)
+  : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, serialize(x)])) : v);
+const deserialize = (v) => (v && typeof v === "object" && "__ts" in v ? new Date(v.__ts) : Array.isArray(v) ? v.map(deserialize)
+  : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, deserialize(x)])) : v);
 async function downloadBackup() {
   toast("جارٍ تجهيز النسخة الاحتياطية…");
-  const out = { app: "centre-imam-malik", date: new Date().toISOString() };
-  for (const c of ["students", "halaqat", "payments", "expenses", "teachers", "payroll", "settings", "quranLogs", "attendance", "grades", "cashAdvances"]) {
-    try { out[c] = (await getDocs(collection(db, c))).docs.map((d) => ({ id: d.id, ...d.data() })); } catch { out[c] = null; }
+  const out = { app: "centre-imam-malik", format: 2, date: new Date().toISOString() };
+  for (const c of BACKUP_COLLECTIONS) {
+    try { out[c] = (await getDocs(collection(db, c))).docs.map((d) => ({ id: d.id, ...serialize(d.data()) })); } catch { out[c] = null; }
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: "application/json" }));
   a.download = `centre-imam-malik-backup-${today()}.json`; a.click();
   localStorage.setItem("lastBackup", today()); toast("✅ تم تنزيل النسخة الاحتياطية"); render();
+}
+/** Restore: records with the same id are overwritten with the file's values; nothing is deleted. */
+function restoreBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data; try { data = JSON.parse(reader.result); } catch { toast("الملف غير صالح"); return; }
+    if (data.app !== "centre-imam-malik") { toast("هذا ليس ملف نسخة احتياطية لهذا التطبيق"); return; }
+    const cols = BACKUP_COLLECTIONS.filter((c) => !NO_RESTORE.includes(c) && Array.isArray(data[c]));
+    const total = cols.reduce((a, c) => a + data[c].length, 0);
+    if (!total) { toast("الملف لا يحتوي بيانات"); return; }
+    confirmBox(`استرجاع ${total} سجل من نسخة بتاريخ ${String(data.date || "").slice(0, 10)}؟ تُحدَّث السجلات المتطابقة، ولا يُحذف أي شيء.`, async () => {
+      try {
+        let n = 0, batch = writeBatch(db), inBatch = 0;
+        for (const c of cols) for (const r of data[c]) {
+          const { id, ...rest } = r; batch.set(doc(db, c, id), deserialize(rest), { merge: true }); n++;
+          if (++inBatch === 400) { await batch.commit(); batch = writeBatch(db); inBatch = 0; }
+        }
+        if (inBatch) await batch.commit();
+        audit("استرجاع نسخة احتياطية", `${n} سجل من ${String(data.date || "").slice(0, 10)}`); toast(`✅ تم استرجاع ${n} سجل`);
+      } catch (e) { fail(e); }
+    }, "استرجاع");
+  };
+  reader.readAsText(file);
 }
 const backupDue = () => { const l = localStorage.getItem("lastBackup"); return !l || dAdd(l, 7) <= today(); };
 
@@ -1011,15 +983,12 @@ const FR_MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juill
 const frMonthName = (m) => { const [y, mm] = m.split("-"); return `${FR_MONTHS[+mm - 1] ?? m} ${y}`; };
 const dueDay = () => Math.min(31, Math.max(1, +state.settings.feeDueDay || 25));   // arrears start counting from this day
 const payDay = () => Math.min(31, Math.max(1, +state.settings.feePayDay || 30));   // «pay before day N», written in reminders
-const isMonthDue = (m, t = today()) => { const cur = t.slice(0, 7); return m < cur || (m === cur && +t.slice(8, 10) >= dueDay()); };
-const plainNum = (n) => Number(n || 0).toLocaleString("en-US").replace(/,/g, " ");
+// Pure rules live in logic.js; these wrappers feed them the page's state (calendar terms, settings, payments).
+const periodRange = (p, anchor) => _periodRange(p, anchor, termsFor);
+const shiftPeriod = (p, anchor, delta) => _shiftPeriod(p, anchor, delta, termsFor);
+const isMonthDue = (m, t = today()) => _isMonthDue(m, t, dueDay());
+const feeArrears = (s, months) => _feeArrears(s, months, state.payments, today(), dueDay());
 /** Arrears of a student in an academic year: unpaid due months and the amount still owed (fee × due months − paid). */
-function feeArrears(s, months) {
-  const mine = state.payments.filter((p) => p.type === "monthly" && p.studentId === s.id);
-  const due = months.filter((m) => isMonthDue(m));
-  const unpaid = due.filter((m) => !mine.some((p) => p.month === m));
-  return { s, months: unpaid, amount: Math.max(0, (s.monthlyFee || 0) * due.length - mine.reduce((a, p) => a + (p.amount || 0), 0)) };
-}
 const arrearsList = (months, students) => students.filter((s) => (s.status || ACTIVE) === ACTIVE && (s.monthlyFee || 0) > 0)
   .map((s) => feeArrears(s, months)).filter((a) => a.amount > 0)
   .sort((a, b) => (a.s.group || "\uFFFF").localeCompare(b.s.group || "\uFFFF", "ar") || a.s.name.localeCompare(b.s.name, "ar"));

@@ -19,6 +19,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Set up Node (website logic tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run website logic tests
+        run: node --test web/tests/
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
