@@ -7,7 +7,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=23";
+import { firebaseConfig } from "./firebase-config.js?v=24";
 
 const ADMIN_EMAIL = "sidibey487@gmail.com";
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
@@ -688,7 +688,8 @@ function viewSettings() {
       <div>${f("se", "✉️ البريد الإلكتروني للمركز", s.email, 'dir="ltr" type="email" placeholder="exemple@gmail.com"')}</div></div>
     ${f("sa", "📍 العنوان (الحي، المدينة)", s.address)}
     <div class="row2"><div>${f("sy", "العام الدراسي", s.academicYear, 'placeholder="2026 / 2027"')}</div><div>${f("sc", "العملة", s.currency)}</div></div>
-    ${f("sdue", "يوم بدء احتساب التأخير في دفع الرسوم (من كل شهر)", s.feeDueDay || 25, 'type="number" min="1" max="31"')}
+    <div class="row2"><div>${f("sdue", "يوم بدء احتساب التأخير (من كل شهر)", s.feeDueDay || 25, 'type="number" min="1" max="31"')}</div>
+      <div>${f("spay", "آخر موعد لدفع الرسوم — يُكتب في التذكيرات", s.feePayDay || 30, 'type="number" min="1" max="31"')}</div></div>
     <div class="modal-actions"><button class="btn" id="ssave">💾 حفظ</button></div></div>`;
 }
 bind.settings = () => {
@@ -697,7 +698,7 @@ bind.settings = () => {
     if (!v("sn")) { toast("اسم المركز مطلوب"); return; }
     if (v("se") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("se"))) { toast("البريد الإلكتروني غير صحيح"); return; }
     setDoc(doc(db, "settings", "centre"), { name: v("sn"), director: v("sd"), phone: v("sp"), email: v("se"), address: v("sa"),
-      academicYear: v("sy"), currency: v("sc") || "فرنك", feeDueDay: Math.min(31, Math.max(1, +v("sdue") || 25)), updatedAt: new Date() }, { merge: true })
+      academicYear: v("sy"), currency: v("sc") || "فرنك", feeDueDay: Math.min(31, Math.max(1, +v("sdue") || 25)), feePayDay: Math.min(31, Math.max(1, +v("spay") || 30)), updatedAt: new Date() }, { merge: true })
       .then(() => { audit("تعديل إعدادات المركز", v("sn")); toast("تم حفظ إعدادات المركز"); }).catch(fail);
   };
 };
@@ -996,7 +997,8 @@ function halaqaForm(h) {
 // A month's fee is overdue from the due day (default the 25th) of that month — same rule as the phone app (Fees.kt).
 const FR_MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 const frMonthName = (m) => { const [y, mm] = m.split("-"); return `${FR_MONTHS[+mm - 1] ?? m} ${y}`; };
-const dueDay = () => Math.min(31, Math.max(1, +state.settings.feeDueDay || 25));
+const dueDay = () => Math.min(31, Math.max(1, +state.settings.feeDueDay || 25));   // arrears start counting from this day
+const payDay = () => Math.min(31, Math.max(1, +state.settings.feePayDay || 30));   // «pay before day N», written in reminders
 const isMonthDue = (m, t = today()) => { const cur = t.slice(0, 7); return m < cur || (m === cur && +t.slice(8, 10) >= dueDay()); };
 const plainNum = (n) => Number(n || 0).toLocaleString("en-US").replace(/,/g, " ");
 /** Arrears of a student in an academic year: unpaid due months and the amount still owed (fee × due months − paid). */
@@ -1011,7 +1013,7 @@ const arrearsList = (months, students) => students.filter((s) => (s.status || AC
   .sort((a, b) => (a.s.group || "\uFFFF").localeCompare(b.s.group || "\uFFFF", "ar") || a.s.name.localeCompare(b.s.name, "ar"));
 /** Arabic + French WhatsApp message (same text as the phone app). */
 function reminderMessage(a) {
-  const c = state.settings.currency || "فرنك", d = dueDay(), name = state.settings.name || DEFAULT_NAME;
+  const c = state.settings.currency || "فرنك", d = payDay(), name = state.settings.name || DEFAULT_NAME;
   return `السلام عليكم ورحمة الله وبركاته،\nنُذكّركم بأن على الطالب/ة ${a.s.name} رسومًا دراسية متأخرة${a.months.length ? " عن: " + a.months.map(monthName).join("، ") : ""}.\n` +
     `المبلغ المتأخر: ${plainNum(a.amount)} ${c}\n(تُستحق الرسوم قبل يوم ${d} من كل شهر). نرجو التسوية في أقرب وقت، جزاكم الله خيرًا.\n\n` +
     `Assalamou alaykoum wa rahmatullah,\nNous vous rappelons que l'élève ${a.s.name} a des frais de scolarité impayés${a.months.length ? " pour : " + a.months.map(frMonthName).join(", ") : ""}.\n` +
@@ -1020,7 +1022,7 @@ function reminderMessage(a) {
 }
 /** One printed slip (Arabic + French). */
 function reminderSlip(a) {
-  const d = dueDay(), c = state.settings.currency || "فرنك", contact = [state.settings.phone, state.settings.email].filter(Boolean).join("  •  ");
+  const d = payDay(), c = state.settings.currency || "فرنك", contact = [state.settings.phone, state.settings.email].filter(Boolean).join("  •  ");
   return `<div class="slip"><div class="slip-head"><img src="logo.png" alt=""><div><b>${esc(state.settings.name || DEFAULT_NAME)}</b><em class="fr">${CENTRE_FR}</em></div></div>
     <div class="slip-title">تذكير بدفع الرسوم الدراسية<div class="fr">Rappel de paiement des frais de scolarité</div></div>
     <div class="slip-to"><b>إلى وليّ أمر الطالب/ة: ${esc(a.s.name)}</b>${a.s.group ? ` — ${esc(a.s.group)}` : ""}
@@ -1084,7 +1086,7 @@ function viewFees() {
     <input id="fq" placeholder="🔍 بحث" value="${esc(state.filters.q)}">${groupSelect()}
     <button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
     <button class="btn gold no-print" id="remAll">🧾 تذكيرات أولياء الأمور</button></div>
-  <div class="muted" style="margin-bottom:6px">يبدأ احتساب التأخير من يوم ${dueDay()} من كل شهر.</div>
+  <div class="muted" style="margin-bottom:6px">يبدأ احتساب التأخير من يوم ${dueDay()} من كل شهر، وآخر موعد للدفع المكتوب في التذكير: يوم ${payDay()}.</div>
   <div class="table-wrap grid"><table><thead><tr><th class="num">#</th><th>الطالب</th><th class="num">الرسم</th>
     ${months.map((m) => `<th class="num">${AR_MONTHS[+m.slice(5) - 1]}</th>`).join("")}
     <th class="num">المدفوع</th><th class="num">المستحق</th><th class="num">المتأخرات</th><th class="no-print">تذكير</th></tr></thead>

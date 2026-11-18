@@ -58,6 +58,8 @@ object Centre {
     var email = ""
     /** Day of the month from which a month's fee counts as overdue. */
     var feeDueDay = DEFAULT_FEE_DUE_DAY
+    /** Last day of the month for paying the fee (written in reminders). */
+    var feePayDay = DEFAULT_FEE_PAY_DAY
     var address = ""
     var academicYear = ""
     var currency = "فرنك"

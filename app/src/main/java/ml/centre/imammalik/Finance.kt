@@ -361,7 +361,7 @@ private fun RemindersTab(state: AppState, openProfile: (String) -> Unit) {
     val dueDay = Centre.feeDueDay
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
         if (payments == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        item { Text("يبدأ احتساب التأخير من يوم $dueDay من كل شهر. الطلاب المتأخرون: ${list.size} • المتأخرات: ${money(list.sumOf { it.amount })}",
+        item { Text("يبدأ احتساب التأخير من يوم $dueDay، وآخر موعد للدفع المكتوب في التذكير يوم ${Centre.feePayDay} من كل شهر. الطلاب المتأخرون: ${list.size} • المتأخرات: ${money(list.sumOf { it.amount })}",
             fontSize = 13.sp, color = SubText) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -376,7 +376,7 @@ private fun RemindersTab(state: AppState, openProfile: (String) -> Unit) {
             }
         }
         item {
-            Button(onClick = { shareFeeReminders(context, list, perPage, dueDay) }, Modifier.fillMaxWidth(), enabled = list.isNotEmpty()) {
+            Button(onClick = { shareFeeReminders(context, list, perPage, Centre.feePayDay) }, Modifier.fillMaxWidth(), enabled = list.isNotEmpty()) {
                 Icon(Icons.Default.Print, null); Spacer(Modifier.width(6.dp)); Text("طباعة تذكيرات الجميع (${list.size}) — عربي وفرنسي")
             }
         }
@@ -388,10 +388,10 @@ private fun RemindersTab(state: AppState, openProfile: (String) -> Unit) {
                         Text(a.student.group.ifBlank { "بدون حلقة" } + " • " + money(a.amount), fontSize = 13.sp, color = Red)
                         if (a.months.isNotEmpty()) Text(a.months.joinToString("، ") { monthName(it) }, fontSize = 12.sp, color = SubText)
                     }
-                    IconButton(onClick = { shareFeeReminders(context, listOf(a), 2, dueDay) }) { Icon(Icons.Default.Print, "طباعة تذكير", tint = Green) }
+                    IconButton(onClick = { shareFeeReminders(context, listOf(a), 2, Centre.feePayDay) }) { Icon(Icons.Default.Print, "طباعة تذكير", tint = Green) }
                     whatsappNumber(a.student.phone)?.let { wa ->
                         IconButton(onClick = {
-                            val msg = reminderMessage(a, Centre.name, Centre.phone, dueDay)
+                            val msg = reminderMessage(a, Centre.name, Centre.phone, Centre.feePayDay)
                             runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                                 android.net.Uri.parse("https://wa.me/$wa?text=" + android.net.Uri.encode(msg)))) }
                         }) { Icon(Icons.Default.Chat, "واتساب", tint = Color(0xFF25D366)) }

@@ -653,7 +653,7 @@ private fun Canvas.ltrText(text: String, left: Float, top: Float, width: Float, 
  * Parent reminders about unpaid fees, Arabic + French, [perPage] slips per A4 page (2, 4 or 6), cut along the dotted lines.
  * One slip per student, or one sheet with all students of a halaqa / the whole centre.
  */
-fun shareFeeReminders(context: Context, items: List<FeeArrears>, perPage: Int, dueDay: Int) {
+fun shareFeeReminders(context: Context, items: List<FeeArrears>, perPage: Int, payDay: Int) {
     val W = 595f; val H = 842f; val M = 18f
     val cols = if (perPage == 2) 1 else 2
     val rows = perPage / cols
@@ -703,8 +703,8 @@ fun shareFeeReminders(context: Context, items: List<FeeArrears>, perPage: Int, d
         cv.ltrText("Montant dû : ${plainAmount(a.amount)} FCFA", left + pad + 4f, y + 17f * s, iw - 8f, 8.5f * s, 0xFFB7791F.toInt(), bold = true, align = Layout.Alignment.ALIGN_CENTER)
         y += 34f * s
         // message
-        y += cv.rtlText("نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم $dueDay من كل شهر. جزاكم الله خيرًا.", right, y, iw, 8.5f * s) + 2f
-        y += cv.ltrText("Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le $dueDay de chaque mois. Qu'Allah vous récompense.",
+        y += cv.rtlText("نرجو التكرّم بتسوية المبلغ في أقرب وقت. تُستحق الرسوم قبل يوم $payDay من كل شهر. جزاكم الله خيرًا.", right, y, iw, 8.5f * s) + 2f
+        y += cv.ltrText("Nous vous prions de bien vouloir régler ce montant dès que possible. Les frais sont exigibles avant le $payDay de chaque mois. Qu'Allah vous récompense.",
             left + pad, y, iw, 7.5f * s, GREY) + 4f
         // footer: contact + signature
         val fy = top + ch - 34f * s - pad

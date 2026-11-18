@@ -9,6 +9,9 @@ import java.util.Locale
 
 const val DEFAULT_FEE_DUE_DAY = 25
 
+/** Last day for paying a month's fee, as written in reminders («قبل 30 من الشهر»). Arrears start counting from [DEFAULT_FEE_DUE_DAY]. */
+const val DEFAULT_FEE_PAY_DAY = 30
+
 val FrenchMonthNames = listOf("Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août",
     "Septembre", "Octobre", "Novembre", "Décembre")
 
@@ -48,18 +51,18 @@ fun studentsWithArrears(students: List<Student>, yearMonths: List<String>, payme
 fun plainAmount(n: Int): String = "%,d".format(Locale.US, n).replace(',', ' ')
 
 /** Arabic + French WhatsApp message for a guardian. */
-fun reminderMessage(a: FeeArrears, centreName: String, phone: String, dueDay: Int = DEFAULT_FEE_DUE_DAY): String = buildString {
+fun reminderMessage(a: FeeArrears, centreName: String, phone: String, payDay: Int = DEFAULT_FEE_PAY_DAY): String = buildString {
     appendLine("السلام عليكم ورحمة الله وبركاته،")
     appendLine("نُذكّركم بأن على الطالب/ة ${a.student.name} رسومًا دراسية متأخرة" +
         (if (a.months.isNotEmpty()) " عن: ${a.months.joinToString("، ") { monthName(it) }}" else "") + ".")
     appendLine("المبلغ المتأخر: ${plainAmount(a.amount)} ${Centre.currency}")
-    appendLine("(تُستحق الرسوم قبل يوم $dueDay من كل شهر). نرجو التسوية في أقرب وقت، جزاكم الله خيرًا.")
+    appendLine("(تُستحق الرسوم قبل يوم $payDay من كل شهر). نرجو التسوية في أقرب وقت، جزاكم الله خيرًا.")
     appendLine()
     appendLine("Assalamou alaykoum wa rahmatullah,")
     appendLine("Nous vous rappelons que l'élève ${a.student.name} a des frais de scolarité impayés" +
         (if (a.months.isNotEmpty()) " pour : ${a.months.joinToString(", ") { frenchMonthName(it) }}" else "") + ".")
     appendLine("Montant dû : ${plainAmount(a.amount)} FCFA")
-    appendLine("(Les frais sont exigibles avant le $dueDay de chaque mois.) Merci de régulariser dès que possible. Qu'Allah vous récompense.")
+    appendLine("(Les frais sont exigibles avant le $payDay de chaque mois.) Merci de régulariser dès que possible. Qu'Allah vous récompense.")
     appendLine()
     append(centreName + (if (phone.isNotBlank()) " • $phone" else ""))
 }
