@@ -544,3 +544,63 @@ button.slipbtn { border: 0; background: #eef3f0; border-radius: 8px; padding: 3p
 .slip-head em.fr { color: #e8f1ec; font-size: .72em; }
 
 .idc-name-fr { font-size: 7.5pt; color: #555; font-weight: 700; margin: -.3mm 0 .8mm; direction: ltr; text-align: left; }
+
+/* =================== v4 (like the reference): Mali stripe, hero, alerts, stats, chart =================== */
+body { background: linear-gradient(90deg, rgba(206,17,38,.045) 0 33.3%, rgba(252,209,22,.06) 33.3% 66.6%, rgba(20,181,58,.06) 66.6%) fixed, var(--cream); }
+body.dark { background: var(--cream); }
+.mali-bar { height: 5px; background: linear-gradient(90deg, #14B53A 0 33.3%, #FCD116 33.3% 66.6%, #CE1126 66.6%); }
+.home-hero { display: none; }
+.hero2 { border-radius: 26px; overflow: hidden; margin-bottom: 14px; background: linear-gradient(160deg, #0b5a3a, #07432b); color: #fff; box-shadow: 0 10px 28px rgba(7,91,58,.22); }
+.hero2-body { padding: 18px 22px 22px; }
+.hero2-tag { color: #f4d77a; font-weight: 700; font-size: 14.5px; }
+.hero2-verse { font-family: "Amiri", "Traditional Arabic", serif; font-size: 34px; line-height: 1.6; margin: 8px 0 2px; }
+.hero2-ref { color: #f4d77a; font-size: 14px; margin-bottom: 10px; }
+.hero2-line { opacity: .92; margin: 3px 0; font-size: 15px; }
+.hero2-hi { font-size: 19px; font-weight: 800; margin: 10px 0 12px; line-height: 1.6; }
+.hero2-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.hb { padding: 12px 20px; border-radius: 16px; font-weight: 800; font-size: 16px; background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.18); }
+.hb.gold { background: linear-gradient(180deg, #f4d77a, #d7a91e); color: #3b2e00; border: 0; }
+.alerts .al { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.alerts .al:first-of-type { border-top: 0; }
+.al .dot { width: 34px; height: 34px; border-radius: 50%; flex: none; position: relative; }
+.al .dot::after { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: currentColor; }
+.dot.red { background: #fde8e8; color: #c53030; } .dot.amber { background: #fdf1d6; color: #b7791f; } .dot.gray { background: #eef0f2; color: #6b7280; }
+.al-t { flex: 1; line-height: 1.6; font-size: 15.5px; }
+.pill-btn { background: #eef3f0; color: var(--green); font-weight: 800; padding: 8px 18px; border-radius: 14px; white-space: nowrap; }
+.badge-n { background: #fde8e8; color: #c53030; font-weight: 800; border-radius: 50%; min-width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
+.month-sel { width: 100%; padding: 14px; border-radius: 16px; font-size: 17px; font-weight: 700; }
+.stat4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 14px; }
+.st { background: var(--card); border: 1px solid #eeebe0; border-inline-end: 5px solid #c9a227; border-radius: 20px; padding: 14px 16px; }
+.st .l { color: var(--muted); font-size: 14px; } .st .v { font-size: 26px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; } .st .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.st.dark { background: linear-gradient(135deg, #0b5a3a, #0f6e47); color: #fff; border-inline-end-color: #f4d77a; } .st.dark .l, .st.dark .s { color: rgba(255,255,255,.85); }
+.st .v .cur { font-size: 13px; }
+.treasury { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; } .treasury span { display: block; color: var(--muted); font-size: 13px; } .treasury b { font-size: 15px; }
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 150px; padding-top: 8px; }
+.chart .bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; font-size: 10.5px; color: var(--muted); }
+.chart .b1 { width: 100%; flex: 1; background: #d3e6dc; border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
+.chart .b2 { width: 100%; background: linear-gradient(180deg, #2f9e6a, #0b7a4f); border-radius: 6px; min-height: 2px; }
+.chart-key i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px 0 2px; } .chart-key .k1 { background: #d3e6dc; } .chart-key .k2 { background: #0b7a4f; }
+.progress.sm { height: 8px; margin: 0; }
+.pill-red { background: #fde8e8; color: #c53030; font-weight: 800; border-radius: 999px; padding: 4px 12px; }
+.dua-card { background: #fbf6e6; border-color: #ecd9a3; } .dua-t { color: var(--green); font-weight: 800; text-align: center; margin-bottom: 6px; }
+.dua-b { font-family: "Amiri", serif; font-size: 22px; line-height: 2; color: #5a4300; text-align: center; }
+.count-line { text-align: center; color: var(--muted); }
+body.dark .st, body.dark .dua-card { border-color: #2a3832; } body.dark .dua-card { background: #2a2614; } body.dark .dua-b { color: #f4d77a; }
+body.dark .pill-btn { background: #163626; color: #9fe0c0; } body.dark .chart .b1 { background: #25382f; }
+@media (min-width: 861px) { .stat4 { grid-template-columns: repeat(4, 1fr); } }
+
+/* phone: green header with the Mali stripe, big central action in the bottom bar */
+@media (max-width: 860px) {
+  .mbar { background: linear-gradient(135deg, #075B3A, #0b7a4f); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.2); padding: 10px 12px 14px; position: sticky; }
+  .mbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: linear-gradient(90deg, #14B53A 0 33.3%, #FCD116 33.3% 66.6%, #CE1126 66.6%); }
+  .mbar .mbar-t { flex: 1; min-width: 0; line-height: 1.3; } .mbar .mbar-t b { color: #fff; font-size: 17px; display: block; } .mbar small { color: #f4d77a; font-size: 12.5px; }
+  .mbar img { border: 2px solid rgba(255,255,255,.5); }
+  .mbar .round { background: rgba(255,255,255,.14); border: 0 !important; color: #fff; width: 44px; height: 44px; border-radius: 16px; font-size: 20px; }
+  .net-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; } .net-dot.on { background: #7ee2a8; box-shadow: 0 0 6px #7ee2a8; } .net-dot.off { background: #f0a030; }
+  body.dark .mbar { background: linear-gradient(135deg, #06331f, #0a4a30); }
+  .bnav a.bnav-main { background: linear-gradient(135deg, #0b5a3a, #0f7a4f); color: #fff; font-weight: 800; border-radius: 20px; margin: -14px 4px 0; padding: 10px 6px; box-shadow: 0 6px 16px rgba(7,91,58,.35); flex: 1.15; }
+  .bnav a.bnav-main span { font-size: 26px; }
+  .sections { display: none; }
+  .hero2-verse { font-size: 28px; } .hero2-body { padding: 16px 18px 20px; }
+}
+@media print { .hero2, .alerts, .stat4 { display: none !important; } }

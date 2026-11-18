@@ -1,5 +1,5 @@
 // Centre Imam Malik — web admin dashboard (same Firestore data as the Android app).
-import { normAr, parseNamePairs, matchFrenchNames, LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, periodRange as _periodRange, shiftPeriod as _shiftPeriod, isMonthDue as _isMonthDue, feeArrears as _feeArrears } from "./logic.js?v=30";
+import { normAr, parseNamePairs, matchFrenchNames, LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, periodRange as _periodRange, shiftPeriod as _shiftPeriod, isMonthDue as _isMonthDue, feeArrears as _feeArrears } from "./logic.js?v=32";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
@@ -8,7 +8,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where, limit
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=30";
+import { firebaseConfig } from "./firebase-config.js?v=32";
 
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const HADITH = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»";
@@ -252,10 +252,14 @@ function render() {
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
-  const bnav = [["home", "🏠", "الرئيسية"], ["students", "👥", "الطلاب"], ["quran", "📖", "الحفظ"],
-    isAdmin() ? ["fees", "💰", "المالية"] : ["halaqat", "🕌", "الحلقات"]];
+  // bottom bar: home, students, [big central action], halaqat, more (drawer)
+  const bnavMain = isAdmin() ? ["fees", "💰", "دفع"] : ["quran", "📖", "الحفظ"];
+  const bnavL = [["home", "🏠", "الرئيسية"], ["students", "👥", "الطلاب"]], bnavR = [["halaqat", "🕌", "الحلقات"]];
   $("#app").innerHTML = `<div class="layout${state.menuOpen ? " menu-open" : ""}">
-    <header class="mbar"><img src="logo.png" alt=""><b>${allowed === "home" ? "مركز الإمام مالك" : title[2]}</b>
+    <header class="mbar"><img src="logo.png" alt=""><div class="mbar-t"><b>${allowed === "home" ? "مركز الإمام مالك" : title[2]}</b>
+        <small>إدارة المركز · ${yearLabel(currentMonth())}</small></div>
+      <span class="net-dot ${navigator.onLine ? "on" : "off"}" title="${navigator.onLine ? "متصل" : "بدون إنترنت"}"></span>
+      <button id="searchBtn" class="round" aria-label="بحث">🔍</button>
       <button id="theme2" class="round" aria-label="الوضع الليلي">${dark() ? "☀️" : "🌙"}</button></header>
     <div class="backdrop" id="backdrop"></div>
     <aside class="side">
@@ -269,9 +273,12 @@ function render() {
     <main><div class="print-head"><img src="logo.png" alt=""><h3>${esc(state.settings.name || DEFAULT_NAME)}</h3>
       <div>${esc(contactLine())}</div></div>${navigator.onLine ? "" : '<div class="offline-bar">📴 بدون إنترنت — تعمل بالبيانات المحفوظة على الجهاز، وتُرسل التغييرات وحدها عند عودة الاتصال</div>'}
       ${state.loaded ? views[allowed]() : '<div class="center muted">جارٍ تحميل البيانات…</div>'}</main>
-    <nav class="bnav">${bnav.map(([r, i, t]) => `<a href="#/${r}" class="${allowed === r ? "on" : ""}"><span>${i}</span>${t}</a>`).join("")}
-      <a href="javascript:void 0" id="moreBtn" class="${state.menuOpen ? "on" : ""}"><span>☰</span>المزيد</a></nav></div>`;
+    <nav class="bnav">${bnavL.map(([r, i, t]) => `<a href="#/${r}" class="${allowed === r ? "on" : ""}"><span>${i}</span>${t}</a>`).join("")}
+      <a href="#/${bnavMain[0]}" class="bnav-main"><span>${bnavMain[1]}</span>${bnavMain[2]}</a>
+      ${bnavR.map(([r, i, t]) => `<a href="#/${r}" class="${allowed === r ? "on" : ""}"><span>${i}</span>${t}</a>`).join("")}
+      <a href="javascript:void 0" id="moreBtn" class="${state.menuOpen ? "on" : ""}"><span>☰</span>الإدارة</a></nav></div>`;
   ["#theme", "#theme2"].forEach((id) => { $(id).onclick = () => { localStorage.setItem("theme", dark() ? "light" : "dark"); applyTheme(); render(); }; });
+  $("#searchBtn").onclick = () => { location.hash = "#/students"; setTimeout(() => $("#fq")?.focus(), 200); };
   $("#moreBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
   $("#backdrop").onclick = () => { state.menuOpen = false; render(); };
   $("#refreshApp").onclick = () => { toast("جارٍ تحديث التطبيق…"); navigator.serviceWorker?.getRegistration().then((r) => r?.update()).finally(() => setTimeout(() => location.reload(), 600)); };
@@ -780,51 +787,84 @@ function restoreBackup(file) {
 const backupDue = () => { const l = localStorage.getItem("lastBackup"); return !l || dAdd(l, 7) <= today(); };
 
 // ---------------------------------------------------------------- home
+/** Today's recitation records, fetched once per day for the home alerts. */
+function loadHomeLogs() {
+  const t = today(); if (state.homeLogs?.date === t) return;
+  state.homeLogs = { date: t, logs: null };
+  getDocs(query(collection(db, "quranLogs"), where("date", "==", t)))
+    .then((q) => { state.homeLogs = { date: t, logs: q.docs.map((d) => d.data()) }; render(); })
+    .catch(() => { state.homeLogs = { date: t, logs: [] }; });
+}
+const VERSES = [["وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ", "سورة القمر، الآية 17"], ["وَقُل رَّبِّ زِدْنِي عِلْمًا", "سورة طه، الآية 114"],
+  ["إِنَّ هَٰذَا الْقُرْآنَ يَهْدِي لِلَّتِي هِيَ أَقْوَمُ", "سورة الإسراء، الآية 9"], ["خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ", "حديث شريف — رواه البخاري"]];
 function viewHome() {
   const active = state.students.filter((s) => (s.status || ACTIVE) === ACTIVE);
-  const m = currentMonth();
-  const monthly = state.payments.filter((p) => p.type === "monthly" && p.month === m);
+  const m = currentMonth(), hm = state.filters.homeMonth || m, months = academicMonths(m), t = today();
   const billable = active.filter((s) => (s.monthlyFee || 0) > 0);
-  const paidIds = new Set(monthly.map((p) => p.studentId));
+  const sum = (l) => l.reduce((a, p) => a + (p.amount || 0), 0);
+  const monthlyOf = (mm) => state.payments.filter((p) => p.type === "monthly" && p.month === mm);
+  const monthly = monthlyOf(hm), paidIds = new Set(monthly.map((p) => p.studentId));
   const paidCount = billable.filter((s) => paidIds.has(s.id)).length;
-  const unpaid = billable.length - paidCount;
-  const pct = billable.length ? Math.round(paidCount * 100 / billable.length) : 0;
-  const d = new Date();
+  const expected = billable.reduce((a, s) => a + s.monthlyFee, 0), collected = sum(monthly);
+  const pct = expected ? Math.round(collected * 100 / expected) : 0;
+  const d = new Date(), v = VERSES[Math.floor(d / 864e5) % VERSES.length];
   const dateAr = d.toLocaleDateString("ar", { weekday: "long", day: "numeric", month: "long", year: "numeric", numberingSystem: "latn" });
   let hijri = ""; try { hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
-  const shortcuts = [["#/students", "👥", "الطلاب"], ["#/halaqat", "🕌", "الحلقات"],
-    ...(isAdmin() ? [["#/fees", "💰", "تسجيل الرسوم"], ["#/expenses", "🧾", "مصروف جديد"], ["#/payroll", "💵", "الرواتب"], ["#/summary", "📊", "الملخص المالي"]] : [])];
+  const st = academicStart(t), offToday = offDaysFor(st).includes(isoDow(t)), evNow = eventsOn(eventsFor(st).concat(eventsFor(st + 1)), t);
+  const schoolToday = isSchoolDay(t, offDaysFor(st), eventsFor(st).concat(eventsFor(st + 1)));
+  const staffAct = state.staff.filter((x) => (x.status || ACTIVE) === ACTIVE);
+  const salPaid = state.payroll.filter((p) => p.month === hm && (p.received || 0) > 0).length;
+  // ---- alerts: [colour, text, action label, link / element id]
+  const alerts = [];
+  if (isAdmin()) { const arr = arrearsList(months, state.students);
+    if (arr.length) alerts.push(["red", `${arr.length} طالبًا متأخرون عن الدفع — ${money(arr.reduce((a, x) => a + x.amount, 0))} للتحصيل`, "عرض", "#/fees", "homeRem"]); }
+  if (offToday) alerts.push(["gray", `🕌 اليوم ${WEEKDAYS[isoDow(t) - 1]}: عطلة أسبوعية`]);
+  evNow.forEach((e) => alerts.push(["amber", `${evIcon(e.type)} اليوم: ${esc(e.title || e.type)}`, "التقويم", "#/calendar"]));
+  if (schoolToday && active.length) { loadHomeLogs(); const logs = state.homeLogs?.logs;
+    if (logs) { const done = new Set(logs.map((l) => l.studentId)); const miss = active.filter((s) => !done.has(s.id)).length;
+      if (miss) alerts.push(["amber", `لم يُسجَّل حفظ ولا مراجعة اليوم لـ ${miss} طالبًا`, "تسجيل", "#/quran"]); } }
+  if (isAdmin() && staffAct.length && salPaid < staffAct.length) alerts.push(["amber", `الرواتب: ${salPaid} من ${staffAct.length} مسجّلة لشهر ${monthName(hm)}`, "عرض", "#/payroll"]);
+  if (isAdmin() && backupDue()) alerts.push(["amber", `💾 ${localStorage.getItem("lastBackup") ? "مرّ أسبوع على آخر نسخة احتياطية" : "لم تُنزَّل نسخة احتياطية بعد"}`, "نزّلها الآن", "javascript:void 0", "dlBackup"]);
   const recent = state.students.slice().sort((a, b) => (b.enrollmentDate || "").localeCompare(a.enrollmentDate || "") || b.id.localeCompare(a.id)).slice(0, 4);
-  const staffN = state.staff.filter((t) => (t.status || ACTIVE) === ACTIVE).length;
-  const sections = [["#/students", "👥", active.length, "الطلاب", `${active.filter((s) => s.gender === "ذكر").length} طالب • ${active.filter((s) => s.gender === "أنثى").length} طالبة`],
-    ["#/halaqat", "🕌", groups().length, "الحلقات", "حلقات التحفيظ"],
+  const boys = active.filter((s) => s.gender === "ذكر").length, girls = active.filter((s) => s.gender === "أنثى").length;
+  const sections = [["#/students", "👥", active.length, "الطلاب", `${boys} طالب • ${girls} طالبة`], ["#/halaqat", "🕌", groups().length, "الحلقات", "حلقات التحفيظ"],
     ["#/quran", "📖", "", "الحفظ والمراجعة", "سجل المتابعة"],
-    ...(isAdmin() ? [["#/staff", "👨‍🏫", staffN, "الموظفون", "المدرسون والعمال"], ["#/fees", "💰", pct + "٪", "رسوم الشهر", `دفع ${paidCount} من ${billable.length}`]] : []),
-    ["#/calendar", "📅", "", "التقويم الدراسي", "الفصول والعطل"]];
-  return `<div class="home-hero">
-      <div class="hero-photo" style="background-image:url(building.jpg)"></div>
-      <div class="hero-body">
-        <div class="hero-tag">● ${esc(state.settings.name || DEFAULT_NAME)}</div>
-        <div class="hero-date">${esc(dateAr)}${hijri ? ` — ${esc(hijri)}` : ""} • العام الدراسي ${yearLabel(m)}</div>
-        <div class="hero-small">قال الله تعالى</div>
-        <div class="hero-verse">﴿وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ﴾</div>
-        <div class="hero-ref">سورة القمر، الآية 17</div>
-        <p>${HADITH} — حفظٌ نتابعه، وعلمٌ نتعلمه، وخيرٌ نتشارك فيه.</p>
-        <div class="hero-btns"><a href="#/quran" class="hero-btn gold">تسجيل الحفظ اليوم ←</a>
-          <a href="#/students" class="hero-btn ghost">👥 الطلاب</a></div>
-      </div>
-    </div>
-  ${isAdmin() && backupDue() ? `<div class="backup-bar">💾 ${localStorage.getItem("lastBackup") ? "مرّ أسبوع على آخر نسخة احتياطية." : "لم تُنزَّل نسخة احتياطية من هذا الجهاز بعد."}
-    <a href="javascript:void 0" id="dlBackup">نزّلها الآن</a></div>` : ""}
-  <div class="row-between"><h3 class="sec-title">أقسام المركز</h3>${isAdmin() ? '<a href="#/report" class="muted">التقرير الشهري ←</a>' : ""}</div>
-  <div class="sections">${sections.map(([h, i, n, t, sub]) => `<a href="${h}" class="sec-card"><span class="sec-ico">${i}</span>
-    ${n !== "" ? `<b class="sec-n">${n}</b>` : ""}<span class="sec-t">${t}</span><span class="sec-sub">${esc(sub)}</span></a>`).join("")}</div>
-  ${isAdmin() ? `<div class="panel"><div class="row-between"><h3>رسوم ${monthName(m)}</h3><a href="#/fees" class="btn small outline">فتح جدول الرسوم ←</a></div>
-    <div class="progress"><div style="width:${pct}%"></div></div>
-    <div class="row-between muted" style="margin-top:6px"><span>دفع <b style="color:var(--green)">${paidCount}</b> من ${billable.length} (${pct}٪) — المحصَّل ${money(monthly.reduce((a, p) => a + (p.amount || 0), 0))}</span>
-    <span>لم يدفع <b style="color:var(--red)">${unpaid}</b></span></div></div>` : ""}
+    ...(isAdmin() ? [["#/staff", "👨‍🏫", staffAct.length, "الموظفون", "المدرسون والعمال"]] : []), ["#/calendar", "📅", "", "التقويم الدراسي", "الفصول والعطل"]];
+  const maxBar = Math.max(1, expected);
+  return `<div class="hero2"><div class="mali-bar"></div><div class="hero2-body">
+      <div class="hero2-tag">● ${esc(state.settings.name || DEFAULT_NAME)}${state.settings.address ? " · " + esc(state.settings.address) : ""}</div>
+      <div class="hero2-verse">﴿${v[0]}﴾</div><div class="hero2-ref">${v[1]}</div>
+      <div class="hero2-line">📅 ${esc(dateAr)}${hijri ? ` · ${esc(hijri)}` : ""}</div>
+      ${state.settings.phone ? `<div class="hero2-line">📞 <span dir="ltr">${esc(state.settings.phone)}</span></div>` : ""}
+      <div class="hero2-hi">مرحبًا بك — ${esc((state.profile?.name || "").trim() || (isAdmin() ? "الإدارة" : "المعلم"))} · السنة الدراسية ${yearLabel(m)}</div>
+      <div class="hero2-btns">${isAdmin() ? '<a href="#/fees" class="hb gold">💰 دفع جديد</a>' : '<a href="#/quran" class="hb gold">📖 تسجيل الحفظ</a>'}
+        ${isAdmin() ? '<a href="#/quran" class="hb">📖 الحفظ</a>' : ""}<a href="#/students" class="hb">👥 الطلاب</a>
+        ${isAdmin() ? '<a href="#/expenses" class="hb">🧾 مصروف</a><a href="javascript:void 0" class="hb" id="homeRem2">🔔 تذكير</a>' : ""}</div>
+    </div></div>
+  ${alerts.length ? `<div class="panel alerts"><div class="row-between"><h3>تنبيهات</h3><span class="badge-n">${alerts.length}</span></div>
+    ${alerts.map(([c, txt, act, href, id]) => `<div class="al"><span class="dot ${c}"></span><span class="al-t">${txt}</span>
+      ${act ? `<a class="pill-btn" href="${href}"${id ? ` id="${id}"` : ""}>${act}</a>` : ""}</div>`).join("")}</div>` : ""}
+  ${isAdmin() ? `<div class="panel"><select id="hm" class="month-sel">${months.map((x) => `<option value="${x}" ${x === hm ? "selected" : ""}>${monthName(x)}</option>`).join("")}</select></div>
+  <div class="stat4">
+    <div class="st dark"><div class="l">المحصَّل</div><div class="v">${amt(collected)}</div><div class="s">${pct}٪ من ${money(expected)}</div></div>
+    <div class="st"><div class="l">الباقي</div><div class="v" style="color:var(--red)">${amt(Math.max(0, expected - collected))}</div></div>
+    <div class="st"><div class="l">دفعوا</div><div class="v"><span style="color:var(--green)">${paidCount}</span> / ${billable.length}</div></div>
+    <div class="st"><div class="l">اليوم</div><div class="v">${amt(sum(state.payments.filter((p) => p.paidOn === t)))}</div><div class="s">${state.payments.filter((p) => p.paidOn === t).length} دفعة</div></div></div>
+  <div class="panel"><h3>خزينة الشهر</h3><div class="treasury"><div><span>المحصَّل</span><b style="color:var(--green)">${money(collected + sum(state.payments.filter((p) => p.type === "registration" && p.month === hm)))}</b></div>
+    <div><span>المصروفات</span><b style="color:var(--red)">${money(sum(state.expenses.filter((e) => e.month === hm)))}</b></div>
+    <div><span>الرصيد</span><b>${money(collected + sum(state.payments.filter((p) => p.type === "registration" && p.month === hm)) - sum(state.expenses.filter((e) => e.month === hm)))}</b></div></div></div>
+  <div class="panel"><div class="row-between"><h3>الرسوم الدراسية حسب الشهر</h3><span class="muted chart-key"><i class="k1"></i> متوقَّع <i class="k2"></i> المحصَّل</span></div>
+    <div class="chart">${months.map((x) => { const c = sum(monthlyOf(x)); return `<div class="bar" title="${monthName(x)}: ${money(c)}"><div class="b1"><div class="b2" style="height:${Math.min(100, Math.round(c * 100 / maxBar))}%"></div></div><span>${AR_MONTHS[+x.slice(5) - 1]}</span></div>`; }).join("")}</div></div>
+  <div class="panel"><h3>حسب الحلقة — ${monthName(hm)}</h3><div class="table-wrap"><table><thead><tr><th>الحلقة</th><th class="num">مدفوع</th><th class="num">المحصَّل / المتوقَّع</th><th style="width:26%"></th></tr></thead><tbody>
+    ${groups().map((g) => { const l = billable.filter((s) => s.group === g), ids = new Set(l.map((s) => s.id)); const c = sum(monthly.filter((p) => ids.has(p.studentId))), e = l.reduce((a, s) => a + s.monthlyFee, 0);
+      const n = l.filter((s) => paidIds.has(s.id)).length; return `<tr><td><b>${esc(g)}</b></td><td class="num">${n}/${l.length}</td><td class="num">${num(c)} <span class="muted">/ ${num(e)}</span></td>
+        <td><div class="progress sm"><div style="width:${e ? Math.round(c * 100 / e) : 0}%"></div></div></td></tr>`; }).join("")}</tbody></table></div></div>
+  <div class="panel"><div class="row-between"><h3>الموظفون · ${monthName(hm)}</h3><span class="pill-red">${salPaid} / ${staffAct.length}</span></div>
+    <div class="muted">المرتبات المدفوعة</div><div class="progress"><div style="width:${staffAct.length ? Math.round(salPaid * 100 / staffAct.length) : 0}%"></div></div></div>` : ""}
   ${homeFollowUp()}
-  <div class="shortcuts">${shortcuts.map(([h, i, t]) => `<a href="${h}" class="shortcut"><span>${i}</span>${t}</a>`).join("")}</div>
+  <div class="row-between"><h3 class="sec-title">أقسام المركز</h3>${isAdmin() ? '<a href="#/report" class="muted">التقرير الشهري ←</a>' : ""}</div>
+  <div class="sections">${sections.map(([h, i, n, tt, sub]) => `<a href="${h}" class="sec-card"><span class="sec-ico">${i}</span>
+    ${n !== "" ? `<b class="sec-n">${n}</b>` : ""}<span class="sec-t">${tt}</span><span class="sec-sub">${esc(sub)}</span></a>`).join("")}</div>
   ${(() => { const top = active.filter((s) => s.hizbs > 0).sort((a, b) => b.hizbs - a.hizbs).slice(0, 5);
     return top.length ? `<h3 class="sec-title">🏆 لوحة الشرف — الأكثر حفظًا</h3><div class="panel">${honorList(top)}</div>` : ""; })()}
   ${recent.length ? `<h3 class="sec-title">أحدث الطلاب المسجلين</h3><div class="recent">${recent.map((s) => `<div class="recent-card">
@@ -834,13 +874,18 @@ function viewHome() {
     ${(s.status || ACTIVE) === ACTIVE ? '<span class="ok-check">✅</span>' : ""}</div>`).join("")}</div>` : ""}
   <h3 class="sec-title">الحلقات</h3>
   <div class="halaqa-cards">${groups().map((g) => { const l = active.filter((s) => s.group === g); const h = state.halaqat.find((x) => x.name === g);
-    const boys = l.filter((s) => s.gender === "ذكر").length, girls = l.filter((s) => s.gender === "أنثى").length;
+    const bb = l.filter((s) => s.gender === "ذكر").length, gg = l.filter((s) => s.gender === "أنثى").length;
     return `<a href="#/students" data-g="${esc(g)}" class="glink hcard"><b>${esc(g)}</b>
       <div class="muted">${h?.teacher ? "👤 " + esc(h.teacher) : "لم يُحدَّد المعلم"}${h?.schedule ? " • 🕒 " + esc(h.schedule) : ""}</div>
-      <div class="hnums"><span><b>${l.length}</b> طالب</span><span>👦 ${boys}</span><span>👧 ${girls}</span></div></a>`; }).join("")}</div>`;
+      <div class="hnums"><span><b>${l.length}</b> طالب</span><span>👦 ${bb}</span><span>👧 ${gg}</span></div></a>`; }).join("")}</div>
+  <div class="panel dua-card"><div class="dua-t">دعاء</div><div class="dua-b">${DUA}</div></div>
+  <div class="panel count-line">العدد: ${active.length} طالبًا · ${boys} ولدًا · ${girls} بنتًا</div>`;
 }
 bind.home = () => {
   const b = $("#dlBackup"); if (b) b.onclick = downloadBackup;
+  const hmSel = $("#hm"); if (hmSel) hmSel.onchange = () => { state.filters.homeMonth = hmSel.value; render(); };
+  // «تذكير»: open the fees page with the parent reminders ready
+  ["#homeRem", "#homeRem2"].forEach((id) => { const e = $(id); if (e) e.onclick = (ev) => { ev.preventDefault(); state.openReminders = true; location.hash = "#/fees"; }; });
   document.querySelectorAll(".glink").forEach((a) => a.onclick = () => { state.filters.group = a.dataset.g; });
   document.querySelectorAll("[data-fu]").forEach((b) => b.onclick = () => { Object.assign(state.memo, { period: b.dataset.fu, anchor: today(), group: "" }); location.hash = "#/quran"; });
 };
@@ -1140,6 +1185,7 @@ function viewFees() {
 }
 bind.fees = () => {
   bindFilters();
+  if (state.openReminders) { state.openReminders = false; setTimeout(() => $("#remAll")?.click(), 50); }
   const months = academicMonths(state.filters.year);
   $("#remAll").onclick = () => showReminders(arrearsList(months, filterStudents(state.students)),
     state.filters.group && state.filters.group !== "-" ? state.filters.group : "كل الحلقات");
