@@ -1,7 +1,7 @@
 // Service worker: lets the dashboard be installed as a desktop app and open without network.
 // Network-first for our own files (always the latest version when online), cache as fallback.
-const CACHE = "imam-malik-v26";
-const SHELL = ["./", "./index.html", "./styles.css?v=26", "./app.js?v=26", "./firebase-config.js?v=26", "./logo.png", "./building.jpg",
+const CACHE = "imam-malik-v27";
+const SHELL = ["./", "./index.html", "./styles.css?v=27", "./app.js?v=27", "./firebase-config.js?v=27", "./logo.png", "./building.jpg",
   "./icon-192.png", "./icon-512.png", "./manifest.webmanifest", "./vendor/qrcode.js"];
 
 // Firebase libraries and fonts come from Google's servers: keep a copy so the dashboard also opens offline.
@@ -29,7 +29,9 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   if (url.origin !== location.origin) return;  // Firebase data: handled by Firestore's own offline cache
+  if (url.searchParams.has("u")) return;        // the page's update check (index.html?u=…): never cache these one-off URLs
   e.respondWith(fetch(e.request).then((res) => {
-    const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return res;
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
+    return res;
   }).catch(() => caches.match(e.request).then((r) => r || caches.match("./index.html"))));
 });
