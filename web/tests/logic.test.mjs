@@ -88,3 +88,16 @@ test("numbers and identifiers", () => {
   assert.equal(L.monthName("2026-10"), "أكتوبر 2026");
   assert.equal(L.yearLabel("2026-11"), "2026 / 2027");
 });
+
+test("French names import: matching by normalized Arabic name", () => {
+  assert.equal(L.normAr("  أَحمد   إبراهيم "), L.normAr("احمد ابراهيم"));
+  assert.equal(L.normAr("فاطمة"), L.normAr("فاطمه"));
+  const pairs = L.parseNamePairs("الاسم\tNom\nأحمد إبراهيم\tAhmed Ibrahim\nآمنة داف;Aminata Daff\n\nمجهول\tInconnu\nمكرر\tDouble\nسطر بلا عمود");
+  assert.equal(pairs.length, 5);                                                    // the header line is a pair too; it is simply not found
+  const students = [{ id: "1", name: "احمد ابراهيم" }, { id: "2", name: "امنة داف", nameFr: "Aminata Daff" }, { id: "3", name: "مكرر" }, { id: "4", name: "مكرر" }];
+  const r = L.matchFrenchNames(pairs, students);
+  assert.deepEqual(r.matched.map((m) => [m.student.id, m.nameFr]), [["1", "Ahmed Ibrahim"]]);
+  assert.equal(r.unchanged, 1);
+  assert.deepEqual(r.notFound.sort(), ["الاسم", "مجهول"].sort());
+  assert.deepEqual(r.ambiguous, ["مكرر"]);
+});

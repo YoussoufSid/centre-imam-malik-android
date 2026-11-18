@@ -79,4 +79,29 @@ function feeArrears(s, months, payments, t, dueDay = 25) {
   return { s, months: unpaid, amount: Math.max(0, (s.monthlyFee || 0) * due.length - mine.reduce((a, p) => a + (p.amount || 0), 0)) };
 }
 
-export { LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, periodRange, shiftPeriod, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, isMonthDue, feeArrears };
+// ---------- French names import (paste two columns from Excel: Arabic name, French name) ----------
+/** Arabic name without diacritics / tatweel, alef and ya/ta-marbuta variants unified, spaces collapsed: for matching names typed differently. */
+const normAr = (s) => String(s || "").replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[أإآٱ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").replace(/\s+/g, " ").trim().toLowerCase();
+/** Lines of "Arabic name <tab|;|,> French name" → [[ar, fr]]; blank lines and lines without two columns are skipped. */
+function parseNamePairs(text) {
+  return String(text || "").split(/\r?\n/).map((line) => {
+    const sep = line.includes("\t") ? "\t" : line.includes(";") ? ";" : ",";
+    const [ar, ...rest] = line.split(sep); const fr = rest.join(sep === "," ? "," : " ").trim();
+    return [String(ar || "").trim(), fr];
+  }).filter(([ar, fr]) => ar && fr);
+}
+/** Matches the pairs to students by normalized Arabic name. Names shared by several students are reported as ambiguous, never guessed. */
+function matchFrenchNames(pairs, students) {
+  const by = {}; students.forEach((s) => (by[normAr(s.name)] = by[normAr(s.name)] || []).push(s));
+  const out = { matched: [], unchanged: 0, notFound: [], ambiguous: [] };
+  for (const [ar, fr] of pairs) {
+    const hit = by[normAr(ar)] || [];
+    if (hit.length === 0) out.notFound.push(ar);
+    else if (hit.length > 1) out.ambiguous.push(ar);
+    else if ((hit[0].nameFr || "") === fr) out.unchanged++;
+    else out.matched.push({ student: hit[0], nameFr: fr });
+  }
+  return out;
+}
+
+export { normAr, parseNamePairs, matchFrenchNames, LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, periodRange, shiftPeriod, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, isMonthDue, feeArrears };

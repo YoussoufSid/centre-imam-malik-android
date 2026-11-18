@@ -1,5 +1,5 @@
 // Centre Imam Malik — web admin dashboard (same Firestore data as the Android app).
-import { LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, periodRange as _periodRange, shiftPeriod as _shiftPeriod, isMonthDue as _isMonthDue, feeArrears as _feeArrears } from "./logic.js?v=29";
+import { normAr, parseNamePairs, matchFrenchNames, LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, periodRange as _periodRange, shiftPeriod as _shiftPeriod, isMonthDue as _isMonthDue, feeArrears as _feeArrears } from "./logic.js?v=30";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
@@ -8,7 +8,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where, limit
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=29";
+import { firebaseConfig } from "./firebase-config.js?v=30";
 
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const HADITH = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»";
@@ -197,7 +197,7 @@ const NAV = [
   ["fees", "💰", "الرسوم الشهرية", true, "المالية"], ["registration", "📝", "رسوم التسجيل", true, "المالية"],
   ["expenses", "🧾", "المصروفات", true, "المالية"], ["summary", "📊", "الملخص المالي", true, "المالية"], ["report", "📄", "البيانات المالية الشهرية", true, "المالية"],
   ["staff", "👨‍🏫", "الموظفون", true, "الموظفون"], ["payroll", "💵", "الرواتب", true, "الموظفون"],
-  ["settings", "⚙️", "إعدادات المركز", true, "التطبيق"], ["phone", "📱", "تطبيق الهاتف", false, "التطبيق"]
+  ["guide", "📘", "دليل الاستعمال", false, "التطبيق"], ["settings", "⚙️", "إعدادات المركز", true, "التطبيق"], ["phone", "📱", "تطبيق الهاتف", false, "التطبيق"]
 ];
 const APK_URL = "https://github.com/YoussoufSid/centre-imam-malik-android/releases/latest/download/centre-imam-malik.apk";
 const SITE_URL = "https://youssoufsid.github.io/centre-imam-malik-android/";
@@ -248,7 +248,7 @@ const route = () => (location.hash.replace("#/", "") || "home");
 function render() {
   if (!state.user || !state.profile || !isStaff()) return;
   const r = route();
-  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport, settings: viewSettings, quran: viewQuran, calendar: viewCalendar };
+  const views = { home: viewHome, students: viewStudents, halaqat: viewHalaqat, fees: viewFees, registration: viewRegistration, expenses: viewExpenses, summary: viewSummary, staff: viewStaff, payroll: viewPayroll, phone: viewPhone, report: viewReport, settings: viewSettings, quran: viewQuran, calendar: viewCalendar, guide: viewGuide };
   const allowed = NAV.find((n) => n[0] === r && (!n[3] || isAdmin())) ? r : "home";
   const focus = document.activeElement?.id; const caret = document.activeElement?.selectionStart;
   const title = NAV.find((n) => n[0] === allowed);
@@ -655,6 +655,38 @@ bind.settings = () => {
   };
 };
 
+// ---------------------------------------------------------------- user guide
+function viewGuide() {
+  const sec = (ico, t, items) => `<div class="panel"><h3>${ico} ${t}</h3><ol class="steps">${items.map((i) => `<li>${i}</li>`).join("")}</ol></div>`;
+  return `<h1>دليل الاستعمال</h1><div class="sub">خطوات مختصرة للمعلمين والإدارة، في الهاتف والحاسوب</div>
+  ${sec("📖", "تسجيل الحفظ والمراجعة (للمعلم)", [
+    "في الهاتف: تبويب «الحفظ» ← «تسجيل سريع»، ثم اختر الحلقة.",
+    "اضغط «حفظ» أو «مراجعة» أمام اسم الطالب؛ تجد السورة والآيات مكتوبة من حيث توقف.",
+    "عدّل الآيات إن لزم ثم <b>اضغط التقدير</b> (ممتاز، جيد جدًا…) فيُحفظ التسجيل.",
+    "في «التقارير»: يومي، أسبوعي، شهري، فصلي، سنوي، مع زر PDF للطباعة."])}
+  ${sec("💰", "الرسوم وتذكير الأولياء (للإدارة)", [
+    "«الرسوم الشهرية»: اضغط على خانة الشهر لتسجيل الدفع أو إلغائه.",
+    "يبدأ احتساب التأخير من يوم 25 من الشهر، وتقول الرسالة «قبل يوم 30» (يمكن تغييرهما من الإعدادات).",
+    "زر «🧾 تذكيرات أولياء الأمور»: تذكير مطبوع بالعربية (يمينًا) والفرنسية (يسارًا)، 2 أو 4 أو 6 في الورقة.",
+    "زر 💬 بجانب كل طالب يفتح واتساب برسالة جاهزة بالعربية والفرنسية."])}
+  ${sec("🪪", "البطاقات", [
+    "«الطلاب» ← 🪪 لبطاقة طالب واحد، أو «بطاقات الطلاب» لكل المعروضين (10 في الورقة).",
+    "أضف الصورة والاسم بالفرنسية من «تعديل ملف الطالب». للأسماء الفرنسية دفعة واحدة: «🔤 استيراد الأسماء الفرنسية» والصق عمودين من Excel.",
+    "بطاقات الموظفين من صفحة «الموظفون»."])}
+  ${sec("📅", "التقويم الدراسي", [
+    "«التقويم الدراسي»: أيام العطلة الأسبوعية (الجمعة والأحد)، وتواريخ الفصول الأربعة، والمراجعة والاختبارات والعطل.",
+    "احفظ التقويم مرة في بداية كل عام دراسي؛ فيظهر في الرئيسية وفي سجلات المتابعة."])}
+  ${sec("📴", "العمل بدون إنترنت والتحديث", [
+    "افتح الموقع أو التطبيق مرة واحدة مع الإنترنت؛ بعدها يعمل بدونه، وتُرسل التغييرات وحدها عند عودة الاتصال.",
+    "الموقع يتحدث وحده. التطبيق يتحدث وحده عند فتحه (عبر Wi-Fi افتراضيًا)، أو من زر «تحديث» في الرئيسية.",
+    "«⚙️ إعدادات المركز» ← «تنزيل نسخة احتياطية» مرة كل أسبوع على الأقل، و«استرجاع من ملف» عند الحاجة."])}
+  ${isAdmin() ? sec("🔐", "تأمين الحساب والتطبيق (للإدارة، مرة واحدة)", [
+    "<b>صلاحية الإدارة:</b> تأكد أن «إعدادات المركز» تُظهر «🔒 حساب الإدارة مؤمَّن»، ثم انشر ملف القواعد الجديد <code>firestore.rules</code> من Firebase Console ← Firestore ← Rules.",
+    "<b>مفتاح الموقع:</b> console.cloud.google.com ← اختر مشروع centre-al-imam-malik ← APIs & Services ← Credentials ← «Browser key» ← Application restrictions: <b>Websites</b> ← أضف <code>https://youssoufsid.github.io/*</code> ثم احفظ. إن توقف الدخول فأزل القيد.",
+    "<b>مفتاح الأندرويد:</b> نفس الصفحة ← المفتاح الآخر ← Application restrictions: <b>Android apps</b> ← package <code>ml.centre.imammalik</code> ← أضف بصمة SHA-1 لمفتاح التوقيع (انظر ملف تعليمات المفتاح الخاص).",
+    "<b>مفتاح توقيع التطبيق:</b> أضف أسرار المستودع الأربعة (RELEASE_KEYSTORE_BASE64 وRELEASE_STORE_PASSWORD وRELEASE_KEY_ALIAS وRELEASE_KEY_PASSWORD) من GitHub ← Settings ← Secrets and variables ← Actions. بعدها احذف التطبيق من الهاتف وثبّته مرة واحدة من الرابط الثابت."]) : ""}`;
+}
+
 // ---------------------------------------------------------------- phone app
 function viewPhone() {
   return `<h1>تطبيق الهاتف</h1><div class="sub">التثبيت والتحديث على الهاتف والحاسوب</div>
@@ -818,7 +850,7 @@ function viewStudents() {
   const list = filterStudents(state.students);
   return `<h1>الطلاب</h1><div class="sub">${state.students.length} طالب مسجل</div>
   <div class="toolbar"><input id="fq" placeholder="🔍 بحث بالاسم أو الهاتف" value="${esc(state.filters.q)}">${groupSelect()}
-    <button class="btn" id="add">+ إضافة طالب</button><button class="btn outline" id="cards">🪪 بطاقات الطلاب</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
+    <button class="btn" id="add">+ إضافة طالب</button><button class="btn outline" id="cards">🪪 بطاقات الطلاب</button><button class="btn outline" id="frimp">🔤 استيراد الأسماء الفرنسية</button><button class="btn outline no-print" onclick="window.print()">🖨️ طباعة</button>
     <span class="muted">${list.length} نتيجة</span></div>
   <div class="table-wrap"><table><thead><tr><th class="num">#</th><th>الاسم</th><th>الجنس</th><th>الحلقة</th><th>المعلم</th><th>هاتف ولي الأمر</th>
   <th class="num">الأحزاب</th>${isAdmin() ? '<th class="num">الرسوم الشهرية</th>' : ""}<th>الحالة</th><th class="no-print"></th></tr></thead><tbody>
@@ -835,6 +867,7 @@ function viewStudents() {
 bind.students = () => {
   bindFilters();
   $("#add").onclick = () => studentForm({ status: ACTIVE, enrollmentDate: today(), group: state.filters.group && state.filters.group !== "-" ? state.filters.group : "" });
+  $("#frimp").onclick = importFrenchNames;
   $("#cards").onclick = () => printCards(filterStudents(state.students).filter((s) => (s.status || ACTIVE) === ACTIVE));
   document.querySelectorAll("[data-card]").forEach((b) => b.onclick = () => printCards([state.students.find((s) => s.id === b.dataset.card)]));
   document.querySelectorAll("[data-cert]").forEach((b) => b.onclick = () => printCertificate(state.students.find((s) => s.id === b.dataset.cert)));
@@ -873,6 +906,34 @@ function bindPhotoPicker(b) {
     resizePhoto(f).then((p) => { photo = p; show(p); }).catch(fail); };
   b.querySelector("#phDel").onclick = () => { photo = ""; show(""); };
   return () => photo;
+}
+
+/** Paste two columns copied from Excel (Arabic name, French name); students are matched by name and shown before anything is saved. */
+function importFrenchNames() {
+  openModal(`<h3>استيراد الأسماء الفرنسية</h3>
+    <p class="muted">في Excel: حدّد عمودين (الاسم بالعربية، ثم الاسم بالفرنسية) ← انسخ ← الصق هنا. تُطابَق الأسماء العربية مع الطلاب المسجلين، وترى النتيجة قبل الحفظ.</p>
+    <textarea id="frt" rows="8" dir="auto" placeholder="أحمد إبراهيم&#9;Ahmed Ibrahim"></textarea>
+    <div id="frres" class="muted" style="margin:8px 0"></div>
+    <div class="modal-actions"><button class="btn" id="frgo" disabled>حفظ الأسماء</button><button class="btn outline" id="cancel">إلغاء</button></div>`, (b) => {
+    let match = null;
+    const check = () => {
+      match = matchFrenchNames(parseNamePairs(b.querySelector("#frt").value), state.students);
+      const r = match;
+      b.querySelector("#frres").innerHTML = `✅ سيُحدَّث <b>${r.matched.length}</b> طالب • بلا تغيير ${r.unchanged}` +
+        (r.notFound.length ? `<br>⚠️ لم يُعثر عليهم (${r.notFound.length}): ${esc(r.notFound.slice(0, 8).join("، "))}${r.notFound.length > 8 ? "…" : ""}` : "") +
+        (r.ambiguous.length ? `<br>⚠️ اسم مكرر بين عدة طلاب (تُرك): ${esc(r.ambiguous.slice(0, 5).join("، "))}` : "");
+      b.querySelector("#frgo").disabled = !r.matched.length;
+    };
+    b.querySelector("#frt").oninput = check;
+    b.querySelector("#cancel").onclick = closeModal;
+    b.querySelector("#frgo").onclick = async () => {
+      try {
+        const batch = writeBatch(db);
+        match.matched.forEach(({ student, nameFr }) => batch.set(doc(db, "students", student.id), { nameFr: nameFr.slice(0, 120), updatedAt: new Date() }, { merge: true }));
+        await batch.commit(); audit("استيراد الأسماء الفرنسية", `${match.matched.length} طالب`); toast(`✅ تم تحديث ${match.matched.length} اسمًا فرنسيًا`); closeModal();
+      } catch (e) { fail(e); }
+    };
+  });
 }
 
 function studentForm(s) {
