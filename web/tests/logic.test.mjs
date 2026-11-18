@@ -101,3 +101,16 @@ test("French names import: matching by normalized Arabic name", () => {
   assert.deepEqual(r.notFound.sort(), ["الاسم", "مجهول"].sort());
   assert.deepEqual(r.ambiguous, ["مكرر"]);
 });
+
+test("French interface: whole-phrase translation, names untouched", async () => {
+  const { trText } = await import("../i18n.js");
+  assert.equal(trText("تسجيل الخروج"), "Se déconnecter");
+  assert.equal(trText("  الطلاب "), "  Élèves ");                                          // spaces around the text are kept
+  assert.equal(plain(trText("27 طالبًا متأخرون عن الدفع — ⁦660 000⁩ فرنك للتحصيل")), "27 élèves en retard de paiement — 660 000 FCFA à recouvrer");
+  assert.equal(trText("نوفمبر 2026"), "Novembre 2026");
+  assert.equal(trText("محمد عيسى باري"), "محمد عيسى باري");                                // a student's name is never translated
+  assert.equal(trText("الحلقة الثالثة – عثمان بن عفان"), "Halaqa 3e – عثمان بن عفان");   // UI words inside a halaqa name, the rest is kept
+  assert.equal(trText("حسابك"), "Votre compte");                                          // whole words only: «حسا…» inside other words is not touched
+  assert.equal(trText("Hello 123"), "Hello 123");
+  assert.equal(trText("هل تريد تسجيل الخروج؟"), "Voulez-vous vous déconnecter ?");
+});
