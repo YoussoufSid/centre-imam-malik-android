@@ -604,3 +604,20 @@ body.dark .pill-btn { background: #163626; color: #9fe0c0; } body.dark .chart .b
   .hero2-verse { font-size: 28px; } .hero2-body { padding: 16px 18px 20px; }
 }
 @media print { .hero2, .alerts, .stat4 { display: none !important; } }
+
+/* =================== French mode (left-to-right) =================== */
+.idcard, .slip, .cert, .cards-sheet { direction: rtl; }   /* printed documents keep their own layout in both languages */
+.lang-pill { display: block; margin: 12px auto 0; background: rgba(7,91,58,.08); color: var(--green); border: 1px solid rgba(7,91,58,.3); border-radius: 999px; padding: 6px 18px; font-weight: 700; }
+html[dir="ltr"] th, html[dir="ltr"] td { text-align: left; }
+html[dir="ltr"] td.actions { text-align: right; }
+html[dir="ltr"] .side > * { direction: ltr; }
+html[dir="ltr"] .hcard { border-right: 1px solid #eeebe0; border-left: 5px solid var(--gold); }
+html[dir="ltr"] body, html[dir="ltr"] input, html[dir="ltr"] select, html[dir="ltr"] textarea, html[dir="ltr"] button { font-family: "Lato", "Segoe UI", Tahoma, Arial, sans-serif; }
+html[dir="ltr"] .notr, html[dir="ltr"] .hero2-verse { font-family: "Amiri", "Tajawal", serif; direction: rtl; }
+html[dir="ltr"] .hero2-verse { text-align: center; }
+html[dir="ltr"] main > h1::after { margin-inline-start: auto; }
+@media (max-width: 860px) {
+  html[dir="ltr"] .side, html[dir="ltr"] .menu-open .side { right: auto; left: 0; transform: translateX(-105%); border-radius: 0 22px 22px 0; box-shadow: 8px 0 30px rgba(0,0,0,.25); }
+  html[dir="ltr"] .menu-open .side { transform: none; }
+}
+html[dir="ltr"] .hero2-verse { margin-top: 16px; }

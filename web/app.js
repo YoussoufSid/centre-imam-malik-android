@@ -1,5 +1,6 @@
 // Centre Imam Malik — web admin dashboard (same Firestore data as the Android app).
-import { normAr, parseNamePairs, matchFrenchNames, LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, periodRange as _periodRange, shiftPeriod as _shiftPeriod, isMonthDue as _isMonthDue, feeArrears as _feeArrears } from "./logic.js?v=32";
+import { startFrench } from "./i18n.js?v=33";
+import { normAr, parseNamePairs, matchFrenchNames, LOG_REV, AR_MONTHS, monthName, shiftMonth, academicMonths, yearLabel, studentNumber, staffNumber, SURAHS, LOG_NEW, GRADES, dParse, dKey, dAdd, dm, TERM_NAMES, academicStart, defaultTerms, DEFAULT_OFF, WEEKDAYS, isoDow, isSchoolDay, schoolDays, termIndexAt, eventsOn, upcomingEvents, ayat, gradeScore, gradeFromScore, logOrder, summarizeMemo, nextPosition, plainNum, periodRange as _periodRange, shiftPeriod as _shiftPeriod, isMonthDue as _isMonthDue, feeArrears as _feeArrears } from "./logic.js?v=33";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
@@ -8,7 +9,7 @@ import {
   initializeFirestore, persistentLocalCache, collection, doc, onSnapshot, setDoc, deleteDoc, addDoc, writeBatch,
   getDocs, query, where, limit
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=32";
+import { firebaseConfig } from "./firebase-config.js?v=33";
 
 const WELCOME = "أهلًا وسهلًا بكم في مركز الإمام مالك لتحفيظ القرآن الكريم والدراسات الإسلامية";
 const HADITH = "«خيرُكم مَن تعلَّم القرآنَ وعلَّمه»";
@@ -32,6 +33,11 @@ const money = (n) => `${num(n)} ${state.settings.currency || "فرنك"}`;
 // Card amount: big number on one line, small currency label.
 const amt = (n) => `${num(n)}<span class="cur">${esc(state.settings.currency || "فرنك")}</span>`;
 const ACTIVE = "نشط";
+/** Interface language: "ar" (default) or "fr" (saved on this device; the page reloads when it changes). */
+const LANG = localStorage.getItem("lang") === "fr" ? "fr" : "ar";
+const LOCALE = LANG === "fr" ? "fr-FR" : "ar";
+const HIJRI_LOCALE = LANG === "fr" ? "fr-FR-u-ca-islamic-umalqura-nu-latn" : "ar-SA-u-ca-islamic-umalqura-nu-latn";
+const toggleLang = () => { localStorage.setItem("lang", LANG === "fr" ? "ar" : "fr"); location.reload(); };
 /** Photos are stored as JPEG data URLs made by the app. Anything else (a tampered record) is ignored, so a record can never inject markup. */
 const safePhoto = (p) => (typeof p === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]{20,}$/.test(p) ? p : "");
 
@@ -157,7 +163,8 @@ function renderLogin() {
       <button type="button" id="eye" title="إظهار كلمة المرور" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px">👁</button></div>
       <button class="btn" id="go">تسجيل الدخول</button>
       <div style="margin-top:10px"><a href="#" id="reset">نسيت كلمة المرور؟</a></div><div class="error" id="err"></div>
-      <div class="login-foot">بسم الله الرحمن الرحيم</div>
+      <div class="login-foot notr">بسم الله الرحمن الرحيم</div>
+      <button class="lang-pill notr" id="langLogin" type="button">${LANG === "fr" ? "العربية" : "Français"}</button>
     </div></section></div>`;
   // Rotating welcome slides
   clearInterval(state.slideTimer);
@@ -183,6 +190,7 @@ function renderLogin() {
         : "تعذّر الدخول: " + c;
     });
   };
+  $("#langLogin").onclick = toggleLang;
   $("#go").onclick = go; $("#pw").onkeydown = (e) => { if (e.key === "Enter") go(); };  // must not return false: that would block typing
   $("#reset").onclick = (e) => { e.preventDefault(); const em = $("#em").value.trim();
     if (!em) { $("#err").textContent = "اكتب البريد أولًا"; return; }
@@ -258,6 +266,7 @@ function render() {
   $("#app").innerHTML = `<div class="layout${state.menuOpen ? " menu-open" : ""}">
     <header class="mbar"><img src="logo.png" alt=""><div class="mbar-t"><b>${allowed === "home" ? "مركز الإمام مالك" : title[2]}</b>
         <small>إدارة المركز · ${yearLabel(currentMonth())}</small></div>
+      <button id="langBtn" class="round notr" aria-label="Langue / اللغة">${LANG === "fr" ? "ع" : "FR"}</button>
       <span class="net-dot ${navigator.onLine ? "on" : "off"}" title="${navigator.onLine ? "متصل" : "بدون إنترنت"}"></span>
       <button id="searchBtn" class="round" aria-label="بحث">🔍</button>
       <button id="theme2" class="round" aria-label="الوضع الليلي">${dark() ? "☀️" : "🌙"}</button></header>
@@ -267,6 +276,7 @@ function render() {
         <div class="brand-sub">لوحة إدارة المركز <span class="flag-ml"><i></i><i></i><i></i></span></div></div></div>
       <nav>${navHtml(allowed)}</nav>
       <div class="user"><b>${esc(state.profile?.name || state.user.email)}</b><div class="role">${isAdmin() ? "👑 الإدارة — صلاحية كاملة" : "📖 معلم"}</div>
+      <button id="langSide" class="side-btn notr">🌐 ${LANG === "fr" ? "العربية" : "Français"}</button>
       <button id="refreshApp" class="side-btn">🔄 تحديث التطبيق</button>
       <button id="theme" class="side-btn">${dark() ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button>
       <button id="logout" class="side-btn danger-soft">↩ تسجيل الخروج</button></div></aside>
@@ -278,6 +288,7 @@ function render() {
       ${bnavR.map(([r, i, t]) => `<a href="#/${r}" class="${allowed === r ? "on" : ""}"><span>${i}</span>${t}</a>`).join("")}
       <a href="javascript:void 0" id="moreBtn" class="${state.menuOpen ? "on" : ""}"><span>☰</span>الإدارة</a></nav></div>`;
   ["#theme", "#theme2"].forEach((id) => { $(id).onclick = () => { localStorage.setItem("theme", dark() ? "light" : "dark"); applyTheme(); render(); }; });
+  $("#langBtn").onclick = toggleLang; $("#langSide").onclick = toggleLang;
   $("#searchBtn").onclick = () => { location.hash = "#/students"; setTimeout(() => $("#fq")?.focus(), 200); };
   $("#moreBtn").onclick = () => { state.menuOpen = !state.menuOpen; render(); };
   $("#backdrop").onclick = () => { state.menuOpen = false; render(); };
@@ -323,7 +334,7 @@ function printCertificate(s) {
   const body = khatm ? "قد أتمّ حفظ كتاب الله تعالى كاملًا (ستين حزبًا) بفضل الله وتوفيقه."
     : h === 0 ? "تقديرًا لجهده ومواظبته في حلقات تحفيظ القرآن الكريم."
     : `قد أتمّ حفظ ${h} حزبًا من كتاب الله تعالى${h >= 2 ? ` (≈ ${Math.floor(h / 2)} جزءًا)` : ""}، تقديرًا لجهده ومواظبته.`;
-  let hijri = ""; try { hijri = new Date().toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
+  let hijri = ""; try { hijri = new Date().toLocaleDateString(HIJRI_LOCALE, { day: "numeric", month: "long", year: "numeric" }); } catch {}
   showPrintOverlay(`<div class="cert"><div class="cert-in">
     <span class="corner tl">۞</span><span class="corner tr">۞</span><span class="corner bl">۞</span><span class="corner br">۞</span>
     <img src="logo.png" alt=""><div class="cert-centre">${esc(state.settings.name || DEFAULT_NAME)}</div>
@@ -691,7 +702,7 @@ function viewGuide() {
     "<b>صلاحية الإدارة:</b> تأكد أن «إعدادات المركز» تُظهر «🔒 حساب الإدارة مؤمَّن»، ثم انشر ملف القواعد الجديد <code>firestore.rules</code> من Firebase Console ← Firestore ← Rules.",
     "<b>مفتاح الموقع:</b> console.cloud.google.com ← اختر مشروع centre-al-imam-malik ← APIs & Services ← Credentials ← «Browser key» ← Application restrictions: <b>Websites</b> ← أضف <code>https://youssoufsid.github.io/*</code> ثم احفظ. إن توقف الدخول فأزل القيد.",
     "<b>مفتاح الأندرويد:</b> نفس الصفحة ← المفتاح الآخر ← Application restrictions: <b>Android apps</b> ← package <code>ml.centre.imammalik</code> ← أضف بصمة SHA-1 لمفتاح التوقيع (انظر ملف تعليمات المفتاح الخاص).",
-    "<b>مفتاح توقيع التطبيق:</b> أضف أسرار المستودع الأربعة (RELEASE_KEYSTORE_BASE64 وRELEASE_STORE_PASSWORD وRELEASE_KEY_ALIAS وRELEASE_KEY_PASSWORD) من GitHub ← Settings ← Secrets and variables ← Actions. بعدها احذف التطبيق من الهاتف وثبّته مرة واحدة من الرابط الثابت."]) : ""}`;
+    "<b>مفتاح توقيع التطبيق:</b> أضف أسرار المستودع الأربعة (RELEASE_KEYSTORE_BASE64, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD) من GitHub ← Settings ← Secrets and variables ← Actions. بعدها احذف التطبيق من الهاتف وثبّته مرة واحدة من الرابط الثابت."]) : ""}`;
 }
 
 // ---------------------------------------------------------------- phone app
@@ -808,8 +819,8 @@ function viewHome() {
   const expected = billable.reduce((a, s) => a + s.monthlyFee, 0), collected = sum(monthly);
   const pct = expected ? Math.round(collected * 100 / expected) : 0;
   const d = new Date(), v = VERSES[Math.floor(d / 864e5) % VERSES.length];
-  const dateAr = d.toLocaleDateString("ar", { weekday: "long", day: "numeric", month: "long", year: "numeric", numberingSystem: "latn" });
-  let hijri = ""; try { hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura-nu-latn", { day: "numeric", month: "long", year: "numeric" }); } catch {}
+  const dateAr = d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", year: "numeric", numberingSystem: "latn" });
+  let hijri = ""; try { hijri = d.toLocaleDateString(HIJRI_LOCALE, { day: "numeric", month: "long", year: "numeric" }); } catch {}
   const st = academicStart(t), offToday = offDaysFor(st).includes(isoDow(t)), evNow = eventsOn(eventsFor(st).concat(eventsFor(st + 1)), t);
   const schoolToday = isSchoolDay(t, offDaysFor(st), eventsFor(st).concat(eventsFor(st + 1)));
   const staffAct = state.staff.filter((x) => (x.status || ACTIVE) === ACTIVE);
@@ -833,7 +844,7 @@ function viewHome() {
   const maxBar = Math.max(1, expected);
   return `<div class="hero2"><div class="mali-bar"></div><div class="hero2-body">
       <div class="hero2-tag">● ${esc(state.settings.name || DEFAULT_NAME)}${state.settings.address ? " · " + esc(state.settings.address) : ""}</div>
-      <div class="hero2-verse">﴿${v[0]}﴾</div><div class="hero2-ref">${v[1]}</div>
+      <div class="hero2-verse notr">﴿${v[0]}﴾</div><div class="hero2-ref">${v[1]}</div>
       <div class="hero2-line">📅 ${esc(dateAr)}${hijri ? ` · ${esc(hijri)}` : ""}</div>
       ${state.settings.phone ? `<div class="hero2-line">📞 <span dir="ltr">${esc(state.settings.phone)}</span></div>` : ""}
       <div class="hero2-hi">مرحبًا بك — ${esc((state.profile?.name || "").trim() || (isAdmin() ? "الإدارة" : "المعلم"))} · السنة الدراسية ${yearLabel(m)}</div>
@@ -878,7 +889,7 @@ function viewHome() {
     return `<a href="#/students" data-g="${esc(g)}" class="glink hcard"><b>${esc(g)}</b>
       <div class="muted">${h?.teacher ? "👤 " + esc(h.teacher) : "لم يُحدَّد المعلم"}${h?.schedule ? " • 🕒 " + esc(h.schedule) : ""}</div>
       <div class="hnums"><span><b>${l.length}</b> طالب</span><span>👦 ${bb}</span><span>👧 ${gg}</span></div></a>`; }).join("")}</div>
-  <div class="panel dua-card"><div class="dua-t">دعاء</div><div class="dua-b">${DUA}</div></div>
+  <div class="panel dua-card notr"><div class="dua-t">دعاء</div><div class="dua-b">${DUA}</div></div>
   <div class="panel count-line">العدد: ${active.length} طالبًا · ${boys} ولدًا · ${girls} بنتًا</div>`;
 }
 bind.home = () => {
@@ -1502,3 +1513,5 @@ function payrollForm(t, m) {
     };
   });
 }
+
+if (LANG === "fr") startFrench();   // after everything is defined: translate the page and whatever is drawn later
